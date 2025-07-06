@@ -1,0 +1,19 @@
+{
+  "name": "Coffee Locker App",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",  // 👈 sets Node 20
+  "features": {
+    "ghcr.io/devcontainers-contrib/features/pnpm:1": {}          // 👈 auto-installs pnpm
+  },
+  "postCreateCommand": "pnpm install",                           // 👈 auto-installs deps
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  }
+}
