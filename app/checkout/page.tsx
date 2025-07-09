@@ -1,17 +1,17 @@
 "use client";
 import { useCart } from "@/context/cartContext";
 import { useRouter } from "next/navigation";
+import { useState } from 'react'; 
+import { getClientId } from '@/lib/getClientId';
 
 export default function CheckoutPage() {
   const { cartItems, clearCart } = useCart();
+ // const [cartItems, setCartItems] = useState<any[]>([]);
+  const [error, setError] = useState('');
   const router = useRouter();
-
+ 
   const handleConfirm = async () => {
-    let clientId = localStorage.getItem("clientId");
-    if (!clientId) {
-      clientId = crypto.randomUUID();
-      localStorage.setItem("clientId", clientId);
-    }
+  const clientId = getClientId();
 
     // look for any in-progress order
     const processingRes = await fetch(
@@ -21,6 +21,7 @@ export default function CheckoutPage() {
 
     // build line_items etc.
     const payload = {
+      clientId,
       line_items: cartItems.map((i) => ({
         product_id: i.productId,
         quantity: i.quantity,
@@ -30,6 +31,11 @@ export default function CheckoutPage() {
     };
 
     let wooOrder: any;
+    if (cartItems.length === 0) {
+  setError("Your cart is empty.");
+  return;
+} else { 
+  console.log("📦 cartItems before placing order:", cartItems);
     if (existing?.id) {
       // update
       const res = await fetch(`/api/update-order/${existing.id}`, {
@@ -47,7 +53,7 @@ export default function CheckoutPage() {
       });        console.log("create new order payload text:",payload);
       wooOrder = await res.json();
     }
-
+}
     // persist and go straight to details
     localStorage.setItem("currentWooId", String(wooOrder.id));
     localStorage.setItem("startTime", String(Date.now()));

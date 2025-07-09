@@ -24,6 +24,7 @@ export default function HeaderNav() {
         <Link href="/">Home</Link>
         <Link href="/products">Products</Link>
         <Link href="/orders">All Orders</Link>
+        <Link href="/login">Login</Link>
         {cartItems.length > 0 && (
           <Link href="/cart">Cart ({cartItems.length})</Link>
         )}

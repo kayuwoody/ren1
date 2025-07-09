@@ -1,11 +1,15 @@
 // 5. app/api/orders/route.ts 
-import { NextResponse } from "next/server";
-import { findProcessingOrder } from "@/lib/orderService";
+import { listWooOrders } from '@/lib/orderService';
+import { NextResponse } from 'next/server';
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const clientId = searchParams.get("clientId");
-  if (!clientId) return NextResponse.json(null);
-  const order = await findProcessingOrder(clientId);
-  return NextResponse.json(order);
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const cid = searchParams.get('cid'); // from query param
+    const orders = await listWooOrders(cid);
+    return NextResponse.json(orders);
+    } catch (err: any) {
+      console.error('❌ Error fetching WooCommerce orders:', err);
+      return NextResponse.json({ error: 'Failed to load orders' }, { status: 500 });
+    }
 }

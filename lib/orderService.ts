@@ -1,5 +1,6 @@
 // 1. lib/orderService.ts import WooCommerceRestApi from "@woocommerce/woocommerce-rest-api";
 import WooCommerceRestApi from '@woocommerce/woocommerce-rest-api';
+import { getClientId } from '@/lib/getClientId';
 
 // Initialize the WooCommerce REST client
 const api = new WooCommerceRestApi({
@@ -16,8 +17,22 @@ if (!process.env.WC_STORE_URL || !process.env.WC_CONSUMER_KEY || !process.env.WC
  * Create a new WooCommerce order
  */
 export async function createWooOrder(payload: any) {
-console.log("🚨 Incoming payload to createWooOrder:", JSON.stringify(payload, null, 2)); // Add this line
-  const { data } = await api.post('orders', payload);
+  console.log("🚨 Incoming payload to createWooOrder:", JSON.stringify(payload, null, 2));
+
+  const { clientId, ...rest } = payload;
+
+  const fullPayload = {
+    ...rest,
+    meta_data: [
+      ...(payload.meta_data || []),
+      {
+        key: 'clientId',
+        value: clientId,
+      },
+    ],
+  };
+
+  const { data } = await api.post('orders', fullPayload);
   return data;
 }
 
@@ -46,9 +61,19 @@ export async function findProcessingOrder(clientId: string) {
 /**
  * List all WooCommerce orders (up to 100)
  */
-export async function listWooOrders() {
-  const { data } = await api.get('orders', { per_page: 100 });
-  return data;
+export async function listWooOrders(clientId: string) {
+  const { data } = await api.get('orders');
+
+  // Defensive filter: match meta_data key (case-insensitive) and value
+  const filtered = data.filter((order: any) =>
+    (order.meta_data || []).some((m: any) =>
+      typeof m.key === 'string' &&
+      m.key.toLowerCase() === 'clientid' &&
+      String(m.value).toLowerCase() === clientId.toLowerCase()
+    )
+  );
+
+  return filtered;
 }
 
 /**

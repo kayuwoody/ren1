@@ -1,135 +1,100 @@
-// lib/orderService.ts
-// import fetch from 'node-fetch';
-// lib/orderService.ts
-
-// First try the “official” store URL vars, then fall back to NEXT_PUBLIC_WC_API_URL
+// 1. lib/orderService.ts import WooCommerceRestApi from "@woocommerce/woocommerce-rest-api";
 import WooCommerceRestApi from '@woocommerce/woocommerce-rest-api';
+import { getClientId } from '@/lib/getClientId';
 
-const storeUrl =
-  process.env.WC_STORE_URL ||
-  process.env.NEXT_PUBLIC_WC_STORE_URL ||
-  process.env.NEXT_PUBLIC_WC_API_URL;
-const consumerKey =
-  process.env.WC_CONSUMER_KEY ||
-  process.env.NEXT_PUBLIC_WC_CONSUMER_KEY;
-const consumerSecret =
-  process.env.WC_CONSUMER_SECRET ||
-  process.env.NEXT_PUBLIC_WC_CONSUMER_SECRET;
-
+// Initialize the WooCommerce REST client
 const api = new WooCommerceRestApi({
-  url:           process.env.NEXT_PUBLIC_WC_API_URL!,
-  consumerKey:    process.env.NEXT_PUBLIC_WC_CONSUMER_KEY!,
-  consumerSecret: process.env.NEXT_PUBLIC_WC_CONSUMER_SECRET!,
-  version:       'wc/v3',
+  url: process.env.WC_STORE_URL!,
+  consumerKey: process.env.WC_CONSUMER_KEY!,
+  consumerSecret: process.env.WC_CONSUMER_SECRET!,
+  version: 'wc/v3',
 });
 
-if (!storeUrl || !consumerKey || !consumerSecret) {
-  console.error(
-    '🐛 WC_STORE_URL:',
-    process.env.WC_STORE_URL,
-    'NEXT_PUBLIC_WC_STORE_URL:',
-    process.env.NEXT_PUBLIC_WC_STORE_URL,
-    'NEXT_PUBLIC_WC_API_URL:',
-    process.env.NEXT_PUBLIC_WC_API_URL,
-    'KEY:',
-    process.env.WC_CONSUMER_KEY,
-    'SECRET:',
-    process.env.WC_CONSUMER_SECRET
-  );
-  throw new Error(
-    'WooCommerce credentials are not fully configured in environment variables.'
-  );
+if (!process.env.WC_STORE_URL || !process.env.WC_CONSUMER_KEY || !process.env.WC_CONSUMER_SECRET) {
+  console.warn("⚠️ Missing WooCommerce credentials in environment variables.");
 }
-console.log('🐛 NEXT_PUBLIC_WC_API_URL:', process.env.NEXT_PUBLIC_WC_API_URL);
-console.log('🐛 NEXT_PUBLIC_WC_STORE_URL:', process.env.NEXT_PUBLIC_WC_STORE_URL);
-// Add this at the top of lib/orderService.ts, before the if-guard
-console.log('🐛 ENV storeUrl        =', storeUrl);
-console.log('🐛 ENV WC_CONSUMER_KEY =', process.env.WC_CONSUMER_KEY);
-console.log('🐛 ENV NEXT_PUBLIC_WC_CONSUMER_KEY =', process.env.NEXT_PUBLIC_WC_CONSUMER_KEY);
-console.log('🐛 ENV consumerKey     =', consumerKey);
-console.log('🐛 ENV WC_CONSUMER_SECRET =', process.env.WC_CONSUMER_SECRET);
-console.log('🐛 ENV NEXT_PUBLIC_WC_CONSUMER_SECRET =', process.env.NEXT_PUBLIC_WC_CONSUMER_SECRET);
-console.log('🐛 ENV consumerSecret  =', consumerSecret);
-if (!storeUrl || !consumerKey || !consumerSecret) {
-  throw new Error('WooCommerce credentials are not fully configured in environment variables.');
-}
+/**
+ * Create a new WooCommerce order
+ */
+export async function createWooOrder(payload: any) {
+  console.log("🚨 Incoming payload to createWooOrder:", JSON.stringify(payload, null, 2));
 
-// Helper to build authenticated URL
-function wcUrl(path: string): string {
-  const url = new URL(path, storeUrl);
-  url.searchParams.append('consumer_key', consumerKey);
-  url.searchParams.append('consumer_secret', consumerSecret);
-  return url.toString();
-}
+  const { clientId, ...rest } = payload;
 
-export interface LineItem {
-  product_id: number;
-  quantity: number;
-}
+  const fullPayload = {
+    ...rest,
+    meta_data: [
+      ...(payload.meta_data || []),
+      {
+        key: 'clientId',
+        value: clientId,
+      },
+    ],
+  };
 
-export interface CreateOrderPayload {
-  customer_id?: number;
-  payment_method?: string;
-  payment_method_title?: string;
-  set_paid?: boolean;
-  billing?: Record<string, any>;
-  shipping?: Record<string, any>;
-  line_items: LineItem[];
-  meta_data?: { key: string; value: any }[];
-}
-
-export interface WooOrderResponse {
-  id: number;
-  status: string;
-  meta_data: { key: string; value: any }[];
+  const { data } = await api.post('orders', fullPayload);
+  return data;
 }
 
 /**
- * Create a new WooCommerce order.
+ * Update an existing WooCommerce order by ID
  */
-export async function createWooOrder(payload: CreateOrderPayload): Promise<WooOrderResponse> {
-  const url = wcUrl('/wp-json/wc/v3/orders');
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Woo create order failed: ${res.status} ${txt}`);
-  }
-  return res.json();
+export async function updateWooOrder(id: number | string, payload: any) {
+  const endpoint = `orders/${id}`;
+  const { data } = await api.put(endpoint, payload);
+  return data;
 }
 
 /**
- * Update an existing WooCommerce order's status.
+ * Find a processing order for a specific clientId
  */
-export async function updateWooOrder(
-  orderId: number,
-  payload: { status?: string; line_items?: LineItem[] }
-): Promise<WooOrderResponse> {
-  const url = wcUrl(`/wp-json/wc/v3/orders/${orderId}`);
-  const body: any = {};
-  if (payload.status) body.status = payload.status;
-  if (payload.line_items) body.line_items = payload.line_items;
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+export async function findProcessingOrder(clientId: string) {
+  const { data } = await api.get('orders', {
+    status: 'processing',
+    meta_key: 'clientId',
+    meta_value: clientId,
+    per_page: 1,
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Woo update order failed: ${res.status} ${txt}`);
-  }
-  return res.json();
-}
-// lib/orderService.ts (add at bottom)
-export async function listWooOrders() {
-  const resp = await api.get('orders', {
-    per_page: 20,
-    order:    'desc',
-    orderby:  'date',
-  });
-  return resp.data;
+  return Array.isArray(data) ? data[0] || null : null;
 }
 
+/**
+ * List all WooCommerce orders (up to 100)
+ */
+export async function listWooOrders(cid?: string) {
+  const { data } = await api.get('orders', {
+    params: {
+      per_page: 50,
+      // optional: you can also include status=any
+    },
+  });
+
+  if (!cid) return data;
+
+  const normalizedCid = cid.toLowerCase();
+
+  return data.filter((order: any) =>
+    order.meta_data?.some(
+      (m: any) =>
+        m.key === 'clientId' &&
+        typeof m.value === 'string' &&
+        m.value.toLowerCase() === normalizedCid
+    )
+  );
+}
+
+/**
+ * Get a single WooCommerce order by ID
+ */
+export async function getWooOrder(id: number | string) {
+  const endpoint = `orders/${id}`;
+  try {
+    console.log(`📦 Calling WooCommerce GET ${endpoint}`);
+    const { data } = await api.get(endpoint);
+    console.log(`✅ WooCommerce order #${id} received`);
+    return data;
+  } catch (err: any) {
+    console.error(`❌ Failed to fetch WooCommerce order ${id}:`, err?.response?.data || err.message || err);
+    throw err; // rethrow so API route can respond with 500
+  }
+}
