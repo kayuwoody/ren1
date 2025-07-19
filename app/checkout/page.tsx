@@ -35,7 +35,7 @@ export default function CheckoutPage() {
     // Build payload for API (NOTE: use item.id, NOT productId)
     const payload: any = {
       line_items: cartItems.map((i: any) => ({
-        product_id: i.id, // correct field
+        product_id: i.productId, // correct field
         quantity: i.quantity,
       })),
       ...(userId ? { userId } : { guestId }),

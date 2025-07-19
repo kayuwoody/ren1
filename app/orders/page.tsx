@@ -1,53 +1,43 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getGuestId } from '@/lib/getGuestId';
-
-type WooLineItem = {
-  id: number;
-  name: string;
-  quantity: number;
-  total: string;
-};
-
-type WooOrder = {
-  id: number;
-  status: string;
-  date_created: string;
-  total: string;
-  line_items?: WooLineItem[];
-};
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<WooOrder[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
 
+  // Fetch all orders; server will use userId cookie if present, otherwise guestId fallback
   useEffect(() => {
-    const gid = getGuestId(); // server will ignore if logged-in cookie present
-    fetch(`/api/orders?guestId=${gid}`)
+    setLoading(true);
+    fetch('/api/orders')
       .then((res) => res.json())
       .then((data) => {
         setOrders(Array.isArray(data) ? data : []);
-        setLoading(false);
       })
       .catch((err) => {
         console.error('Failed to fetch orders', err);
+        setOrders([]);
+      })
+      .finally(() => {
         setLoading(false);
       });
   }, []);
 
-  if (loading) return <p className="p-4">Loading...</p>;
+  if (loading) {
+    return <p className="p-4">Loading orders…</p>;
+  }
 
+  // Filter and search
   const filtered = orders.filter((order) => {
     const matchesStatus =
       statusFilter === 'all' || order.status === statusFilter;
     const matchesSearch =
       order.id.toString().includes(search) ||
-      (order.line_items ?? []).some((i) =>
-        i.name.toLowerCase().includes(search.toLowerCase())
+      (order.line_items ?? []).some((item: any) =>
+        item.name.toLowerCase().includes(search.toLowerCase())
       );
     return matchesStatus && matchesSearch;
   });
@@ -56,9 +46,10 @@ export default function OrdersPage() {
     <div className="p-4 max-w-xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold">My Orders</h1>
 
-      {/* Controls */}
+      {/* Search and filter controls */}
       <div className="flex gap-2">
         <input
+          type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search orders..."
@@ -72,12 +63,12 @@ export default function OrdersPage() {
           <option value="all">All</option>
           <option value="pending">Pending</option>
           <option value="processing">Processing</option>
-          <option value="ready-to-pickup">Ready</option>
+          <option value="ready-for-pickup">Ready</option>
           <option value="completed">Completed</option>
         </select>
       </div>
 
-      {/* Orders */}
+      {/* Orders list */}
       {filtered.length === 0 ? (
         <p>No orders found.</p>
       ) : (
@@ -87,6 +78,7 @@ export default function OrdersPage() {
             const dateLabel = order.date_created
               ? new Date(order.date_created).toLocaleDateString()
               : '';
+
             return (
               <li
                 key={order.id}
@@ -105,9 +97,7 @@ export default function OrdersPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold">
-                      RM {order.total ?? '—'}
-                    </p>
+                    <p className="font-bold">RM {order.total ?? '—'}</p>
                     {order.line_items?.length ? (
                       <p className="text-xs text-gray-500">
                         {order.line_items.length} item

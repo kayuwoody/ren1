@@ -1,36 +1,16 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createWooOrder, NewOrderPayload } from '@/lib/orderService';
-
-type IncomingLineItem = {
-  product_id: number | string;
-  quantity: number | string;
-};
-
-type IncomingBody = {
-  line_items?: IncomingLineItem[];
-  guestId?: string;
-  meta_data?: Array<{ key: string; value: any }>;
-};
-
-function normalizeLineItems(raw?: IncomingLineItem[]) {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((li) => ({
-      product_id: Number(li.product_id),
-      quantity: Number(li.quantity),
-    }))
-    .filter((li) => Number.isFinite(li.product_id) && li.product_id > 0 && li.quantity > 0);
-}
+import { createWooOrder } from '@/lib/orderService';
 
 export async function POST(req: Request) {
-  try {
-    const body = (await req.json()) as IncomingBody;
-    const line_items = normalizeLineItems(body.line_items);
+   try {
+    const body = await req.json();
+    const { line_items, guestId, meta_data: extraMeta = [] } = body;
 
-    if (line_items.length === 0) {
+    // Validate line_items
+    if (!Array.isArray(line_items) || line_items.length === 0) {
       return NextResponse.json(
-        { error: 'Must supply at least one valid line item' },
+        { error: 'Must supply at least one line_items entry' },
         { status: 400 }
       );
     }
@@ -39,16 +19,27 @@ export async function POST(req: Request) {
     const userIdCookie = cookies().get('userId')?.value;
     const userId = userIdCookie ? Number(userIdCookie) : undefined;
 
-    // Guest fallback (only used if no userId)
-    const guestId = userId ? undefined : body.guestId;
+    // Compute kitchen timing window
+    const now = Date.now();
+    const duration = 2 * 60_000 * line_items.length; // 2min per item
+    const startTime = String(now);
+    const endTime   = String(now + duration);
 
-    const payload: NewOrderPayload = {
+    // Guest fallback (only used if no userId)
+    // const guestId = userId ? undefined : body.guestId;
+
+    // Build the full payload, embedding both guest/user and timer meta
+    const payload = {
       line_items,
       userId,
-      guestId,
-      meta_data: body.meta_data ?? [],
+      guestId: userId ? undefined : guestId,
+      meta_data: [
+        ...extraMeta,
+        { key: 'startTime', value: startTime },
+        { key: 'endTime',   value: endTime },
+      ],
     };
-
+console.log("payload: ",payload);
     const order = await createWooOrder(payload);
     return NextResponse.json(order, { status: 201 });
   } catch (err: any) {

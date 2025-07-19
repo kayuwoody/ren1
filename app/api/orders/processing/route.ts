@@ -1,23 +1,36 @@
-// 4. app/api/orders/processing/route.ts 
-export const runtime = 'nodejs';
-
+// app/api/orders/processing/route.ts
 import { NextResponse } from 'next/server';
-import { findProcessingOrder } from '@/lib/orderService';
+import { cookies } from 'next/headers';
+import { listOrdersByUser, listOrdersByGuest } from '@/lib/orderService';
 
 export async function GET(req: Request) {
   try {
-    // pull clientId from ?clientId=…
-    const { searchParams } = new URL(req.url);
-    const clientId = searchParams.get('clientId') || '';
-    if (!clientId) {
-      // no clientId → no in-progress order
-      return NextResponse.json(null);
+    const c = cookies();
+    const userIdCookie = c.get('userId')?.value;
+    const url = new URL(req.url);
+    const guestId = url.searchParams.get('guestId') || undefined;
+
+    let processingOrders: any[] = [];
+
+    // Logged‑in user: fetch only status='processing'
+    if (userIdCookie) {
+      processingOrders = await listOrdersByUser(Number(userIdCookie), {
+        status: 'processing',
+      });
+    }
+    // Guest fallback: same filter via meta
+    else if (guestId) {
+      processingOrders = await listOrdersByGuest(guestId, {
+        status: 'processing',
+      });
     }
 
-    const order = await findProcessingOrder(clientId);
-    return NextResponse.json(order);
+    return NextResponse.json(processingOrders);
   } catch (err: any) {
-    console.error('Error finding processing order:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('❌ /api/orders/processing error:', err);
+    return NextResponse.json(
+      { error: 'Failed to load processing orders' },
+      { status: 500 }
+    );
   }
 }
