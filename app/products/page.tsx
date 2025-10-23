@@ -36,22 +36,35 @@ const ProductListPage: React.FC = () => {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 p-4">
-      {products.map(product => (
-        <div
-          key={product.id}
-          className="border p-2 rounded shadow-sm cursor-pointer"
-          onClick={() => addToCart({ productId: product.id, name: product.name, price: parseFloat(product.price), quantity: 1 })}
-        >
-          <img
-            src={product.images[0]?.src || "/placeholder.jpg"}
-            alt={product.name}
-            className="w-full h-32 object-cover"
-          />
-          <h3 className="font-bold">{product.name}</h3>
-          <p className="text-sm text-gray-600">RM {product.price}</p>
-        </div>
-      ))}
+    <div className="max-w-4xl mx-auto p-4">
+      {/* Responsive grid: 1 col mobile, 2 cols tablet, 3 cols desktop */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {products.map(product => (
+          <div
+            key={product.id}
+            className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => addToCart({ productId: product.id, name: product.name, price: parseFloat(product.price), quantity: 1 })}
+          >
+            {/* Image container with aspect ratio */}
+            <div className="relative w-full aspect-square bg-gray-100">
+              <img
+                src={product.images[0]?.src || "/placeholder.jpg"}
+                alt={product.name}
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Product info */}
+            <div className="p-3">
+              <h3 className="font-semibold text-gray-900 mb-1 line-clamp-1">{product.name}</h3>
+              <p className="text-lg font-bold text-green-700">RM {parseFloat(product.price).toFixed(2)}</p>
+              <button className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded transition-colors">
+                Add to Cart
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
