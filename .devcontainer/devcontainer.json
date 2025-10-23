@@ -6,7 +6,7 @@
       "version": "20"
     }
   },
-  "postCreateCommand": "npm install -g pnpm && pnpm install",
+  "postCreateCommand": "npm install",
   "customizations": {
     "vscode": {
       "settings": {
