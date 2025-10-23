@@ -15,14 +15,14 @@ export default function CartPage() {
       ) : (
         <ul className="space-y-4">
           {cartItems.map((item) => (
-            <li key={item.id} className="flex justify-between border-b pb-2">
+            <li key={item.productId} className="flex justify-between border-b pb-2">
               <div>
                 <h2>{item.name}</h2>
                 <p>Quantity: {item.quantity}</p>
               </div>
               <div>
                 <p>{(item.price * item.quantity).toFixed(2)} MYR</p>
-                <button onClick={() => removeFromCart(item.id)} className="text-red-500 text-sm">Remove</button>
+                <button onClick={() => removeFromCart(item.productId)} className="text-red-500 text-sm">Remove</button>
               </div>
             </li>
           ))}

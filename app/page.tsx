@@ -38,7 +38,7 @@ export default function Home() {
 
       <div>
         <Link
-          href="/menu"
+          href="/products"
           className="inline-block bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
         >
           View Menu
