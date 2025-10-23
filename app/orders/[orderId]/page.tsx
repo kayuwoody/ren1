@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import QRCode from 'react-qr-code';
+import { FileText } from 'lucide-react';
 
 type WooMeta = { key: string; value: any };
 
@@ -180,6 +182,17 @@ export default function OrderDetailPage() {
         <p className="mt-4 text-right font-bold text-lg">
           Total: RM {order.total}
         </p>
+      </div>
+
+      {/* View All Orders Button */}
+      <div className="pt-4 border-t">
+        <Link
+          href="/orders"
+          className="flex items-center justify-center gap-2 w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg transition"
+        >
+          <FileText className="w-5 h-5" />
+          View All Orders
+        </Link>
       </div>
     </div>
   );
