@@ -14,4 +14,16 @@ const realWcApi = new WooCommerceRestApi({
 // Export either mock or real API based on environment
 export const wcApi = USE_MOCK ? mockWcApi : realWcApi;
 
-console.log(USE_MOCK ? '🔧 Using MOCK WooCommerce API' : '🌐 Using LIVE WooCommerce API');
+// Enhanced logging
+const apiMode = USE_MOCK ? 'MOCK' : 'LIVE';
+const apiUrl = process.env.WC_STORE_URL || 'not set';
+console.log(`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔧 WooCommerce API Configuration
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Mode: ${apiMode}
+USE_MOCK_API env: ${process.env.USE_MOCK_API}
+Store URL: ${apiUrl}
+Using: ${USE_MOCK ? 'Mock responses (no real orders)' : 'Real WooCommerce API'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`);
