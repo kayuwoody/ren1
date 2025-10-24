@@ -22,6 +22,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const skipNextSyncRef = useRef(false);
+  const disableSyncRef = useRef(false);
 
   // Load pending order items on mount
   useEffect(() => {
@@ -151,6 +152,18 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   // Auto-sync when cart changes (debounced)
   useEffect(() => {
     if (!isLoaded) return;
+
+    // Don't sync if we're on the payment page (order detail page)
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/orders/')) {
+      console.log('⏭️ Skipping sync - on payment/order page');
+      return;
+    }
+
+    // Don't sync if manually disabled
+    if (disableSyncRef.current) {
+      console.log('⏭️ Skipping sync - sync disabled');
+      return;
+    }
 
     // Skip sync if we just loaded from backend
     if (skipNextSyncRef.current) {

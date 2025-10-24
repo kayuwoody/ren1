@@ -7,7 +7,7 @@ import { getGuestId } from "@/lib/getGuestId";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cartItems, clearCart, removeFromCart } = useCart();
+  const { cartItems, clearCart, removeFromCart, syncWithPendingOrder } = useCart();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<any>(null);
@@ -57,85 +57,42 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Get user info
-    const userIdStr =
-      typeof window !== "undefined" ? localStorage.getItem("userId") : null;
-    const userId = userIdStr ? Number(userIdStr) : undefined;
-    const guestId = userId ? undefined : getGuestId();
-
-    // Build line items payload
-    const lineItems = cartItems.map((i: any) => ({
-      product_id: i.productId,
-      quantity: i.quantity,
-    }));
-
-    let wooOrder: any;
+    console.log("🛒 Starting checkout with cart items:", cartItems);
 
     try {
-      // Check if we have a pending order to update
+      // First, ensure cart is synced to pending order
+      await syncWithPendingOrder();
+      console.log("✅ Cart synced before checkout");
+
+      // Wait a moment for sync to complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Now get the pending order ID
       const pendingOrderId = localStorage.getItem("pendingOrderId");
 
-      if (pendingOrderId && pendingOrder) {
-        // Update existing pending order
-        console.log("📝 Updating existing pending order:", pendingOrderId);
-
-        const updateRes = await fetch(`/api/orders/${pendingOrderId}/update-items`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ line_items: lineItems })
-        });
-
-        if (!updateRes.ok) {
-          console.error("Update order failed");
-          // Fallback to creating new order
-          localStorage.removeItem("pendingOrderId");
-        } else {
-          wooOrder = await updateRes.json();
-          console.log("✅ Updated pending order:", wooOrder);
-        }
+      if (!pendingOrderId) {
+        setError("Failed to create order. Please try again.");
+        setLoading(false);
+        return;
       }
 
-      // Create new order if no pending order or update failed
-      if (!wooOrder) {
-        console.log("🆕 Creating new pending order");
-
-        const payload: any = {
-          line_items: lineItems,
-          ...(userId ? { userId } : { guestId }),
-        };
-
-        const res = await fetch("/api/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("Create order failed:", text);
-          setError("Order failed. Please try again.");
-          setLoading(false);
-          return;
-        }
-
-        wooOrder = await res.json();
-
-        // Store as pending order
-        localStorage.setItem("pendingOrderId", String(wooOrder.id));
-        console.log("✅ Created pending order:", wooOrder.id);
+      // Fetch the order to verify it has all items
+      const orderRes = await fetch(`/api/orders/${pendingOrderId}`);
+      if (!orderRes.ok) {
+        throw new Error("Failed to fetch order");
       }
-    } catch (err) {
-      console.error("Order error:", err);
-      setError("Network error. Please try again.");
+
+      const order = await orderRes.json();
+      console.log("📦 Order ready for payment:", order);
+
+      // Navigate to payment page
+      router.push(`/orders/${order.id}`);
       setLoading(false);
-      return;
+    } catch (err) {
+      console.error("Checkout error:", err);
+      setError("Failed to process checkout. Please try again.");
+      setLoading(false);
     }
-
-    // Clear cart and navigate to order page
-    // DON'T clear cart here - it will auto-sync empty cart to pending order!
-    // Cart will be cleared when payment is simulated
-    router.push(`/orders/${wooOrder.id}`);
-    setLoading(false);
   }
 
   return (
