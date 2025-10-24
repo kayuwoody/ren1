@@ -1,6 +1,7 @@
 // app/api/update-order/[orderId]/route.ts
 import { NextResponse } from 'next/server';
 import { getWooOrder, updateWooOrder } from '@/lib/orderService';
+import { cookies } from 'next/headers';
 
 export async function PATCH(
   req: Request,
@@ -55,6 +56,41 @@ export async function PATCH(
 
     // 4) Perform the update in one go
     const updated = await updateWooOrder(orderId, patchPayload);
+
+    // 5) If order is now ready, send push notification
+    if (body.status === 'ready-for-pickup') {
+      try {
+        const cookieStore = cookies();
+        const userIdCookie = cookieStore.get('userId');
+        const userId = userIdCookie?.value;
+
+        if (userId) {
+          // Get locker info from meta
+          const lockerNumber = combinedMeta.find(m => m.key === '_locker_number')?.value;
+          const pickupCode = combinedMeta.find(m => m.key === '_pickup_code')?.value;
+
+          await fetch(`${req.url.split('/api')[0]}/api/push/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId,
+              title: '🎉 Your order is ready!',
+              body: lockerNumber
+                ? `Pick up from Locker ${lockerNumber}${pickupCode ? ` • Code: ${pickupCode}` : ''}`
+                : 'Your order is ready for pickup',
+              url: `/orders/${orderId}`,
+              orderId
+            })
+          });
+
+          console.log(`📬 Push notification sent for order #${orderId}`);
+        }
+      } catch (notifErr) {
+        console.error('Failed to send push notification:', notifErr);
+        // Don't fail the order update if notification fails
+      }
+    }
+
     return NextResponse.json(updated);
   } catch (err: any) {
     console.error('❌ /api/update-order error:', err);

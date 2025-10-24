@@ -3,7 +3,13 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, LogOut, FileText, Settings as SettingsIcon, Award, TrendingUp } from 'lucide-react';
+import { User, LogOut, FileText, Settings as SettingsIcon, Award, TrendingUp, Bell, BellOff } from 'lucide-react';
+import {
+  isPushNotificationSupported,
+  subscribeToPushNotifications,
+  unsubscribeFromPushNotifications,
+  isSubscribedToPush
+} from '@/lib/pushNotifications';
 
 interface PointsTransaction {
   id: string;
@@ -33,6 +39,9 @@ export default function SettingsPage() {
   const [pointsBalance, setPointsBalance] = useState<number>(0);
   const [pointsHistory, setPointsHistory] = useState<PointsTransaction[]>([]);
   const [loadingPoints, setLoadingPoints] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
 
   useEffect(() => {
     // Load user info from localStorage
@@ -45,7 +54,22 @@ export default function SettingsPage() {
     if (storedUserId) {
       fetchPoints();
     }
+
+    // Check push notification support and status
+    if (typeof window !== 'undefined') {
+      setPushSupported(isPushNotificationSupported());
+      checkPushSubscription();
+    }
   }, []);
+
+  const checkPushSubscription = async () => {
+    try {
+      const subscribed = await isSubscribedToPush();
+      setPushSubscribed(subscribed);
+    } catch (err) {
+      console.error('Failed to check push subscription:', err);
+    }
+  };
 
   const fetchPoints = async () => {
     setLoadingPoints(true);
@@ -60,6 +84,28 @@ export default function SettingsPage() {
       console.error('Failed to fetch points:', err);
     } finally {
       setLoadingPoints(false);
+    }
+  };
+
+  const handlePushToggle = async () => {
+    setPushLoading(true);
+    try {
+      if (pushSubscribed) {
+        // Unsubscribe
+        await unsubscribeFromPushNotifications();
+        setPushSubscribed(false);
+        alert('Push notifications disabled');
+      } else {
+        // Subscribe
+        await subscribeToPushNotifications();
+        setPushSubscribed(true);
+        alert('Push notifications enabled! You\'ll be notified when your order is ready.');
+      }
+    } catch (err: any) {
+      console.error('Push toggle failed:', err);
+      alert(`Failed to ${pushSubscribed ? 'disable' : 'enable'} notifications: ${err.message}`);
+    } finally {
+      setPushLoading(false);
     }
   };
 
@@ -177,6 +223,55 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Push Notifications Section */}
+      {pushSupported && isLoggedIn && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center gap-3 pb-3 border-b mb-4">
+            <Bell className="w-6 h-6 text-purple-600" />
+            <h2 className="text-xl font-semibold">Notifications</h2>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="font-semibold text-gray-800">Push Notifications</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Get notified when your order is ready for pickup
+              </p>
+            </div>
+
+            <button
+              onClick={handlePushToggle}
+              disabled={pushLoading}
+              className={`ml-4 px-4 py-2 rounded-lg font-semibold transition ${
+                pushSubscribed
+                  ? 'bg-purple-600 text-white hover:bg-purple-700'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              } disabled:opacity-50`}
+            >
+              {pushLoading ? (
+                'Loading...'
+              ) : pushSubscribed ? (
+                <span className="flex items-center gap-2">
+                  <Bell className="w-4 h-4" />
+                  Enabled
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <BellOff className="w-4 h-4" />
+                  Disabled
+                </span>
+              )}
+            </button>
+          </div>
+
+          {pushSubscribed && (
+            <div className="mt-4 p-3 bg-purple-50 rounded-lg text-sm text-purple-800">
+              ✓ You'll receive notifications when your orders are ready
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Navigation Links */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
