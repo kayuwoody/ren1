@@ -17,18 +17,22 @@ export class ThermalPrinter {
 
   /**
    * Request bluetooth printer pairing
+   * Updated to support Niimbot and other printers
    */
   async pair(): Promise<BluetoothDevice> {
     try {
-      // Request bluetooth device
+      // Accept all devices to support Niimbot and other proprietary printers
       const device = await navigator.bluetooth.requestDevice({
-        filters: [
-          { services: ['000018f0-0000-1000-8000-00805f9b34fb'] }, // Common printer service
-        ],
-        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+        acceptAllDevices: true,
+        optionalServices: [
+          '000018f0-0000-1000-8000-00805f9b34fb', // Standard ESC/POS
+          'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Niimbot service (common)
+          '0000fee0-0000-1000-8000-00805f9b34fb', // Alternative Niimbot service
+        ]
       });
 
       this.device = device;
+      console.log('Paired device:', device.name, 'ID:', device.id);
       return device;
     } catch (err) {
       console.error('Failed to pair printer:', err);
@@ -38,6 +42,7 @@ export class ThermalPrinter {
 
   /**
    * Connect to paired printer
+   * Auto-discovers services and characteristics
    */
   async connect(device?: BluetoothDevice): Promise<void> {
     try {
@@ -51,11 +56,33 @@ export class ThermalPrinter {
         throw new Error('Failed to connect to GATT server');
       }
 
-      // Get printer service and characteristic
-      const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-      this.characteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+      console.log('Connected to GATT server, discovering services...');
 
-      console.log('✅ Connected to printer');
+      // Try to get primary services
+      const services = await server.getPrimaryServices();
+      console.log(`Found ${services.length} services`);
+
+      // Try each service to find writable characteristic
+      for (const service of services) {
+        try {
+          const characteristics = await service.getCharacteristics();
+          console.log(`Service ${service.uuid}: ${characteristics.length} characteristics`);
+
+          for (const char of characteristics) {
+            // Look for writable characteristic
+            if (char.properties.write || char.properties.writeWithoutResponse) {
+              this.characteristic = char;
+              console.log(`✅ Connected to printer (Service: ${service.uuid}, Char: ${char.uuid})`);
+              return;
+            }
+          }
+        } catch (err) {
+          // Skip services we can't access
+          continue;
+        }
+      }
+
+      throw new Error('No writable characteristic found on printer');
     } catch (err) {
       console.error('Failed to connect to printer:', err);
       throw new Error('Failed to connect to printer');
