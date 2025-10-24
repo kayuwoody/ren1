@@ -34,9 +34,17 @@ export async function PATCH(
     if (body.status === 'processing') {
       const itemCount = existing.line_items?.length ?? 1;
       const now = Date.now();
-      const duration = 2 * 60_000 * itemCount; // 2 min per item
+      const duration = 2 * 60_000 * itemCount; // 2 min per item
       combinedMeta.push({ key: 'startTime', value: String(now) });
       combinedMeta.push({ key: 'endTime',   value: String(now + duration) });
+    }
+
+    // 2b) If going to ready-for-pickup, add timestamp for auto-cleanup
+    if (body.status === 'ready-for-pickup') {
+      combinedMeta.push({
+        key: '_ready_timestamp',
+        value: new Date().toISOString()
+      });
     }
 
     // 3) Build patch payload: status + full meta_data

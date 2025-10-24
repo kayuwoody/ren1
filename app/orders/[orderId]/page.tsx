@@ -145,27 +145,75 @@ export default function OrderDetailPage() {
       )}
 
       {isReady && (
-        <div className="space-y-2">
-          <p>
-            <strong>Locker Number:</strong>{' '}
-            {getMeta('_locker_number') ?? '—'}
+        <div className="space-y-4">
+          <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4">
+            <p className="text-green-800 font-semibold text-lg mb-2">
+              ✅ Your order is ready for pickup!
+            </p>
+            <p className="text-sm text-green-700">
+              Use the QR code below to unlock the locker
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <p>
+              <strong>Locker Number:</strong>{' '}
+              {getMeta('_locker_number') ?? '—'}
+            </p>
+            <p>
+              <strong>Pickup Code:</strong>{' '}
+              <span className="font-mono text-lg">
+                {getMeta('_pickup_code')}
+              </span>
+            </p>
+            {getMeta('_pickup_qr_url') && (
+              <div className="mt-2">
+                <p className="font-semibold mb-1">QR Code:</p>
+                <img
+                  src={String(getMeta('_pickup_qr_url'))}
+                  alt="QR Code"
+                  className="w-32 h-32 border"
+                />
+              </div>
+            )}
+          </div>
+
+          <button
+            className="w-full mt-4 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+            onClick={async () => {
+              if (!confirm('Confirm you have picked up your order?')) return;
+
+              try {
+                const res = await fetch(`/api/update-order/${order.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: 'completed' }),
+                });
+
+                if (res.ok) {
+                  const updated = await res.json();
+                  console.log('✅ Order marked as completed', updated);
+                  setOrder(updated);
+
+                  // Clear from localStorage
+                  localStorage.removeItem('currentWooId');
+
+                  alert('Thank you! Order marked as completed.');
+                } else {
+                  console.error('Failed to mark as completed');
+                  alert('Failed to update order. Please try again.');
+                }
+              } catch (e) {
+                console.error(e);
+                alert('Error updating order. Please try again.');
+              }
+            }}
+          >
+            ✓ I Picked It Up
+          </button>
+          <p className="text-xs text-gray-500 text-center">
+            Tap this button after collecting your order to earn loyalty points
           </p>
-          <p>
-            <strong>Pickup Code:</strong>{' '}
-            <span className="font-mono">
-              {getMeta('_pickup_code')}
-            </span>
-          </p>
-          {getMeta('_pickup_qr_url') && (
-            <div className="mt-2">
-              <p className="font-semibold mb-1">QR Code:</p>
-              <img
-                src={String(getMeta('_pickup_qr_url'))}
-                alt="QR Code"
-                className="w-32 h-32 border"
-              />
-            </div>
-          )}
         </div>
       )}
 

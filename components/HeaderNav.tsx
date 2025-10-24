@@ -45,6 +45,18 @@ export default function HeaderNav() {
         const order = await res.json();
         setOrderStatus(order.status);
 
+        // If completed, clear from localStorage and hide timer
+        if (order.status === 'completed') {
+          console.log('✅ Order completed, clearing timer');
+          localStorage.removeItem('currentWooId');
+          localStorage.removeItem('endTime');
+          localStorage.removeItem('startTime');
+          setCurrentOrderId(null);
+          setOrderStatus(null);
+          setIsFlashing(false);
+          return;
+        }
+
         // If ready, trigger flash
         if (order.status === 'ready-for-pickup') {
           setIsFlashing(true);
