@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
 import { getGuestId } from "@/lib/getGuestId";
+import { printerManager } from "@/lib/printerService";
 
 export default function PaymentPage() {
   const router = useRouter();
@@ -81,6 +82,21 @@ export default function PaymentPage() {
 
       const updatedOrder = await updateRes.json();
       console.log("✅ Order marked as processing:", updatedOrder.id);
+
+      // Auto-print kitchen stub (if printer is configured)
+      try {
+        const hasKitchenPrinter = printerManager.getPrinterConfig('kitchen');
+        if (hasKitchenPrinter && printerManager.isBluetoothSupported()) {
+          console.log('🖨️ Auto-printing kitchen stub...');
+          const printer = printerManager.getKitchenPrinter();
+          await printer.connect();
+          await printer.printKitchenStub(order);
+          console.log('✅ Kitchen stub printed');
+        }
+      } catch (printErr) {
+        console.warn('Failed to print kitchen stub (non-critical):', printErr);
+        // Don't block the flow if printing fails
+      }
 
       // Clear cart now that payment is successful
       clearCart();

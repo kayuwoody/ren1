@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import QRCode from 'react-qr-code';
-import { FileText } from 'lucide-react';
+import { FileText, Receipt } from 'lucide-react';
 
 type WooMeta = { key: string; value: any };
 
@@ -278,8 +278,20 @@ export default function OrderDetailPage() {
         </p>
       </div>
 
-      {/* View All Orders Button */}
-      <div className="pt-4 border-t">
+      {/* Receipt and Orders Buttons */}
+      <div className="pt-4 border-t space-y-3">
+        {/* View Receipt Button */}
+        {!isPending && (
+          <Link
+            href={`/orders/${orderId}/receipt`}
+            className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition"
+          >
+            <Receipt className="w-5 h-5" />
+            View Receipt
+          </Link>
+        )}
+
+        {/* View All Orders Button */}
         <Link
           href="/orders"
           className="flex items-center justify-center gap-2 w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg transition"
