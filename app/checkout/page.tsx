@@ -141,20 +141,6 @@ export default function CheckoutPage() {
     <div className="p-4 max-w-lg mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Checkout</h1>
 
-      {pendingOrder && (
-        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
-          <p className="font-semibold text-yellow-800">
-            ⚠️ You have an unpaid order
-          </p>
-          <p className="text-sm text-yellow-700 mt-1">
-            Order #{pendingOrder.id} • RM {pendingOrder.total}
-          </p>
-          <p className="text-xs text-yellow-600 mt-2">
-            Your current cart will update this order instead of creating a new one.
-          </p>
-        </div>
-      )}
-
       {/* Cart summary */}
       <ul className="mb-4 space-y-2">
         {cartItems.map((item: any) => (

@@ -136,7 +136,10 @@ export default function OrderDetailPage() {
                   localStorage.setItem('activeOrders', JSON.stringify(activeOrders));
                 }
 
-                console.log('✅ Payment processed, added to active orders');
+                // Trigger immediate timer refresh
+                window.dispatchEvent(new Event('refreshActiveOrders'));
+
+                console.log('✅ Payment processed, added to active orders, timer refreshed');
               } else {
                 console.error('Simulate payment failed');
               }

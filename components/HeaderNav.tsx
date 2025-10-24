@@ -91,7 +91,17 @@ export default function HeaderNav() {
     // Poll every 10 seconds
     const interval = setInterval(fetchActiveOrders, 10000);
 
-    return () => clearInterval(interval);
+    // Listen for manual refresh events (when payment is made)
+    const handleRefresh = () => {
+      console.log('🔄 Manual timer refresh triggered');
+      fetchActiveOrders();
+    };
+    window.addEventListener('refreshActiveOrders', handleRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('refreshActiveOrders', handleRefresh);
+    };
   }, []);
 
   // Update timers every second
