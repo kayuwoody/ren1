@@ -1,10 +1,12 @@
 {
-  "name": "Coffee Locker App",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",  // 👈 sets Node 20
+  "name": "Coffee Oasis POS",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
   "features": {
-    "ghcr.io/devcontainers-contrib/features/pnpm:1": {}          // 👈 auto-installs pnpm
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
   },
-  "postCreateCommand": "pnpm install",                           // 👈 auto-installs deps
+  "postCreateCommand": "npm install",
   "customizations": {
     "vscode": {
       "settings": {

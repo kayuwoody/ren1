@@ -1,48 +1,33 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
+/**
+ * Home Page - Redirects to Menu
+ *
+ * Since Menu (/products) is now the primary landing page,
+ * this page simply redirects users there.
+ *
+ * UX Decision: Menu-first approach for a coffee shop POS
+ * - Faster ordering for customers
+ * - Primary action is browsing/ordering
+ * - Settings accessible via persistent nav icon
+ */
 export default function Home() {
-  const [clientId, setClientId] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    setClientId(localStorage.getItem('clientId'));
-  }, []);
+    // Redirect to menu (products page) as default landing
+    router.replace('/products');
+  }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('clientId');
-    location.reload();
-  };
-
+  // Show loading state during redirect
   return (
-    <main className="max-w-xl mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Welcome to Coffee Oasis</h1>
-
-      {clientId ? (
-        <div className="space-y-2">
-          <p className="text-green-600">Logged in as <strong>{clientId}</strong></p>
-          <div className="flex gap-4">
-            <Link href="/orders" className="text-blue-600 hover:underline">My Orders</Link>
-            <button onClick={handleLogout} className="text-red-500 hover:underline">Logout</button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <p>You’re not logged in.</p>
-          <Link href="/login" className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-            Login or Register
-          </Link>
-        </div>
-      )}
-
-      <div>
-        <Link
-          href="/menu"
-          className="inline-block bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-        >
-          View Menu
-        </Link>
+    <main className="max-w-xl mx-auto p-6 flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading menu...</p>
       </div>
     </main>
   );

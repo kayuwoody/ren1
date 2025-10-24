@@ -32,7 +32,7 @@ export default function CheckoutPage() {
     // fallback guest identity
     const guestId = userId ? undefined : getGuestId();
 
-    // Build payload for API (NOTE: use item.id, NOT productId)
+    // Build payload for API
     const payload: any = {
       line_items: cartItems.map((i: any) => ({
         product_id: i.productId, // correct field
@@ -83,7 +83,7 @@ export default function CheckoutPage() {
       {/* Cart summary */}
       <ul className="mb-4 space-y-2">
         {cartItems.map((item: any) => (
-          <li key={item.id} className="flex justify-between">
+          <li key={item.productId} className="flex justify-between">
             <span>
               {item.name} × {item.quantity}
             </span>

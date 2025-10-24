@@ -1,17 +1,8 @@
 // app/api/products/route.ts
 import { NextResponse } from "next/server";
-import WooCommerceRestApi from "@woocommerce/woocommerce-rest-api";
+import { wcApi } from "@/lib/wooClient";
 
 export const dynamic = "force-dynamic"; // ensures this API route runs fresh each time
-console.log("🔑 ENV URL:", process.env.WC_STORE_URL);
-console.log("🔑 KEY:", process.env.WC_CONSUMER_KEY?.slice(0, 5));
-
-const api = new WooCommerceRestApi({
-  url: process.env.WC_STORE_URL || "",
-  consumerKey: process.env.WC_CONSUMER_KEY || "",
-  consumerSecret: process.env.WC_CONSUMER_SECRET || "",
-  version: "wc/v3",
-});
 
 /* export async function GET() {
   try {
@@ -37,7 +28,7 @@ const api = new WooCommerceRestApi({
 export async function GET() {
   console.log("📦 Calling WooCommerce /products");
   try {
-    const { data } = await api.get("products");
+    const { data } = await wcApi.get("products");
     console.log("✅ WooCommerce returned:", data.length, "products");
     return NextResponse.json(data);
   } catch (error: any) {
