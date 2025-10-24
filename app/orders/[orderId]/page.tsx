@@ -184,25 +184,50 @@ export default function OrderDetailPage() {
               if (!confirm('Confirm you have picked up your order?')) return;
 
               try {
+                // 1. Mark order as completed
                 const res = await fetch(`/api/update-order/${order.id}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ status: 'completed' }),
                 });
 
-                if (res.ok) {
-                  const updated = await res.json();
-                  console.log('✅ Order marked as completed', updated);
-                  setOrder(updated);
-
-                  // Clear from localStorage
-                  localStorage.removeItem('currentWooId');
-
-                  alert('Thank you! Order marked as completed.');
-                } else {
+                if (!res.ok) {
                   console.error('Failed to mark as completed');
                   alert('Failed to update order. Please try again.');
+                  return;
                 }
+
+                const updated = await res.json();
+                console.log('✅ Order marked as completed', updated);
+                setOrder(updated);
+
+                // 2. Award loyalty points
+                try {
+                  const pointsRes = await fetch('/api/loyalty/award', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      reason: 'manual_pickup',
+                      orderId: order.id
+                    })
+                  });
+
+                  if (pointsRes.ok) {
+                    const pointsData = await pointsRes.json();
+                    console.log('✅ Points awarded:', pointsData);
+                    alert(`Thank you! Order completed.\n\n🎉 ${pointsData.message}\nNew balance: ${pointsData.balance} points`);
+                  } else {
+                    // Order completed but points failed - still show success
+                    alert('Thank you! Order marked as completed.');
+                  }
+                } catch (pointsErr) {
+                  console.warn('Points award failed:', pointsErr);
+                  alert('Thank you! Order marked as completed.');
+                }
+
+                // 3. Clear from localStorage
+                localStorage.removeItem('currentWooId');
+
               } catch (e) {
                 console.error(e);
                 alert('Error updating order. Please try again.');
@@ -212,7 +237,7 @@ export default function OrderDetailPage() {
             ✓ I Picked It Up
           </button>
           <p className="text-xs text-gray-500 text-center">
-            Tap this button after collecting your order to earn loyalty points
+            Tap this button after collecting your order to earn +10 loyalty points!
           </p>
         </div>
       )}

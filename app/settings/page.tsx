@@ -3,7 +3,16 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, LogOut, FileText, Settings as SettingsIcon } from 'lucide-react';
+import { User, LogOut, FileText, Settings as SettingsIcon, Award, TrendingUp } from 'lucide-react';
+
+interface PointsTransaction {
+  id: string;
+  type: 'earned' | 'redeemed';
+  amount: number;
+  reason: string;
+  orderId?: string;
+  timestamp: string;
+}
 
 /**
  * Settings Page
@@ -21,6 +30,9 @@ export default function SettingsPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [pointsBalance, setPointsBalance] = useState<number>(0);
+  const [pointsHistory, setPointsHistory] = useState<PointsTransaction[]>([]);
+  const [loadingPoints, setLoadingPoints] = useState(false);
 
   useEffect(() => {
     // Load user info from localStorage
@@ -28,7 +40,28 @@ export default function SettingsPage() {
     const storedEmail = localStorage.getItem('userEmail');
     setUserId(storedUserId);
     setEmail(storedEmail);
+
+    // Fetch loyalty points if logged in
+    if (storedUserId) {
+      fetchPoints();
+    }
   }, []);
+
+  const fetchPoints = async () => {
+    setLoadingPoints(true);
+    try {
+      const res = await fetch('/api/loyalty/points');
+      if (res.ok) {
+        const data = await res.json();
+        setPointsBalance(data.balance);
+        setPointsHistory(data.history);
+      }
+    } catch (err) {
+      console.error('Failed to fetch points:', err);
+    } finally {
+      setLoadingPoints(false);
+    }
+  };
 
   const handleLogout = () => {
     // Clear all user data
@@ -49,6 +82,63 @@ export default function SettingsPage() {
         <SettingsIcon className="w-8 h-8 text-gray-700" />
         <h1 className="text-3xl font-bold">Settings</h1>
       </div>
+
+      {/* Loyalty Points Section */}
+      {isLoggedIn && (
+        <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg shadow-md p-6 space-y-4">
+          <div className="flex items-center gap-3 pb-3 border-b border-orange-200">
+            <Award className="w-6 h-6 text-orange-600" />
+            <h2 className="text-xl font-semibold">Loyalty Points</h2>
+          </div>
+
+          {loadingPoints ? (
+            <p className="text-gray-600">Loading...</p>
+          ) : (
+            <>
+              <div className="bg-white rounded-lg p-6 text-center">
+                <p className="text-sm text-gray-500 mb-2">Your Balance</p>
+                <p className="text-5xl font-bold text-orange-600">{pointsBalance}</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Worth RM {(pointsBalance / 100).toFixed(2)}
+                </p>
+              </div>
+
+              {pointsHistory.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                    <TrendingUp className="w-4 h-4" />
+                    <p className="font-semibold">Recent Activity</p>
+                  </div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {pointsHistory.slice(0, 10).map((txn) => (
+                      <div key={txn.id} className="bg-white rounded p-3 flex justify-between items-center text-sm">
+                        <div>
+                          <p className="font-medium text-gray-800">{txn.reason}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(txn.timestamp).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <span className={`font-bold ${txn.type === 'earned' ? 'text-green-600' : 'text-red-600'}`}>
+                          {txn.type === 'earned' ? '+' : '-'}{txn.amount}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-white rounded-lg p-4 text-sm text-gray-600">
+                <p className="font-semibold mb-2">How to earn points:</p>
+                <ul className="space-y-1">
+                  <li>• +10 points: Confirm pickup manually</li>
+                  <li>• +5 points: Complete an order</li>
+                  <li>• +20 points: First order bonus</li>
+                </ul>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* User Profile Section */}
       <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
