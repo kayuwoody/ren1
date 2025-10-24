@@ -125,6 +125,18 @@ export default function OrderDetailPage() {
                 const updated = await res.json();
                 console.log('🔄 Order updated to processing', updated);
                 setOrder(updated);
+
+                // Clear pending order since it's now paid
+                localStorage.removeItem('pendingOrderId');
+
+                // Add to active orders list for timer tracking
+                const activeOrders = JSON.parse(localStorage.getItem('activeOrders') || '[]');
+                if (!activeOrders.includes(String(order.id))) {
+                  activeOrders.push(String(order.id));
+                  localStorage.setItem('activeOrders', JSON.stringify(activeOrders));
+                }
+
+                console.log('✅ Payment processed, added to active orders');
               } else {
                 console.error('Simulate payment failed');
               }
@@ -225,8 +237,10 @@ export default function OrderDetailPage() {
                   alert('Thank you! Order marked as completed.');
                 }
 
-                // 3. Clear from localStorage
-                localStorage.removeItem('currentWooId');
+                // 3. Remove from active orders
+                const activeOrders = JSON.parse(localStorage.getItem('activeOrders') || '[]');
+                const filteredOrders = activeOrders.filter((id: string) => id !== String(order.id));
+                localStorage.setItem('activeOrders', JSON.stringify(filteredOrders));
 
               } catch (e) {
                 console.error(e);
