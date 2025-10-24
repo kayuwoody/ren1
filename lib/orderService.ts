@@ -153,6 +153,9 @@ export async function markOrderReadyForPickup(
   if (pickupCode) meta.push({ key: '_pickup_code', value: pickupCode });
   if (qrUrl) meta.push({ key: '_pickup_qr_url', value: qrUrl });
 
+  // Add timestamp for auto-cleanup tracking
+  meta.push({ key: '_ready_timestamp', value: new Date().toISOString() });
+
   // patch both status + meta
   const current = await getWooOrder(id);
   const combined = [

@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import QRCode from 'react-qr-code';
 import { FileText } from 'lucide-react';
+import { useCart } from '@/context/cartContext';
 
 type WooMeta = { key: string; value: any };
 
@@ -13,6 +14,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [progress, setProgress] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { clearCart } = useCart();
 
   if (!orderId) {
     console.error('No orderId in URL');
@@ -125,6 +127,24 @@ export default function OrderDetailPage() {
                 const updated = await res.json();
                 console.log('🔄 Order updated to processing', updated);
                 setOrder(updated);
+
+                // Clear pending order since it's now paid
+                localStorage.removeItem('pendingOrderId');
+
+                // Clear cart now that order is paid
+                clearCart();
+
+                // Add to active orders list for timer tracking
+                const activeOrders = JSON.parse(localStorage.getItem('activeOrders') || '[]');
+                if (!activeOrders.includes(String(order.id))) {
+                  activeOrders.push(String(order.id));
+                  localStorage.setItem('activeOrders', JSON.stringify(activeOrders));
+                }
+
+                // Trigger immediate timer refresh
+                window.dispatchEvent(new Event('refreshActiveOrders'));
+
+                console.log('✅ Payment processed, cart cleared, added to active orders, timer refreshed');
               } else {
                 console.error('Simulate payment failed');
               }
@@ -145,27 +165,102 @@ export default function OrderDetailPage() {
       )}
 
       {isReady && (
-        <div className="space-y-2">
-          <p>
-            <strong>Locker Number:</strong>{' '}
-            {getMeta('_locker_number') ?? '—'}
+        <div className="space-y-4">
+          <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4">
+            <p className="text-green-800 font-semibold text-lg mb-2">
+              ✅ Your order is ready for pickup!
+            </p>
+            <p className="text-sm text-green-700">
+              Use the QR code below to unlock the locker
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <p>
+              <strong>Locker Number:</strong>{' '}
+              {getMeta('_locker_number') ?? '—'}
+            </p>
+            <p>
+              <strong>Pickup Code:</strong>{' '}
+              <span className="font-mono text-lg">
+                {getMeta('_pickup_code')}
+              </span>
+            </p>
+            {getMeta('_pickup_qr_url') && (
+              <div className="mt-2">
+                <p className="font-semibold mb-1">QR Code:</p>
+                <img
+                  src={String(getMeta('_pickup_qr_url'))}
+                  alt="QR Code"
+                  className="w-32 h-32 border"
+                />
+              </div>
+            )}
+          </div>
+
+          <button
+            className="w-full mt-4 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+            onClick={async () => {
+              if (!confirm('Confirm you have picked up your order?')) return;
+
+              try {
+                // 1. Mark order as completed
+                const res = await fetch(`/api/update-order/${order.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: 'completed' }),
+                });
+
+                if (!res.ok) {
+                  console.error('Failed to mark as completed');
+                  alert('Failed to update order. Please try again.');
+                  return;
+                }
+
+                const updated = await res.json();
+                console.log('✅ Order marked as completed', updated);
+                setOrder(updated);
+
+                // 2. Award loyalty points
+                try {
+                  const pointsRes = await fetch('/api/loyalty/award', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      reason: 'manual_pickup',
+                      orderId: order.id
+                    })
+                  });
+
+                  if (pointsRes.ok) {
+                    const pointsData = await pointsRes.json();
+                    console.log('✅ Points awarded:', pointsData);
+                    alert(`Thank you! Order completed.\n\n🎉 ${pointsData.message}\nNew balance: ${pointsData.balance} points`);
+                  } else {
+                    // Order completed but points failed - still show success
+                    alert('Thank you! Order marked as completed.');
+                  }
+                } catch (pointsErr) {
+                  console.warn('Points award failed:', pointsErr);
+                  alert('Thank you! Order marked as completed.');
+                }
+
+                // 3. Remove from active orders
+                const activeOrders = JSON.parse(localStorage.getItem('activeOrders') || '[]');
+                const filteredOrders = activeOrders.filter((id: string) => id !== String(order.id));
+                localStorage.setItem('activeOrders', JSON.stringify(filteredOrders));
+
+              } catch (e) {
+                console.error(e);
+                alert('Error updating order. Please try again.');
+              }
+            }}
+          >
+            ✓ I Picked It Up
+          </button>
+          <p className="text-xs text-gray-500 text-center">
+            Tap this button after collecting your order to earn +10 loyalty points!
           </p>
-          <p>
-            <strong>Pickup Code:</strong>{' '}
-            <span className="font-mono">
-              {getMeta('_pickup_code')}
-            </span>
-          </p>
-          {getMeta('_pickup_qr_url') && (
-            <div className="mt-2">
-              <p className="font-semibold mb-1">QR Code:</p>
-              <img
-                src={String(getMeta('_pickup_qr_url'))}
-                alt="QR Code"
-                className="w-32 h-32 border"
-              />
-            </div>
-          )}
         </div>
       )}
 

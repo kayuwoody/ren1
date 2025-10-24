@@ -9,6 +9,25 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
 
+  // Helper function to get status badge
+  const getStatusBadge = (status: string) => {
+    const badges: Record<string, { icon: string; color: string; bg: string; label: string }> = {
+      'pending': { icon: '🟡', color: 'text-yellow-800', bg: 'bg-yellow-100', label: 'Pending' },
+      'processing': { icon: '🔵', color: 'text-blue-800', bg: 'bg-blue-100', label: 'Preparing' },
+      'ready-for-pickup': { icon: '🟢', color: 'text-green-800', bg: 'bg-green-100', label: 'Ready!' },
+      'completed': { icon: '⚪', color: 'text-gray-600', bg: 'bg-gray-100', label: 'Completed' },
+    };
+
+    const badge = badges[status] || { icon: '⚫', color: 'text-gray-800', bg: 'bg-gray-100', label: status };
+
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${badge.color} ${badge.bg}`}>
+        <span>{badge.icon}</span>
+        <span>{badge.label}</span>
+      </span>
+    );
+  };
+
   // Fetch all orders; server will use userId cookie if present, otherwise guestId fallback
   useEffect(() => {
     setLoading(true);
@@ -88,22 +107,27 @@ export default function OrdersPage() {
               >
                 <Link
                   href={`/orders/${order.id}`}
-                  className="flex justify-between items-center"
+                  className="block"
                 >
-                  <div>
-                    <p className="font-semibold">Order #{order.id}</p>
-                    <p className="text-xs text-gray-500">
-                      {dateLabel} • {order.status}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold">RM {order.total ?? '—'}</p>
-                    {order.line_items?.length ? (
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-semibold">Order #{order.id}</p>
                       <p className="text-xs text-gray-500">
-                        {order.line_items.length} item
-                        {order.line_items.length > 1 ? 's' : ''}
+                        {dateLabel}
                       </p>
-                    ) : null}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold">RM {order.total ?? '—'}</p>
+                      {order.line_items?.length ? (
+                        <p className="text-xs text-gray-500">
+                          {order.line_items.length} item
+                          {order.line_items.length > 1 ? 's' : ''}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(order.status)}
                   </div>
                 </Link>
               </li>
