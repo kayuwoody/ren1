@@ -156,6 +156,9 @@ export default function HeaderNav() {
   // Show cart icon?
   const showCart = cartItems.length > 0;
 
+  // Calculate total quantity (not just unique items)
+  const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
     <header className="sticky top-0 z-50 bg-white border-b shadow-sm">
       <nav className="max-w-md mx-auto px-4 h-16 flex items-center justify-between gap-4">
@@ -253,9 +256,9 @@ export default function HeaderNav() {
           >
             <ShoppingCart className="w-6 h-6 text-blue-600" />
             <span className="text-xs text-blue-600 mt-1">Cart</span>
-            {/* Badge with item count */}
+            {/* Badge with total quantity */}
             <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-              {cartItems.length}
+              {totalQuantity}
             </span>
           </Link>
         )}

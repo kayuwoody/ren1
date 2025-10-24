@@ -7,7 +7,7 @@ import { getGuestId } from "@/lib/getGuestId";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cartItems, clearCart } = useCart();
+  const { cartItems, clearCart, removeFromCart } = useCart();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<any>(null);
@@ -142,16 +142,25 @@ export default function CheckoutPage() {
     <div className="p-4 max-w-lg mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Checkout</h1>
 
-      {/* Cart summary */}
+      {/* Cart summary with remove buttons */}
       <ul className="mb-4 space-y-2">
         {cartItems.map((item: any) => (
-          <li key={item.productId} className="flex justify-between">
-            <span>
-              {item.name} × {item.quantity}
-            </span>
-            <span>
-              RM {((item.price ?? 0) * (item.quantity ?? 0)).toFixed(2)}
-            </span>
+          <li key={item.productId} className="flex justify-between items-center border-b pb-2">
+            <div className="flex-1">
+              <p className="font-medium">{item.name}</p>
+              <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-semibold">
+                RM {((item.price ?? 0) * (item.quantity ?? 0)).toFixed(2)}
+              </span>
+              <button
+                onClick={() => removeFromCart(item.productId)}
+                className="text-red-600 hover:text-red-800 text-sm font-medium"
+              >
+                Remove
+              </button>
+            </div>
           </li>
         ))}
       </ul>

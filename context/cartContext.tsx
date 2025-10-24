@@ -73,10 +73,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     loadPendingOrder();
   }, []);
 
-  // Sync cart changes to pending order
+  // Sync cart changes to pending order (or create one if needed)
   const syncWithPendingOrder = async () => {
-    const pendingOrderId = localStorage.getItem('pendingOrderId');
-    if (!pendingOrderId || !isLoaded) return;
+    if (!isLoaded) return;
 
     // Don't sync empty carts to prevent accidental deletion
     if (cartItems.length === 0) {
@@ -84,6 +83,48 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    let pendingOrderId = localStorage.getItem('pendingOrderId');
+
+    // If no pending order exists, create one
+    if (!pendingOrderId) {
+      console.log('🆕 No pending order found, creating one...');
+      try {
+        const userIdStr = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        const userId = userIdStr ? Number(userIdStr) : undefined;
+
+        const lineItems = cartItems.map(item => ({
+          product_id: item.productId,
+          quantity: item.quantity
+        }));
+
+        const payload: any = {
+          line_items: lineItems,
+          ...(userId ? { userId } : {})
+        };
+
+        const res = await fetch('/api/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          console.error('❌ Failed to create pending order');
+          return;
+        }
+
+        const newOrder = await res.json();
+        pendingOrderId = String(newOrder.id);
+        localStorage.setItem('pendingOrderId', pendingOrderId);
+        console.log(`✅ Created pending order #${pendingOrderId}`);
+        return;
+      } catch (err) {
+        console.error('❌ Failed to create pending order:', err);
+        return;
+      }
+    }
+
+    // Update existing pending order
     try {
       const lineItems = cartItems.map(item => ({
         product_id: item.productId,
