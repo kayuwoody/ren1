@@ -132,7 +132,8 @@ export default function CheckoutPage() {
     }
 
     // Clear cart and navigate to order page
-    clearCart();
+    // DON'T clear cart here - it will auto-sync empty cart to pending order!
+    // Cart will be cleared when payment is simulated
     router.push(`/orders/${wooOrder.id}`);
     setLoading(false);
   }

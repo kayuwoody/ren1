@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import QRCode from 'react-qr-code';
 import { FileText } from 'lucide-react';
+import { useCart } from '@/context/cartContext';
 
 type WooMeta = { key: string; value: any };
 
@@ -13,6 +14,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [progress, setProgress] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { clearCart } = useCart();
 
   if (!orderId) {
     console.error('No orderId in URL');
@@ -129,6 +131,9 @@ export default function OrderDetailPage() {
                 // Clear pending order since it's now paid
                 localStorage.removeItem('pendingOrderId');
 
+                // Clear cart now that order is paid
+                clearCart();
+
                 // Add to active orders list for timer tracking
                 const activeOrders = JSON.parse(localStorage.getItem('activeOrders') || '[]');
                 if (!activeOrders.includes(String(order.id))) {
@@ -139,7 +144,7 @@ export default function OrderDetailPage() {
                 // Trigger immediate timer refresh
                 window.dispatchEvent(new Event('refreshActiveOrders'));
 
-                console.log('✅ Payment processed, added to active orders, timer refreshed');
+                console.log('✅ Payment processed, cart cleared, added to active orders, timer refreshed');
               } else {
                 console.error('Simulate payment failed');
               }

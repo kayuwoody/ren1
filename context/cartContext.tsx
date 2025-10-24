@@ -26,21 +26,26 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadPendingOrder = async () => {
       const pendingOrderId = localStorage.getItem('pendingOrderId');
+      console.log('🛒 CartContext mount - pendingOrderId:', pendingOrderId);
+
       if (!pendingOrderId) {
+        console.log('🛒 No pending order, starting with empty cart');
         setIsLoaded(true);
         return;
       }
 
+      console.log(`🛒 Fetching pending order #${pendingOrderId}...`);
       try {
         const res = await fetch(`/api/orders/${pendingOrderId}`);
         if (!res.ok) {
-          // Order doesn't exist, clear it
+          console.warn(`🛒 Order #${pendingOrderId} not found, clearing pendingOrderId`);
           localStorage.removeItem('pendingOrderId');
           setIsLoaded(true);
           return;
         }
 
         const order = await res.json();
+        console.log(`🛒 Fetched order #${pendingOrderId}, status: ${order.status}, items:`, order.line_items);
 
         // Only load if still pending
         if (order.status === 'pending') {
@@ -53,13 +58,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           }));
 
           setCartItems(items);
-          console.log('🛒 Loaded pending order items into cart:', items);
+          console.log('✅ Loaded pending order items into cart:', items);
         } else {
-          // Order was paid, clear it
+          console.log(`🛒 Order #${pendingOrderId} is ${order.status}, not loading items`);
           localStorage.removeItem('pendingOrderId');
         }
       } catch (err) {
-        console.error('Failed to load pending order:', err);
+        console.error('❌ Failed to load pending order:', err);
       }
 
       setIsLoaded(true);
@@ -73,11 +78,19 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const pendingOrderId = localStorage.getItem('pendingOrderId');
     if (!pendingOrderId || !isLoaded) return;
 
+    // Don't sync empty carts to prevent accidental deletion
+    if (cartItems.length === 0) {
+      console.log('🛒 Skipping sync - cart is empty');
+      return;
+    }
+
     try {
       const lineItems = cartItems.map(item => ({
         product_id: item.productId,
         quantity: item.quantity
       }));
+
+      console.log(`🔄 Syncing ${cartItems.length} items to pending order #${pendingOrderId}...`);
 
       await fetch(`/api/orders/${pendingOrderId}/update-items`, {
         method: 'PATCH',
@@ -85,9 +98,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         body: JSON.stringify({ line_items: lineItems })
       });
 
-      console.log('🔄 Synced cart with pending order');
+      console.log('✅ Synced cart with pending order');
     } catch (err) {
-      console.error('Failed to sync with pending order:', err);
+      console.error('❌ Failed to sync with pending order:', err);
     }
   };
 
@@ -103,6 +116,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   }, [cartItems, isLoaded]);
 
   const addToCart = (item: CartItem) => {
+    console.log('➕ Adding to cart:', item);
     setCartItems(prev => {
       const existing = prev.find(ci => ci.productId === item.productId);
       if (existing) {
@@ -118,10 +132,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeFromCart = (productId: number) => {
+    console.log('➖ Removing from cart:', productId);
     setCartItems(prev => prev.filter(ci => ci.productId !== productId));
   };
 
   const clearCart = () => {
+    console.log('🗑️ Clearing cart');
     setCartItems([]);
   };
 
