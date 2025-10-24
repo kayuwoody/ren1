@@ -97,8 +97,8 @@ export default function PaymentPage() {
 
       console.log("✅ Payment processed, cart cleared, order active");
 
-      // Navigate to order detail page
-      router.push(`/orders/${order.id}`);
+      // Navigate back to menu page
+      router.push("/products");
     } catch (err) {
       console.error("Payment error:", err);
       setError("Network error. Please try again.");

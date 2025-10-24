@@ -151,8 +151,15 @@ export default function OrderDetailPage() {
 
       {isProcessing && (
         <div>
-          <p className="text-sm text-gray-500">Preparing your order…</p>
+          <p className="text-sm text-gray-500">
+            {progress >= 100 ? 'Out for Delivery to Locker…' : 'Preparing your order…'}
+          </p>
           <progress value={progress} max={100} className="w-full h-4" />
+          {progress >= 100 && (
+            <p className="text-xs text-orange-600 mt-2">
+              Your order will be ready for pickup once it's delivered to the locker
+            </p>
+          )}
         </div>
       )}
 
