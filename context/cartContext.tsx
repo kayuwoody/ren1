@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
 export interface CartItem {
   productId: number;
@@ -21,6 +21,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const skipNextSyncRef = useRef(false);
 
   // Load pending order items on mount
   useEffect(() => {
@@ -57,6 +58,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             quantity: item.quantity
           }));
 
+          // Skip the next sync since we're loading FROM backend
+          skipNextSyncRef.current = true;
           setCartItems(items);
           console.log('✅ Loaded pending order items into cart:', items);
         } else {
@@ -148,6 +151,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   // Auto-sync when cart changes (debounced)
   useEffect(() => {
     if (!isLoaded) return;
+
+    // Skip sync if we just loaded from backend
+    if (skipNextSyncRef.current) {
+      console.log('⏭️ Skipping sync - cart was just loaded from backend');
+      skipNextSyncRef.current = false;
+      return;
+    }
 
     const timeout = setTimeout(() => {
       syncWithPendingOrder();
