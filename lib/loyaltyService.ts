@@ -34,18 +34,33 @@ export interface LoyaltyPoints {
  */
 export async function getCustomerPoints(userId: number): Promise<LoyaltyPoints> {
   try {
+    console.log(`🔍 [getCustomerPoints] Fetching points for user ${userId}`);
     const { data: customer } = await wcApi.get(`customers/${userId}`);
+    console.log(`🔍 [getCustomerPoints] Customer meta_data count:`, customer.meta_data?.length || 0);
 
     // Extract points from meta_data
-    const pointsBalance = customer.meta_data?.find((m: any) => m.key === '_loyalty_points')?.value || 0;
-    const pointsHistory = customer.meta_data?.find((m: any) => m.key === '_loyalty_history')?.value || '[]';
+    const pointsMeta = customer.meta_data?.find((m: any) => m.key === '_loyalty_points');
+    const historyMeta = customer.meta_data?.find((m: any) => m.key === '_loyalty_history');
 
-    return {
+    console.log(`🔍 [getCustomerPoints] Found loyalty meta:`, {
+      pointsMeta: pointsMeta ? { key: pointsMeta.key, value: pointsMeta.value } : null,
+      historyMeta: historyMeta ? { key: historyMeta.key, valueLength: historyMeta.value?.length } : null
+    });
+
+    const pointsBalance = pointsMeta?.value || 0;
+    const pointsHistory = historyMeta?.value || '[]';
+
+    const result = {
       balance: Number(pointsBalance),
       history: JSON.parse(pointsHistory)
     };
+
+    console.log(`🔍 [getCustomerPoints] Returning:`, { balance: result.balance, historyCount: result.history.length });
+
+    return result;
   } catch (err: any) {
     console.error('❌ Failed to get customer points:', err);
+    console.error('❌ Error details:', err?.response?.data || err?.message);
     return { balance: 0, history: [] };
   }
 }
@@ -60,11 +75,15 @@ export async function awardPoints(
   orderId?: string
 ): Promise<LoyaltyPoints> {
   try {
+    console.log(`🔍 [awardPoints] Starting for user ${userId}, amount ${amount}`);
+
     // 1. Get current points
     const current = await getCustomerPoints(userId);
+    console.log(`🔍 [awardPoints] Current points:`, current);
 
     // 2. Calculate new balance
     const newBalance = current.balance + amount;
+    console.log(`🔍 [awardPoints] New balance will be: ${newBalance}`);
 
     // 3. Add transaction to history
     const transaction: PointsTransaction = {
@@ -77,15 +96,20 @@ export async function awardPoints(
     };
 
     const newHistory = [transaction, ...current.history].slice(0, 100); // Keep last 100 transactions
+    console.log(`🔍 [awardPoints] History entries: ${newHistory.length}`);
 
     // 4. Update customer meta_data
+    console.log(`🔍 [awardPoints] Fetching customer ${userId} from WooCommerce...`);
     const { data: customer } = await wcApi.get(`customers/${userId}`);
+    console.log(`🔍 [awardPoints] Customer fetched, current meta_data count:`, customer.meta_data?.length || 0);
+
     const existingMeta = customer.meta_data || [];
 
     // Remove old points/history entries
     const filteredMeta = existingMeta.filter((m: any) =>
       m.key !== '_loyalty_points' && m.key !== '_loyalty_history'
     );
+    console.log(`🔍 [awardPoints] Filtered meta (removed old loyalty data):`, filteredMeta.length);
 
     // Add new points/history
     const updatedMeta = [
@@ -93,12 +117,24 @@ export async function awardPoints(
       { key: '_loyalty_points', value: String(newBalance) },
       { key: '_loyalty_history', value: JSON.stringify(newHistory) }
     ];
-
-    await wcApi.put(`customers/${userId}`, {
-      meta_data: updatedMeta
+    console.log(`🔍 [awardPoints] Updated meta (with new loyalty data):`, updatedMeta.length);
+    console.log(`🔍 [awardPoints] New loyalty meta:`, {
+      points: updatedMeta.find(m => m.key === '_loyalty_points'),
+      historyLength: JSON.parse(updatedMeta.find(m => m.key === '_loyalty_history')?.value || '[]').length
     });
 
-    console.log(`✅ Awarded ${amount} points to customer #${userId}: ${reason}`);
+    console.log(`🔍 [awardPoints] Sending PUT request to WooCommerce...`);
+    const updateResponse = await wcApi.put(`customers/${userId}`, {
+      meta_data: updatedMeta
+    });
+    console.log(`🔍 [awardPoints] WooCommerce PUT response status:`, updateResponse.status);
+    console.log(`🔍 [awardPoints] Updated customer meta_data count:`, updateResponse.data?.meta_data?.length || 0);
+
+    // Verify the update
+    const savedPoints = updateResponse.data.meta_data?.find((m: any) => m.key === '_loyalty_points')?.value;
+    console.log(`🔍 [awardPoints] Verified saved points in response:`, savedPoints);
+
+    console.log(`✅ Awarded ${amount} points to customer #${userId}: ${reason} (new balance: ${newBalance})`);
 
     return {
       balance: newBalance,
@@ -106,6 +142,7 @@ export async function awardPoints(
     };
   } catch (err: any) {
     console.error('❌ Failed to award points:', err);
+    console.error('❌ Error details:', err?.response?.data || err?.message);
     throw err;
   }
 }
