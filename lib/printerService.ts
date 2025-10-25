@@ -214,21 +214,6 @@ export class ThermalPrinter {
     return new Uint8Array(packet);
   }
 
-  /**
-   * Count black pixels in a bitmap row
-   */
-  private countBlackPixels(row: Uint8Array): number {
-    let count = 0;
-    for (const byte of row) {
-      // Count set bits in byte
-      let b = byte;
-      while (b) {
-        count += b & 1;
-        b >>= 1;
-      }
-    }
-    return count;
-  }
 
   /**
    * Convert text to bitmap image for Niimbot label printer
@@ -260,12 +245,12 @@ export class ThermalPrinter {
     // Limit to maxHeight (240px for 50x30mm labels)
     canvas.height = Math.min(requiredHeight, maxHeight);
 
-    // White background
-    ctx.fillStyle = 'white';
+    // Black background (will be inverted later - NiimPrintX inverts the image!)
+    ctx.fillStyle = 'black';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Black text
-    ctx.fillStyle = 'black';
+    // White text (will become black after inversion)
+    ctx.fillStyle = 'white';
     ctx.font = `bold ${fontSize}px monospace`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
@@ -281,11 +266,12 @@ export class ThermalPrinter {
 
     console.log(`🖼️ Canvas rendered: ${canvas.width}x${canvas.height}px (max: ${width}x${maxHeight})`);
 
-    // Convert to monochrome bitmap
+    // Get image data
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const pixels = imageData.data;
 
-    // Convert to 1-bit per pixel (8 pixels per byte)
+    // Convert to 1-bit per pixel (8 pixels per byte, MSB first)
+    // Based on NiimPrintX: inverted grayscale converted to 1-bit
     const bitmapLines: Uint8Array[] = [];
     const bytesPerLine = Math.ceil(width / 8);
 
@@ -298,13 +284,17 @@ export class ThermalPrinter {
         const g = pixels[pixelIndex + 1];
         const b = pixels[pixelIndex + 2];
 
-        // Convert to grayscale and threshold
+        // Grayscale
         const gray = (r + g + b) / 3;
-        const isBlack = gray < 128;
 
-        if (isBlack) {
+        // For 1-bit: 0 = black pixel, 1 = white pixel (in bitmap)
+        // Since we inverted colors in canvas (black bg, white text),
+        // threshold at 128: < 128 = black = 0, >= 128 = white = 1
+        const isWhite = gray >= 128;
+
+        if (!isWhite) {  // If black, set bit
           const byteIndex = Math.floor(x / 8);
-          const bitIndex = 7 - (x % 8);
+          const bitIndex = 7 - (x % 8);  // MSB first
           lineBytes[byteIndex] |= (1 << bitIndex);
         }
       }
@@ -382,15 +372,15 @@ export class ThermalPrinter {
       await this.sendCommand(labelTypeCmd);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // 3. Start print job
+      // 3. Start print job (send 0x01 as data)
       console.log('📤 Step 3/9: Start print job');
-      const startPrintCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PRINT, []);
+      const startPrintCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PRINT, [0x01]);
       await this.sendCommand(startPrintCmd);
       await new Promise(resolve => setTimeout(resolve, 150));
 
-      // 4. Start page print
+      // 4. Start page print (send 0x01 as data)
       console.log('📤 Step 4/9: Start page');
-      const startPageCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PAGE_PRINT, []);
+      const startPageCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PAGE_PRINT, [0x01]);
       await this.sendCommand(startPageCmd);
       await new Promise(resolve => setTimeout(resolve, 150));
 
@@ -408,20 +398,20 @@ export class ThermalPrinter {
       await this.sendCommand(dimensionCmd);
       await new Promise(resolve => setTimeout(resolve, 150));
 
-      // 6. Send bitmap data row by row with proper format
+      // 6. Send bitmap data row by row
+      // NiimPrintX format: [ROW_HI] [ROW_LO] [0] [0] [0] [1] [BITMAP_DATA...]
       console.log(`📤 Step 6/9: Sending ${bitmap.data.length} bitmap rows...`);
       for (let rowNum = 0; rowNum < bitmap.data.length; rowNum++) {
         const rowData = bitmap.data[rowNum];
-        const blackPixels = this.countBlackPixels(rowData);
 
-        // Format: 00 [ROW_HI] [ROW_LO] [BLACK_HI] [BLACK_LO] [REPEAT] [BITMAP_DATA...]
+        // Build packet data per NiimPrintX protocol
         const packetData = [
-          0x00,                      // Always 0x00
-          (rowNum >> 8) & 0xFF,      // Row number high byte
+          (rowNum >> 8) & 0xFF,      // Row number high byte (big-endian)
           rowNum & 0xFF,             // Row number low byte
-          (blackPixels >> 8) & 0xFF, // Black pixel count high byte
-          blackPixels & 0xFF,        // Black pixel count low byte
-          0x01,                      // Repeat count (1 = print once)
+          0x00,                      // Always 0
+          0x00,                      // Always 0
+          0x00,                      // Always 0
+          0x01,                      // Always 1
           ...Array.from(rowData)     // Bitmap data (48 bytes for 384 pixels)
         ];
 
@@ -433,27 +423,32 @@ export class ThermalPrinter {
           console.log(`   Row ${rowNum + 1}/${bitmap.data.length}`);
         }
 
-        // Small delay between rows
-        await new Promise(resolve => setTimeout(resolve, 5));
+        // 10ms delay between rows (per NiimPrintX)
+        await new Promise(resolve => setTimeout(resolve, 10));
       }
 
       console.log('✅ All bitmap rows sent');
 
-      // 7. End page print
+      // 7. End page print (send 0x01 as data)
       console.log('📤 Step 7/9: End page');
-      const endPageCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PAGE_PRINT, []);
+      const endPageCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PAGE_PRINT, [0x01]);
       await this.sendCommand(endPageCmd);
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // 8. Set quantity (print 1 copy)
+      // 8. Set quantity (print 1 copy - big-endian 16-bit value)
       console.log('📤 Step 8/9: Set quantity');
-      const quantityCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_QUANTITY, [1]);
+      const quantity = 1;
+      const quantityData = [
+        (quantity >> 8) & 0xFF,  // High byte
+        quantity & 0xFF          // Low byte
+      ];
+      const quantityCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_QUANTITY, quantityData);
       await this.sendCommand(quantityCmd);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // 9. End print job
+      // 9. End print job (send 0x01 as data)
       console.log('📤 Step 9/9: End print job');
-      const endPrintCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PRINT, []);
+      const endPrintCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PRINT, [0x01]);
       await this.sendCommand(endPrintCmd);
       await new Promise(resolve => setTimeout(resolve, 500));
 
