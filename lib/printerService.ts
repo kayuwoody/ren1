@@ -216,8 +216,10 @@ export class ThermalPrinter {
   /**
    * Convert text to bitmap image for Niimbot label printer
    * Returns monochrome bitmap data (1 bit per pixel)
+   *
+   * For B1 with 50x30mm labels: max 384x240 pixels at 203 DPI
    */
-  private textToBitmap(text: string, width: number = 384): { data: Uint8Array[], width: number, height: number } {
+  private textToBitmap(text: string, width: number = 384, maxHeight: number = 240): { data: Uint8Array[], width: number, height: number } {
     // Create canvas to render text
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
@@ -225,14 +227,19 @@ export class ThermalPrinter {
     // Niimbot B1 supports 384px width for 50mm labels
     canvas.width = width;
 
-    // Set font and measure text
-    const fontSize = 24;
-    const lineHeight = 32;
+    // Set font - smaller to fit on 30mm labels
+    const fontSize = 18;
+    const lineHeight = 24;
     ctx.font = `bold ${fontSize}px monospace`;
 
     const lines = text.split('\n');
-    const padding = 10;
-    canvas.height = lines.length * lineHeight + padding * 2;
+    const padding = 8;
+
+    // Calculate required height
+    const requiredHeight = lines.length * lineHeight + padding * 2;
+
+    // Limit to maxHeight (240px for 50x30mm labels)
+    canvas.height = Math.min(requiredHeight, maxHeight);
 
     // White background
     ctx.fillStyle = 'white';
@@ -247,8 +254,13 @@ export class ThermalPrinter {
     // Draw each line
     lines.forEach((line, index) => {
       const y = padding + index * lineHeight;
-      ctx.fillText(line, padding, y);
+      // Only draw lines that fit
+      if (y + lineHeight <= canvas.height) {
+        ctx.fillText(line, padding, y);
+      }
     });
+
+    console.log(`🖼️ Canvas rendered: ${canvas.width}x${canvas.height}px (max: ${width}x${maxHeight})`);
 
     // Convert to monochrome bitmap
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -332,9 +344,9 @@ export class ThermalPrinter {
 
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Convert text to bitmap
+      // Convert text to bitmap (50x30mm = 384x240 pixels at 203 DPI)
       console.log('🖼️ Converting text to bitmap...');
-      const bitmap = this.textToBitmap(text, 384);
+      const bitmap = this.textToBitmap(text, 384, 240);
       console.log(`📐 Bitmap: ${bitmap.width}x${bitmap.height} pixels`);
 
       // 1. Set print density (1-5, where 3 is medium)
