@@ -153,38 +153,54 @@ export class ThermalPrinter {
   private async niimbotPrint(text: string): Promise<void> {
     try {
       console.log('🖨️ Niimbot: Starting print...');
+      console.log('📝 Text to print:', text);
 
       // 1. Set label type (50mm x 30mm for B1)
-      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_TYPE, [1]));
+      const labelTypeCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_TYPE, [1]);
+      console.log('📤 Sending label type:', Array.from(labelTypeCmd).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+      await this.sendCommand(labelTypeCmd);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // 2. Set print density (1-3, where 2 is medium)
-      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_DENSITY, [2]));
+      const densityCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_DENSITY, [2]);
+      console.log('📤 Sending density:', Array.from(densityCmd).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+      await this.sendCommand(densityCmd);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // 3. Start print job
-      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_START_PRINT, [1]));
-      await new Promise(resolve => setTimeout(resolve, 100));
+      const startCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PRINT, [1]);
+      console.log('📤 Sending start print:', Array.from(startCmd).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+      await this.sendCommand(startCmd);
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // 4. Print text lines
       const lines = text.split('\n');
+      console.log(`📝 Printing ${lines.length} lines...`);
       for (const line of lines) {
         if (line.trim()) {
           const encoder = new TextEncoder();
           const textBytes = Array.from(encoder.encode(line));
-          await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_TEXT, textBytes));
+          const textCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_TEXT, textBytes);
+          console.log(`📤 Line: "${line}" => ${Array.from(textCmd.slice(0, 10)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')}...`);
+          await this.sendCommand(textCmd);
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
 
       // 5. Print some blank space to advance label
+      console.log('📤 Sending blank lines...');
       for (let i = 0; i < 3; i++) {
-        await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_EMPTY, []));
+        const emptyCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_EMPTY, []);
+        console.log('📤 Empty:', Array.from(emptyCmd).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+        await this.sendCommand(emptyCmd);
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
       // 6. End print job
-      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_END_PRINT, [1]));
+      const endCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PRINT, [1]);
+      console.log('📤 Sending end print:', Array.from(endCmd).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+      await this.sendCommand(endCmd);
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       console.log('✅ Niimbot: Print complete');
     } catch (err) {
