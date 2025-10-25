@@ -1,18 +1,67 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Printer, CheckCircle, XCircle, Bluetooth } from 'lucide-react';
+import { Printer, CheckCircle, XCircle, Bluetooth, Clock, AlertCircle, FileText } from 'lucide-react';
 import { printerManager, ThermalPrinter } from '@/lib/printerService';
+
+interface PrintLog {
+  id: string;
+  type: 'receipt' | 'kitchen';
+  orderId: string;
+  timestamp: string;
+  status: 'success' | 'failed';
+  error?: string;
+}
 
 export default function PrintersAdminPage() {
   const [receiptPrinter, setReceiptPrinter] = useState<BluetoothDevice | null>(null);
   const [kitchenPrinter, setKitchenPrinter] = useState<BluetoothDevice | null>(null);
   const [bluetoothSupported, setBluetoothSupported] = useState(true);
   const [testResult, setTestResult] = useState<string>('');
+  const [printLogs, setPrintLogs] = useState<PrintLog[]>([]);
+  const [lastReceiptPrint, setLastReceiptPrint] = useState<string>('');
+  const [lastKitchenPrint, setLastKitchenPrint] = useState<string>('');
 
   useEffect(() => {
     setBluetoothSupported(printerManager.isBluetoothSupported());
+
+    // Load print logs from localStorage
+    const logs = localStorage.getItem('printer_logs');
+    if (logs) {
+      try {
+        setPrintLogs(JSON.parse(logs));
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // Load last print times
+    setLastReceiptPrint(localStorage.getItem('last_receipt_print') || '');
+    setLastKitchenPrint(localStorage.getItem('last_kitchen_print') || '');
   }, []);
+
+  const addPrintLog = (log: Omit<PrintLog, 'id' | 'timestamp'>) => {
+    const newLog: PrintLog = {
+      ...log,
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+    };
+
+    const updatedLogs = [newLog, ...printLogs].slice(0, 50); // Keep last 50
+    setPrintLogs(updatedLogs);
+    localStorage.setItem('printer_logs', JSON.stringify(updatedLogs));
+
+    // Update last print time
+    if (log.type === 'receipt') {
+      const time = new Date().toISOString();
+      setLastReceiptPrint(time);
+      localStorage.setItem('last_receipt_print', time);
+    } else {
+      const time = new Date().toISOString();
+      setLastKitchenPrint(time);
+      localStorage.setItem('last_kitchen_print', time);
+    }
+  };
 
   const handlePairReceiptPrinter = async () => {
     try {
@@ -56,8 +105,23 @@ export default function PrintersAdminPage() {
 
       await printer.printReceipt(testOrder);
       setTestResult('✅ Receipt printed successfully!');
+
+      // Add to log
+      addPrintLog({
+        type: 'receipt',
+        orderId: 'TEST',
+        status: 'success',
+      });
     } catch (err: any) {
       setTestResult(`❌ Failed: ${err.message}`);
+
+      // Add error to log
+      addPrintLog({
+        type: 'receipt',
+        orderId: 'TEST',
+        status: 'failed',
+        error: err.message,
+      });
     }
   };
 
@@ -79,9 +143,35 @@ export default function PrintersAdminPage() {
 
       await printer.printKitchenStub(testOrder);
       setTestResult('✅ Kitchen stub printed successfully!');
+
+      // Add to log
+      addPrintLog({
+        type: 'kitchen',
+        orderId: 'TEST',
+        status: 'success',
+      });
     } catch (err: any) {
       setTestResult(`❌ Failed: ${err.message}`);
+
+      // Add error to log
+      addPrintLog({
+        type: 'kitchen',
+        orderId: 'TEST',
+        status: 'failed',
+        error: err.message,
+      });
     }
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    if (!timestamp) return 'Never';
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-MY', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   if (!bluetoothSupported) {
@@ -115,7 +205,7 @@ export default function PrintersAdminPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600">Status:</p>
               <p className="font-semibold">
@@ -132,6 +222,19 @@ export default function PrintersAdminPage() {
                 )}
               </p>
             </div>
+
+            <div>
+              <p className="text-sm text-gray-600 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                Last Print:
+              </p>
+              <p className="text-sm font-medium text-gray-800">
+                {formatTimestamp(lastReceiptPrint)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
 
             <div className="flex gap-2">
               <button
@@ -167,7 +270,7 @@ export default function PrintersAdminPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600">Status:</p>
               <p className="font-semibold">
@@ -184,6 +287,19 @@ export default function PrintersAdminPage() {
                 )}
               </p>
             </div>
+
+            <div>
+              <p className="text-sm text-gray-600 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                Last Print:
+              </p>
+              <p className="text-sm font-medium text-gray-800">
+                {formatTimestamp(lastKitchenPrint)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
 
             <div className="flex gap-2">
               <button
@@ -220,6 +336,85 @@ export default function PrintersAdminPage() {
         </div>
       )}
 
+      {/* Print Logs */}
+      {printLogs.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <FileText className="w-6 h-6 text-gray-600" />
+            <h2 className="text-xl font-semibold">Print History</h2>
+          </div>
+
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {printLogs.map((log) => (
+              <div
+                key={log.id}
+                className={`border-l-4 p-3 rounded ${
+                  log.status === 'success'
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-red-500 bg-red-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Printer
+                      className={`w-4 h-4 ${
+                        log.type === 'receipt' ? 'text-blue-600' : 'text-purple-600'
+                      }`}
+                    />
+                    <div>
+                      <p className="text-sm font-medium">
+                        {log.type === 'receipt' ? 'Receipt' : 'Kitchen'} -{' '}
+                        Order #{log.orderId}
+                      </p>
+                      {log.error && (
+                        <p className="text-xs text-red-700 mt-1">
+                          Error: {log.error}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">
+                      {formatTimestamp(log.timestamp)}
+                    </p>
+                    {log.status === 'success' ? (
+                      <p className="text-xs text-green-700 font-medium">Success</p>
+                    ) : (
+                      <p className="text-xs text-red-700 font-medium">Failed</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Troubleshooting */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+        <h3 className="font-semibold text-amber-900 mb-3 flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" />
+          Troubleshooting
+        </h3>
+        <div className="space-y-2 text-sm text-amber-800">
+          <div>
+            <p className="font-medium">Printer not appearing in list?</p>
+            <p className="text-xs">Ensure Bluetooth is enabled and printer is in pairing mode</p>
+          </div>
+          <div>
+            <p className="font-medium">Print job stuck or not printing?</p>
+            <p className="text-xs">Try re-pairing the printer or check paper/ribbon</p>
+          </div>
+          <div>
+            <p className="font-medium">Niimbot printer setup:</p>
+            <p className="text-xs">• Load label roll correctly with NFC tag positioned</p>
+            <p className="text-xs">• Check label size matches (50x30mm recommended)</p>
+            <p className="text-xs">• Ensure labels are genuine Niimbot with NFC</p>
+          </div>
+        </div>
+      </div>
+
       {/* Instructions */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
         <h3 className="font-semibold text-blue-900 mb-2">Setup Instructions:</h3>
@@ -230,7 +425,7 @@ export default function PrintersAdminPage() {
           <li>Repeat for both receipt and kitchen printers</li>
         </ol>
         <p className="text-xs text-blue-700 mt-3">
-          Note: Printers must support ESC/POS commands (most thermal printers do).
+          Note: Supports ESC/POS printers and Niimbot label printers (B1, B21, etc.)
         </p>
       </div>
     </div>
