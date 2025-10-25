@@ -34,8 +34,19 @@ export class ThermalPrinter {
 
       this.device = device;
 
-      // Detect if it's a Niimbot printer
-      this.isNiimbot = device.name?.toLowerCase().includes('niimbot') || false;
+      // Detect if it's a Niimbot printer (check for model names)
+      const deviceName = device.name?.toLowerCase() || '';
+      this.isNiimbot =
+        deviceName.includes('niimbot') ||
+        deviceName.includes('b1-') ||
+        deviceName.includes('b21-') ||
+        deviceName.includes('d11-') ||
+        deviceName.includes('d110-') ||
+        deviceName.startsWith('b1') ||
+        deviceName.startsWith('b21') ||
+        deviceName.startsWith('d11') ||
+        deviceName.startsWith('d110');
+
       console.log('Paired device:', device.name, 'ID:', device.id, 'Niimbot:', this.isNiimbot);
 
       return device;
