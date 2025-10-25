@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Printer, Bluetooth, Share2, Mail, MessageCircle, Star } from 'lucide-react';
-import { QRCodeSVG } from 'react-qr-code';
+import QRCode from 'react-qr-code';
 import { printerManager } from '@/lib/printerService';
 
 export default function ReceiptPage() {
@@ -254,11 +254,10 @@ export default function ReceiptPage() {
             <div className="flex flex-col items-center space-y-4">
               {/* QR Code */}
               <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
-                <QRCodeSVG
+                <QRCode
                   value={typeof window !== 'undefined' ? window.location.href : ''}
                   size={120}
                   level="M"
-                  includeMargin={false}
                 />
                 <p className="text-xs text-center text-gray-500 mt-2">Scan to view receipt</p>
               </div>

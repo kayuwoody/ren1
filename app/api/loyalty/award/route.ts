@@ -15,20 +15,28 @@ import { cookies } from 'next/headers';
  */
 export async function POST(req: Request) {
   try {
-    // Get userId from cookie
+    const body = await req.json();
+    const { reason, orderId, userId: bodyUserId } = body;
+
+    // Try to get userId from cookie first, then from request body, then from localStorage (via header)
     const cookieStore = cookies();
     const userIdCookie = cookieStore.get('userId');
+    const userIdFromHeader = req.headers.get('x-user-id');
 
-    if (!userIdCookie?.value) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      );
+    const userId = bodyUserId ||
+                   (userIdCookie?.value ? Number(userIdCookie.value) : null) ||
+                   (userIdFromHeader ? Number(userIdFromHeader) : null);
+
+    if (!userId) {
+      // If no userId provided, still succeed but don't award points (guest user)
+      console.warn('⚠️ No userId found - guest user, skipping points award');
+      return NextResponse.json({
+        success: true,
+        awarded: 0,
+        balance: 0,
+        message: 'Order completed (guest user - no points awarded)'
+      });
     }
-
-    const userId = Number(userIdCookie.value);
-    const body = await req.json();
-    const { reason, orderId } = body;
 
     // Determine points amount based on reason
     let amount = 0;

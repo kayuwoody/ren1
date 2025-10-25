@@ -222,12 +222,16 @@ export default function OrderDetailPage() {
 
                 // 2. Award loyalty points
                 try {
+                  // Get userId from localStorage
+                  const userId = localStorage.getItem('userId');
+
                   const pointsRes = await fetch('/api/loyalty/award', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       reason: 'manual_pickup',
-                      orderId: order.id
+                      orderId: order.id,
+                      userId: userId ? Number(userId) : undefined
                     })
                   });
 
