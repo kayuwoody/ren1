@@ -126,10 +126,40 @@ export class ThermalPrinter {
   }
 
   /**
+   * Send command and read response from printer
+   */
+  private async sendCommandAndRead(data: Uint8Array): Promise<Uint8Array | null> {
+    if (!this.characteristic) {
+      throw new Error('Printer not connected');
+    }
+
+    try {
+      // Send command
+      await this.characteristic.writeValue(data);
+
+      // Wait a bit for printer to respond
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Try to read response if characteristic supports it
+      if (this.characteristic.properties.read || this.characteristic.properties.notify) {
+        const response = await this.characteristic.readValue();
+        return new Uint8Array(response.buffer);
+      }
+
+      return null;
+    } catch (err) {
+      console.warn('Failed to read response:', err);
+      return null;
+    }
+  }
+
+  /**
    * Niimbot Protocol Commands (for B1, D11, D110, etc.)
    * Based on AndBondStyle/niimprint and MultiMote/niimbluelib
    */
   private niimbotCommands = {
+    CMD_GET_RFID: 0x1A,
+    CMD_GET_INFO: 0x40,
     CMD_SET_LABEL_DENSITY: 0x21,
     CMD_SET_LABEL_TYPE: 0x23,
     CMD_START_PRINT: 0x01,
@@ -137,6 +167,7 @@ export class ThermalPrinter {
     CMD_START_PAGE_PRINT: 0x03,
     CMD_END_PAGE_PRINT: 0xE3,
     CMD_SET_DIMENSION: 0x13,
+    CMD_SET_QUANTITY: 0x15,
     CMD_PRINT_EMPTY_ROW: 0x84,
     CMD_PRINT_BITMAP_ROW: 0x85,
   };
@@ -265,37 +296,73 @@ export class ThermalPrinter {
       console.log('🖨️ Niimbot B1: Starting print...');
       console.log('📝 Text to print:', text);
 
-      // Convert text to bitmap first
+      // 0. Read RFID tag to get label information
+      console.log('📡 Step 0: Reading NFC/RFID tag...');
+      const rfidCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_GET_RFID, [1]);
+      const rfidResponse = await this.sendCommandAndRead(rfidCmd);
+
+      if (rfidResponse) {
+        console.log('📡 RFID Response:', Array.from(rfidResponse).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+
+        // Parse RFID response to extract label info
+        // Typical format: 55 55 1A [LEN] [DATA...] [CHECKSUM] AA AA
+        if (rfidResponse.length > 10) {
+          const dataStart = 4; // After headers, cmd, len
+          const dataEnd = rfidResponse.length - 3; // Before checksum and tails
+          const rfidData = rfidResponse.slice(dataStart, dataEnd);
+
+          console.log('📡 Label info (bytes):', Array.from(rfidData).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+
+          // Try to parse label dimensions if available
+          // Format varies but often includes width/height in the data
+          if (rfidData.length >= 10) {
+            console.log('📏 Label details:');
+            console.log('   Type code:', rfidData[0]);
+            console.log('   Density:', rfidData[1]);
+            if (rfidData.length >= 6) {
+              const width = (rfidData[4] << 8) | rfidData[5];
+              const height = (rfidData[6] << 8) | rfidData[7];
+              console.log(`   Detected size: ${width}x${height} pixels`);
+            }
+          }
+        }
+      } else {
+        console.warn('⚠️ No RFID response - using default settings');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Convert text to bitmap
       console.log('🖼️ Converting text to bitmap...');
       const bitmap = this.textToBitmap(text, 384);
       console.log(`📐 Bitmap: ${bitmap.width}x${bitmap.height} pixels`);
 
       // 1. Set print density (1-5, where 3 is medium)
-      console.log('📤 Step 1/8: Set density');
+      console.log('📤 Step 1/9: Set density');
       const densityCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_DENSITY, [3]);
       await this.sendCommand(densityCmd);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // 2. Set label type (1 for standard label)
-      console.log('📤 Step 2/8: Set label type');
+      console.log('📤 Step 2/9: Set label type');
       const labelTypeCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_TYPE, [1]);
       await this.sendCommand(labelTypeCmd);
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // 3. Start print job
-      console.log('📤 Step 3/8: Start print job');
+      console.log('📤 Step 3/9: Start print job');
       const startPrintCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PRINT, []);
       await this.sendCommand(startPrintCmd);
       await new Promise(resolve => setTimeout(resolve, 150));
 
       // 4. Start page print
-      console.log('📤 Step 4/8: Start page');
+      console.log('📤 Step 4/9: Start page');
       const startPageCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PAGE_PRINT, []);
       await this.sendCommand(startPageCmd);
       await new Promise(resolve => setTimeout(resolve, 150));
 
       // 5. Set dimensions (height and width as big-endian uint16)
-      console.log('📤 Step 5/8: Set dimensions');
+      console.log('📤 Step 5/9: Set dimensions');
       const height = bitmap.height;
       const width = bitmap.width;
       const dimensionData = [
@@ -309,7 +376,7 @@ export class ThermalPrinter {
       await new Promise(resolve => setTimeout(resolve, 150));
 
       // 6. Send bitmap data row by row with proper format
-      console.log(`📤 Step 6/8: Sending ${bitmap.data.length} bitmap rows...`);
+      console.log(`📤 Step 6/9: Sending ${bitmap.data.length} bitmap rows...`);
       for (let rowNum = 0; rowNum < bitmap.data.length; rowNum++) {
         const rowData = bitmap.data[rowNum];
         const blackPixels = this.countBlackPixels(rowData);
@@ -340,13 +407,19 @@ export class ThermalPrinter {
       console.log('✅ All bitmap rows sent');
 
       // 7. End page print
-      console.log('📤 Step 7/8: End page');
+      console.log('📤 Step 7/9: End page');
       const endPageCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PAGE_PRINT, []);
       await this.sendCommand(endPageCmd);
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // 8. End print job
-      console.log('📤 Step 8/8: End print job');
+      // 8. Set quantity (print 1 copy)
+      console.log('📤 Step 8/9: Set quantity');
+      const quantityCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_QUANTITY, [1]);
+      await this.sendCommand(quantityCmd);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 9. End print job
+      console.log('📤 Step 9/9: End print job');
       const endPrintCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PRINT, []);
       await this.sendCommand(endPrintCmd);
       await new Promise(resolve => setTimeout(resolve, 500));
