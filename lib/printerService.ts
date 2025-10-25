@@ -127,35 +127,59 @@ export class ThermalPrinter {
 
   /**
    * Niimbot Protocol Commands (for B1, D11, D110, etc.)
+   * Based on AndBondStyle/niimprint and MultiMote/niimbluelib
    */
   private niimbotCommands = {
-    // Header for all commands
-    HEADER: 0x55,
-    TAIL: 0xAA,
-
-    // Command types
-    CMD_GET_INFO: 0xC3,
-    CMD_SET_LABEL_TYPE: 0x23,
     CMD_SET_LABEL_DENSITY: 0x21,
+    CMD_SET_LABEL_TYPE: 0x23,
     CMD_START_PRINT: 0x01,
     CMD_END_PRINT: 0xF3,
-    CMD_PRINT_BITMAP: 0x85, // Sends one line of bitmap data
-    CMD_PRINT_EMPTY: 0x20,
+    CMD_START_PAGE_PRINT: 0x03,
+    CMD_END_PAGE_PRINT: 0xE3,
+    CMD_SET_DIMENSION: 0x13,
+    CMD_PRINT_EMPTY_ROW: 0x84,
+    CMD_PRINT_BITMAP_ROW: 0x85,
   };
 
   /**
-   * Create Niimbot command packet
+   * Create Niimbot command packet with correct format:
+   * 55 55 | CMD | LEN | DATA | CHECKSUM | AA AA
    */
   private createNiimbotPacket(cmd: number, data: number[] = []): Uint8Array {
     const len = data.length;
+
+    // Calculate checksum (XOR of cmd, len, and all data bytes)
+    let checksum = cmd ^ len;
+    for (const byte of data) {
+      checksum ^= byte;
+    }
+
     const packet = [
-      this.niimbotCommands.HEADER,
+      0x55, 0x55,     // Double header
       cmd,
       len,
       ...data,
-      this.niimbotCommands.TAIL
+      checksum,
+      0xAA, 0xAA      // Double tail
     ];
+
     return new Uint8Array(packet);
+  }
+
+  /**
+   * Count black pixels in a bitmap row
+   */
+  private countBlackPixels(row: Uint8Array): number {
+    let count = 0;
+    for (const byte of row) {
+      // Count set bits in byte
+      let b = byte;
+      while (b) {
+        count += b & 1;
+        b >>= 1;
+      }
+    }
+    return count;
   }
 
   /**
@@ -234,72 +258,102 @@ export class ThermalPrinter {
   }
 
   /**
-   * Print using Niimbot protocol with bitmap data
+   * Print using Niimbot protocol with correct command sequence
    */
   private async niimbotPrint(text: string): Promise<void> {
     try {
-      console.log('🖨️ Niimbot: Starting print...');
+      console.log('🖨️ Niimbot B1: Starting print...');
       console.log('📝 Text to print:', text);
 
-      // 1. Set label type (1 for standard label)
-      const labelTypeCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_TYPE, [1]);
-      console.log('📤 Sending label type');
-      await this.sendCommand(labelTypeCmd);
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Convert text to bitmap first
+      console.log('🖼️ Converting text to bitmap...');
+      const bitmap = this.textToBitmap(text, 384);
+      console.log(`📐 Bitmap: ${bitmap.width}x${bitmap.height} pixels`);
 
-      // 2. Set print density (1-3, where 3 is darkest)
+      // 1. Set print density (1-5, where 3 is medium)
+      console.log('📤 Step 1/8: Set density');
       const densityCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_DENSITY, [3]);
-      console.log('📤 Sending density');
       await this.sendCommand(densityCmd);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // 3. Convert text to bitmap
-      console.log('🖼️ Converting text to bitmap...');
-      const bitmap = this.textToBitmap(text, 384);
-      console.log(`📐 Bitmap size: ${bitmap.width}x${bitmap.height} pixels, ${bitmap.data.length} lines`);
+      // 2. Set label type (1 for standard label)
+      console.log('📤 Step 2/8: Set label type');
+      const labelTypeCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_TYPE, [1]);
+      await this.sendCommand(labelTypeCmd);
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // 4. Start print job
-      const startCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PRINT, [1]);
-      console.log('📤 Starting print job');
-      await this.sendCommand(startCmd);
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // 3. Start print job
+      console.log('📤 Step 3/8: Start print job');
+      const startPrintCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PRINT, []);
+      await this.sendCommand(startPrintCmd);
+      await new Promise(resolve => setTimeout(resolve, 150));
 
-      // 5. Send bitmap data line by line
-      console.log(`📤 Sending ${bitmap.data.length} bitmap lines...`);
-      for (let i = 0; i < bitmap.data.length; i++) {
-        const lineData = Array.from(bitmap.data[i]);
-        const lineCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_BITMAP, lineData);
-        await this.sendCommand(lineCmd);
+      // 4. Start page print
+      console.log('📤 Step 4/8: Start page');
+      const startPageCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_START_PAGE_PRINT, []);
+      await this.sendCommand(startPageCmd);
+      await new Promise(resolve => setTimeout(resolve, 150));
 
-        // Log progress every 20 lines
-        if (i % 20 === 0) {
-          console.log(`📤 Progress: ${i}/${bitmap.data.length} lines sent`);
+      // 5. Set dimensions (height and width as big-endian uint16)
+      console.log('📤 Step 5/8: Set dimensions');
+      const height = bitmap.height;
+      const width = bitmap.width;
+      const dimensionData = [
+        (height >> 8) & 0xFF,  // Height high byte
+        height & 0xFF,          // Height low byte
+        (width >> 8) & 0xFF,   // Width high byte
+        width & 0xFF            // Width low byte
+      ];
+      const dimensionCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_DIMENSION, dimensionData);
+      await this.sendCommand(dimensionCmd);
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // 6. Send bitmap data row by row with proper format
+      console.log(`📤 Step 6/8: Sending ${bitmap.data.length} bitmap rows...`);
+      for (let rowNum = 0; rowNum < bitmap.data.length; rowNum++) {
+        const rowData = bitmap.data[rowNum];
+        const blackPixels = this.countBlackPixels(rowData);
+
+        // Format: 00 [ROW_HI] [ROW_LO] [BLACK_HI] [BLACK_LO] [REPEAT] [BITMAP_DATA...]
+        const packetData = [
+          0x00,                      // Always 0x00
+          (rowNum >> 8) & 0xFF,      // Row number high byte
+          rowNum & 0xFF,             // Row number low byte
+          (blackPixels >> 8) & 0xFF, // Black pixel count high byte
+          blackPixels & 0xFF,        // Black pixel count low byte
+          0x01,                      // Repeat count (1 = print once)
+          ...Array.from(rowData)     // Bitmap data (48 bytes for 384 pixels)
+        ];
+
+        const rowCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_BITMAP_ROW, packetData);
+        await this.sendCommand(rowCmd);
+
+        // Log progress
+        if (rowNum % 50 === 0 || rowNum === bitmap.data.length - 1) {
+          console.log(`   Row ${rowNum + 1}/${bitmap.data.length}`);
         }
 
-        // Small delay between lines
-        await new Promise(resolve => setTimeout(resolve, 10));
+        // Small delay between rows
+        await new Promise(resolve => setTimeout(resolve, 5));
       }
 
-      console.log('✅ All bitmap data sent');
+      console.log('✅ All bitmap rows sent');
 
-      // 6. Print some blank lines to advance label
-      console.log('📤 Sending blank lines...');
-      const blankLine = new Uint8Array(Math.ceil(bitmap.width / 8));
-      for (let i = 0; i < 20; i++) {
-        const blankCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_BITMAP, Array.from(blankLine));
-        await this.sendCommand(blankCmd);
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
+      // 7. End page print
+      console.log('📤 Step 7/8: End page');
+      const endPageCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PAGE_PRINT, []);
+      await this.sendCommand(endPageCmd);
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // 7. End print job
-      const endCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PRINT, [1]);
-      console.log('📤 Ending print job');
-      await this.sendCommand(endCmd);
+      // 8. End print job
+      console.log('📤 Step 8/8: End print job');
+      const endPrintCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_END_PRINT, []);
+      await this.sendCommand(endPrintCmd);
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log('✅ Niimbot: Print complete!');
+      console.log('✅ Niimbot B1: Print job complete!');
     } catch (err) {
-      console.error('Niimbot print failed:', err);
+      console.error('❌ Niimbot print failed:', err);
       throw err;
     }
   }
