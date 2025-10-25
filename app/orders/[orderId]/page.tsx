@@ -224,6 +224,7 @@ export default function OrderDetailPage() {
                 try {
                   // Get userId from localStorage
                   const userId = localStorage.getItem('userId');
+                  console.log('🔍 Attempting to award points:', { userId, orderId: order.id });
 
                   const pointsRes = await fetch('/api/loyalty/award', {
                     method: 'POST',
@@ -235,17 +236,21 @@ export default function OrderDetailPage() {
                     })
                   });
 
+                  console.log('📊 Points API response status:', pointsRes.status);
+
                   if (pointsRes.ok) {
                     const pointsData = await pointsRes.json();
                     console.log('✅ Points awarded:', pointsData);
                     alert(`Thank you! Order completed.\n\n🎉 ${pointsData.message}\nNew balance: ${pointsData.balance} points`);
                   } else {
-                    // Order completed but points failed - still show success
-                    alert('Thank you! Order marked as completed.');
+                    // Order completed but points failed - show error details
+                    const errorData = await pointsRes.json().catch(() => ({ error: 'Unknown error' }));
+                    console.error('❌ Points award failed:', errorData);
+                    alert(`Thank you! Order marked as completed.\n\nNote: Points award failed: ${errorData.error || 'Unknown error'}`);
                   }
                 } catch (pointsErr) {
-                  console.warn('Points award failed:', pointsErr);
-                  alert('Thank you! Order marked as completed.');
+                  console.error('❌ Points award exception:', pointsErr);
+                  alert(`Thank you! Order marked as completed.\n\nNote: Points award error: ${pointsErr instanceof Error ? pointsErr.message : 'Unknown error'}`);
                 }
 
                 // 3. Remove from active orders

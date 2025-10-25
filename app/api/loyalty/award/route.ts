@@ -18,18 +18,33 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { reason, orderId, userId: bodyUserId } = body;
 
-    // Try to get userId from cookie first, then from request body, then from localStorage (via header)
+    console.log('🔍 Loyalty award request:', {
+      reason,
+      orderId,
+      bodyUserId,
+      bodyUserIdType: typeof bodyUserId
+    });
+
+    // Try to get userId from multiple sources
     const cookieStore = cookies();
     const userIdCookie = cookieStore.get('userId');
     const userIdFromHeader = req.headers.get('x-user-id');
+
+    console.log('🔍 userId sources:', {
+      bodyUserId,
+      cookieValue: userIdCookie?.value,
+      headerValue: userIdFromHeader
+    });
 
     const userId = bodyUserId ||
                    (userIdCookie?.value ? Number(userIdCookie.value) : null) ||
                    (userIdFromHeader ? Number(userIdFromHeader) : null);
 
-    if (!userId) {
+    console.log('🔍 Final userId:', userId, 'isValid:', Boolean(userId && !isNaN(userId)));
+
+    if (!userId || isNaN(userId)) {
       // If no userId provided, still succeed but don't award points (guest user)
-      console.warn('⚠️ No userId found - guest user, skipping points award');
+      console.warn('⚠️ No valid userId found - guest user, skipping points award');
       return NextResponse.json({
         success: true,
         awarded: 0,

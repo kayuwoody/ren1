@@ -2,12 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useCart } from '@/context/cartContext';
+import { Star, RotateCcw } from 'lucide-react';
 
 export default function OrdersPage() {
+  const router = useRouter();
+  const { addToCart, clearCart } = useCart();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [favorites, setFavorites] = useState<Set<number>>(new Set());
 
   // Helper function to check if order timer has completed
   const isOutForDelivery = (order: any) => {
@@ -50,6 +56,19 @@ export default function OrdersPage() {
     );
   };
 
+  // Load favorites from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('favoriteOrders');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setFavorites(new Set(parsed));
+      } catch (err) {
+        console.error('Failed to load favorites', err);
+      }
+    }
+  }, []);
+
   // Fetch all orders; server will use userId cookie if present, otherwise guestId fallback
   useEffect(() => {
     setLoading(true);
@@ -67,21 +86,76 @@ export default function OrdersPage() {
       });
   }, []);
 
+  // Toggle favorite status
+  const toggleFavorite = (orderId: number, e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent navigation to order details
+    e.stopPropagation();
+
+    const newFavorites = new Set(favorites);
+    if (newFavorites.has(orderId)) {
+      newFavorites.delete(orderId);
+    } else {
+      newFavorites.add(orderId);
+    }
+    setFavorites(newFavorites);
+    localStorage.setItem('favoriteOrders', JSON.stringify(Array.from(newFavorites)));
+  };
+
+  // Quick reorder - add all items from the order to cart
+  const handleReorder = async (order: any, e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent navigation to order details
+    e.stopPropagation();
+
+    if (!confirm(`Reorder ${order.line_items.length} item(s) from Order #${order.id}?`)) {
+      return;
+    }
+
+    try {
+      clearCart();
+
+      for (const item of order.line_items) {
+        addToCart({
+          productId: item.product_id,
+          name: item.name,
+          price: parseFloat(item.price),
+          quantity: item.quantity,
+        });
+      }
+
+      console.log('✅ Items added to cart from order', order.id);
+      alert(`${order.line_items.length} item(s) added to cart!`);
+      router.push('/cart');
+    } catch (err) {
+      console.error('Failed to reorder', err);
+      alert('Failed to add items to cart. Please try again.');
+    }
+  };
+
   if (loading) {
     return <p className="p-4">Loading orders…</p>;
   }
 
-  // Filter and search
-  const filtered = orders.filter((order) => {
-    const matchesStatus =
-      statusFilter === 'all' || order.status === statusFilter;
-    const matchesSearch =
-      order.id.toString().includes(search) ||
-      (order.line_items ?? []).some((item: any) =>
-        item.name.toLowerCase().includes(search.toLowerCase())
-      );
-    return matchesStatus && matchesSearch;
-  });
+  // Filter, search, and sort (favorites on top)
+  const filtered = orders
+    .filter((order) => {
+      const matchesStatus =
+        statusFilter === 'all' || order.status === statusFilter;
+      const matchesSearch =
+        order.id.toString().includes(search) ||
+        (order.line_items ?? []).some((item: any) =>
+          item.name.toLowerCase().includes(search.toLowerCase())
+        );
+      return matchesStatus && matchesSearch;
+    })
+    .sort((a, b) => {
+      // Sort favorites to top
+      const aIsFav = favorites.has(a.id);
+      const bIsFav = favorites.has(b.id);
+      if (aIsFav && !bIsFav) return -1;
+      if (!aIsFav && bIsFav) return 1;
+      // Otherwise keep original order (newest first)
+      return 0;
+    });
 
   return (
     <div className="p-4 max-w-xl mx-auto space-y-6">
@@ -120,23 +194,41 @@ export default function OrdersPage() {
               ? new Date(order.date_created).toLocaleDateString()
               : '';
 
+            const isFavorite = favorites.has(order.id);
+
             return (
               <li
                 key={order.id}
                 className={`border rounded p-4 transition ${
                   isCompleted ? 'opacity-50' : 'hover:bg-gray-50'
-                }`}
+                } ${isFavorite ? 'border-amber-400 border-2 bg-amber-50' : ''}`}
               >
                 <Link
                   href={`/orders/${order.id}`}
                   className="block"
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="font-semibold">Order #{order.id}</p>
-                      <p className="text-xs text-gray-500">
-                        {dateLabel}
-                      </p>
+                    <div className="flex items-start gap-2">
+                      {/* Favorite Star Button */}
+                      <button
+                        onClick={(e) => toggleFavorite(order.id, e)}
+                        className="mt-0.5 hover:scale-110 transition"
+                        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                      >
+                        <Star
+                          className={`w-5 h-5 ${
+                            isFavorite
+                              ? 'fill-amber-500 text-amber-500'
+                              : 'text-gray-400 hover:text-amber-500'
+                          }`}
+                        />
+                      </button>
+                      <div>
+                        <p className="font-semibold">Order #{order.id}</p>
+                        <p className="text-xs text-gray-500">
+                          {dateLabel}
+                        </p>
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="font-bold">RM {order.total ?? '—'}</p>
@@ -148,8 +240,18 @@ export default function OrdersPage() {
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2">
                     {getStatusBadge(order)}
+
+                    {/* Reorder Button */}
+                    <button
+                      onClick={(e) => handleReorder(order, e)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded transition"
+                      title="Reorder these items"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Reorder</span>
+                    </button>
                   </div>
                 </Link>
               </li>

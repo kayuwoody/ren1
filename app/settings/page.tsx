@@ -276,25 +276,13 @@ export default function SettingsPage() {
       {/* Navigation Links */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <Link
-          href="/customer"
-          className="flex items-center gap-3 p-4 hover:bg-gray-50 transition border-b"
-        >
-          <User className="w-5 h-5 text-amber-600" />
-          <div className="flex-1">
-            <p className="font-semibold">Quick Reorder</p>
-            <p className="text-sm text-gray-500">Reorder from your history</p>
-          </div>
-          <span className="text-gray-400">→</span>
-        </Link>
-
-        <Link
           href="/orders"
           className="flex items-center gap-3 p-4 hover:bg-gray-50 transition border-b"
         >
           <FileText className="w-5 h-5 text-gray-600" />
           <div className="flex-1">
             <p className="font-semibold">Order History</p>
-            <p className="text-sm text-gray-500">View all your orders</p>
+            <p className="text-sm text-gray-500">View, reorder, and favorite your orders</p>
           </div>
           <span className="text-gray-400">→</span>
         </Link>
