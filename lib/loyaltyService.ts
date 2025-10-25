@@ -38,9 +38,9 @@ export async function getCustomerPoints(userId: number): Promise<LoyaltyPoints> 
     const { data: customer } = await wcApi.get(`customers/${userId}`);
     console.log(`🔍 [getCustomerPoints] Customer meta_data count:`, customer.meta_data?.length || 0);
 
-    // Extract points from meta_data
-    const pointsMeta = customer.meta_data?.find((m: any) => m.key === '_loyalty_points');
-    const historyMeta = customer.meta_data?.find((m: any) => m.key === '_loyalty_history');
+    // Extract points from meta_data (without underscore prefix - WooCommerce blocks private meta)
+    const pointsMeta = customer.meta_data?.find((m: any) => m.key === 'loyalty_points');
+    const historyMeta = customer.meta_data?.find((m: any) => m.key === 'loyalty_history');
 
     console.log(`🔍 [getCustomerPoints] Found loyalty meta:`, {
       pointsMeta: pointsMeta ? { key: pointsMeta.key, value: pointsMeta.value } : null,
@@ -105,22 +105,22 @@ export async function awardPoints(
 
     const existingMeta = customer.meta_data || [];
 
-    // Remove old points/history entries
+    // Remove old points/history entries (using non-underscore keys - WooCommerce blocks private meta)
     const filteredMeta = existingMeta.filter((m: any) =>
-      m.key !== '_loyalty_points' && m.key !== '_loyalty_history'
+      m.key !== 'loyalty_points' && m.key !== 'loyalty_history'
     );
     console.log(`🔍 [awardPoints] Filtered meta (removed old loyalty data):`, filteredMeta.length);
 
-    // Add new points/history
+    // Add new points/history (using non-underscore keys - WooCommerce blocks private meta)
     const updatedMeta = [
       ...filteredMeta,
-      { key: '_loyalty_points', value: String(newBalance) },
-      { key: '_loyalty_history', value: JSON.stringify(newHistory) }
+      { key: 'loyalty_points', value: String(newBalance) },
+      { key: 'loyalty_history', value: JSON.stringify(newHistory) }
     ];
     console.log(`🔍 [awardPoints] Updated meta (with new loyalty data):`, updatedMeta.length);
     console.log(`🔍 [awardPoints] New loyalty meta:`, {
-      points: updatedMeta.find(m => m.key === '_loyalty_points'),
-      historyLength: JSON.parse(updatedMeta.find(m => m.key === '_loyalty_history')?.value || '[]').length
+      points: updatedMeta.find(m => m.key === 'loyalty_points'),
+      historyLength: JSON.parse(updatedMeta.find(m => m.key === 'loyalty_history')?.value || '[]').length
     });
 
     console.log(`🔍 [awardPoints] Sending PUT request to WooCommerce...`);
@@ -131,7 +131,7 @@ export async function awardPoints(
     console.log(`🔍 [awardPoints] Updated customer meta_data count:`, updateResponse.data?.meta_data?.length || 0);
 
     // Verify the update
-    const savedPoints = updateResponse.data.meta_data?.find((m: any) => m.key === '_loyalty_points')?.value;
+    const savedPoints = updateResponse.data.meta_data?.find((m: any) => m.key === 'loyalty_points')?.value;
     console.log(`🔍 [awardPoints] Verified saved points in response:`, savedPoints);
 
     console.log(`✅ Awarded ${amount} points to customer #${userId}: ${reason} (new balance: ${newBalance})`);
@@ -180,13 +180,13 @@ export async function redeemPoints(
     const existingMeta = customer.meta_data || [];
 
     const filteredMeta = existingMeta.filter((m: any) =>
-      m.key !== '_loyalty_points' && m.key !== '_loyalty_history'
+      m.key !== 'loyalty_points' && m.key !== 'loyalty_history'
     );
 
     const updatedMeta = [
       ...filteredMeta,
-      { key: '_loyalty_points', value: String(newBalance) },
-      { key: '_loyalty_history', value: JSON.stringify(newHistory) }
+      { key: 'loyalty_points', value: String(newBalance) },
+      { key: 'loyalty_history', value: JSON.stringify(newHistory) }
     ];
 
     await wcApi.put(`customers/${userId}`, {
