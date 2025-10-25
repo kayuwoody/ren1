@@ -1,45 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
-import { getGuestId } from "@/lib/getGuestId";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cartItems, clearCart, removeFromCart } = useCart();
+  const { cartItems, removeFromCart } = useCart();
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [pendingOrder, setPendingOrder] = useState<any>(null);
-
-  // Check for existing pending order
-  useEffect(() => {
-    const checkPendingOrder = async () => {
-      const pendingOrderId = localStorage.getItem("pendingOrderId");
-      if (pendingOrderId) {
-        try {
-          const res = await fetch(`/api/orders/${pendingOrderId}`);
-          if (res.ok) {
-            const order = await res.json();
-            // Only keep it if still pending
-            if (order.status === 'pending') {
-              setPendingOrder(order);
-            } else {
-              // Order was paid, clear it
-              localStorage.removeItem("pendingOrderId");
-            }
-          } else {
-            // Order doesn't exist, clear it
-            localStorage.removeItem("pendingOrderId");
-          }
-        } catch (err) {
-          console.error('Failed to check pending order:', err);
-        }
-      }
-    };
-
-    checkPendingOrder();
-  }, []);
 
   // Calculate total
   const total = cartItems.reduce(
@@ -47,141 +15,67 @@ export default function CheckoutPage() {
     0
   );
 
-  async function handleConfirm() {
-    setError("");
-    setLoading(true);
-
+  function handleConfirm() {
     if (!cartItems.length) {
       setError("Your cart is empty.");
-      setLoading(false);
       return;
     }
 
-    // Get user info
-    const userIdStr =
-      typeof window !== "undefined" ? localStorage.getItem("userId") : null;
-    const userId = userIdStr ? Number(userIdStr) : undefined;
-    const guestId = userId ? undefined : getGuestId();
+    console.log("🛒 Proceeding to payment with cart items:", cartItems);
 
-    // Build line items payload
-    const lineItems = cartItems.map((i: any) => ({
-      product_id: i.productId,
-      quantity: i.quantity,
-    }));
-
-    let wooOrder: any;
-
-    try {
-      // Check if we have a pending order to update
-      const pendingOrderId = localStorage.getItem("pendingOrderId");
-
-      if (pendingOrderId && pendingOrder) {
-        // Update existing pending order
-        console.log("📝 Updating existing pending order:", pendingOrderId);
-
-        const updateRes = await fetch(`/api/orders/${pendingOrderId}/update-items`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ line_items: lineItems })
-        });
-
-        if (!updateRes.ok) {
-          console.error("Update order failed");
-          // Fallback to creating new order
-          localStorage.removeItem("pendingOrderId");
-        } else {
-          wooOrder = await updateRes.json();
-          console.log("✅ Updated pending order:", wooOrder);
-        }
-      }
-
-      // Create new order if no pending order or update failed
-      if (!wooOrder) {
-        console.log("🆕 Creating new pending order");
-
-        const payload: any = {
-          line_items: lineItems,
-          ...(userId ? { userId } : { guestId }),
-        };
-
-        const res = await fetch("/api/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("Create order failed:", text);
-          setError("Order failed. Please try again.");
-          setLoading(false);
-          return;
-        }
-
-        wooOrder = await res.json();
-
-        // Store as pending order
-        localStorage.setItem("pendingOrderId", String(wooOrder.id));
-        console.log("✅ Created pending order:", wooOrder.id);
-      }
-    } catch (err) {
-      console.error("Order error:", err);
-      setError("Network error. Please try again.");
-      setLoading(false);
-      return;
-    }
-
-    // Clear cart and navigate to order page
-    // DON'T clear cart here - it will auto-sync empty cart to pending order!
-    // Cart will be cleared when payment is simulated
-    router.push(`/orders/${wooOrder.id}`);
-    setLoading(false);
+    // Navigate to payment page (cart stays intact)
+    router.push("/payment");
   }
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Checkout</h1>
 
-      {/* Cart summary with remove buttons */}
-      <ul className="mb-4 space-y-2">
-        {cartItems.map((item: any) => (
-          <li key={item.productId} className="flex justify-between items-center border-b pb-2">
-            <div className="flex-1">
-              <p className="font-medium">{item.name}</p>
-              <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="font-semibold">
-                RM {((item.price ?? 0) * (item.quantity ?? 0)).toFixed(2)}
-              </span>
-              <button
-                onClick={() => removeFromCart(item.productId)}
-                className="text-red-600 hover:text-red-800 text-sm font-medium"
-              >
-                Remove
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {cartItems.length === 0 ? (
+        <p className="text-gray-600">Your cart is empty.</p>
+      ) : (
+        <>
+          {/* Cart summary with remove buttons */}
+          <ul className="mb-4 space-y-2">
+            {cartItems.map((item: any) => (
+              <li key={item.productId} className="flex justify-between items-center border-b pb-2">
+                <div className="flex-1">
+                  <p className="font-medium">{item.name}</p>
+                  <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold">
+                    RM {((item.price ?? 0) * (item.quantity ?? 0)).toFixed(2)}
+                  </span>
+                  <button
+                    onClick={() => removeFromCart(item.productId)}
+                    className="text-red-600 hover:text-red-800 text-sm font-medium"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
 
-      <p className="text-right font-semibold">
-        Total: RM {total.toFixed(2)}
-      </p>
+          <p className="text-right font-semibold">
+            Total: RM {total.toFixed(2)}
+          </p>
 
-      <button
-        onClick={handleConfirm}
-        disabled={loading}
-        className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 transition disabled:opacity-50"
-      >
-        {loading ? 'Processing...' : 'Confirm & Pay'}
-      </button>
+          <button
+            onClick={handleConfirm}
+            className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 transition"
+          >
+            Proceed to Payment
+          </button>
 
-      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+          {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
 
-      <p className="text-xs text-gray-500 text-center">
-        You'll be able to simulate payment on the next screen
-      </p>
+          <p className="text-xs text-gray-500 text-center">
+            Review your order and simulate payment on the next screen
+          </p>
+        </>
+      )}
     </div>
   );
 }

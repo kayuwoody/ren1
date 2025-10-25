@@ -9,8 +9,30 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
 
+  // Helper function to check if order timer has completed
+  const isOutForDelivery = (order: any) => {
+    if (order.status !== 'processing') return false;
+
+    const endTime = order.meta_data?.find((m: any) => m.key === 'endTime')?.value;
+    if (!endTime) return false;
+
+    return Date.now() > Number(endTime);
+  };
+
   // Helper function to get status badge
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (order: any) => {
+    const status = order.status;
+
+    // Check if it's out for delivery (processing but timer done)
+    if (isOutForDelivery(order)) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold text-orange-800 bg-orange-100">
+          <span>🚚</span>
+          <span>Out for Delivery</span>
+        </span>
+      );
+    }
+
     const badges: Record<string, { icon: string; color: string; bg: string; label: string }> = {
       'pending': { icon: '🟡', color: 'text-yellow-800', bg: 'bg-yellow-100', label: 'Pending' },
       'processing': { icon: '🔵', color: 'text-blue-800', bg: 'bg-blue-100', label: 'Preparing' },
@@ -127,7 +149,7 @@ export default function OrdersPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {getStatusBadge(order.status)}
+                    {getStatusBadge(order)}
                   </div>
                 </Link>
               </li>

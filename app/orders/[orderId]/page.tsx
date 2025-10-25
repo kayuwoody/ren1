@@ -4,8 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import QRCode from 'react-qr-code';
-import { FileText } from 'lucide-react';
-import { useCart } from '@/context/cartContext';
+import { FileText, Receipt } from 'lucide-react';
 
 type WooMeta = { key: string; value: any };
 
@@ -14,7 +13,6 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [progress, setProgress] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { clearCart } = useCart();
 
   if (!orderId) {
     console.error('No orderId in URL');
@@ -128,12 +126,6 @@ export default function OrderDetailPage() {
                 console.log('🔄 Order updated to processing', updated);
                 setOrder(updated);
 
-                // Clear pending order since it's now paid
-                localStorage.removeItem('pendingOrderId');
-
-                // Clear cart now that order is paid
-                clearCart();
-
                 // Add to active orders list for timer tracking
                 const activeOrders = JSON.parse(localStorage.getItem('activeOrders') || '[]');
                 if (!activeOrders.includes(String(order.id))) {
@@ -144,7 +136,7 @@ export default function OrderDetailPage() {
                 // Trigger immediate timer refresh
                 window.dispatchEvent(new Event('refreshActiveOrders'));
 
-                console.log('✅ Payment processed, cart cleared, added to active orders, timer refreshed');
+                console.log('✅ Payment processed, added to active orders, timer refreshed');
               } else {
                 console.error('Simulate payment failed');
               }
@@ -159,8 +151,15 @@ export default function OrderDetailPage() {
 
       {isProcessing && (
         <div>
-          <p className="text-sm text-gray-500">Preparing your order…</p>
+          <p className="text-sm text-gray-500">
+            {progress >= 100 ? 'Out for Delivery to Locker…' : 'Preparing your order…'}
+          </p>
           <progress value={progress} max={100} className="w-full h-4" />
+          {progress >= 100 && (
+            <p className="text-xs text-orange-600 mt-2">
+              Your order will be ready for pickup once it's delivered to the locker
+            </p>
+          )}
         </div>
       )}
 
@@ -279,8 +278,20 @@ export default function OrderDetailPage() {
         </p>
       </div>
 
-      {/* View All Orders Button */}
-      <div className="pt-4 border-t">
+      {/* Receipt and Orders Buttons */}
+      <div className="pt-4 border-t space-y-3">
+        {/* View Receipt Button */}
+        {!isPending && (
+          <Link
+            href={`/orders/${orderId}/receipt`}
+            className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition"
+          >
+            <Receipt className="w-5 h-5" />
+            View Receipt
+          </Link>
+        )}
+
+        {/* View All Orders Button */}
         <Link
           href="/orders"
           className="flex items-center justify-center gap-2 w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg transition"

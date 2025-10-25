@@ -66,7 +66,7 @@ export default function HeaderNav() {
                 const seconds = Math.floor((remaining % 60000) / 1000);
                 timeRemaining = `${minutes}:${seconds.toString().padStart(2, '0')}`;
               } else {
-                timeRemaining = 'Ready!';
+                timeRemaining = 'Out for Delivery';
               }
             }
 
@@ -122,7 +122,7 @@ export default function HeaderNav() {
 
           const remaining = Number(endTime) - Date.now();
           if (remaining <= 0) {
-            return { ...order, timeRemaining: 'Ready!' };
+            return { ...order, timeRemaining: 'Out for Delivery' };
           }
 
           const minutes = Math.floor(remaining / 60000);
