@@ -40,14 +40,31 @@ export class ThermalPrinter {
         deviceName.includes('niimbot') ||
         deviceName.includes('b1-') ||
         deviceName.includes('b21-') ||
+        deviceName.includes('b3s-') ||
         deviceName.includes('d11-') ||
         deviceName.includes('d110-') ||
         deviceName.startsWith('b1') ||
         deviceName.startsWith('b21') ||
+        deviceName.startsWith('b3s') ||
         deviceName.startsWith('d11') ||
         deviceName.startsWith('d110');
 
-      console.log('Paired device:', device.name, 'ID:', device.id, 'Niimbot:', this.isNiimbot);
+      // Determine model
+      let detectedModel = 'Unknown';
+      if (deviceName.includes('b21') || deviceName.startsWith('b21')) {
+        detectedModel = 'B21';
+      } else if (deviceName.includes('b1') || deviceName.startsWith('b1')) {
+        detectedModel = 'B1';
+      } else if (deviceName.includes('b3s') || deviceName.startsWith('b3s')) {
+        detectedModel = 'B3S';
+      } else if (deviceName.includes('d11') || deviceName.startsWith('d11')) {
+        detectedModel = 'D11';
+      } else if (deviceName.includes('d110') || deviceName.startsWith('d110')) {
+        detectedModel = 'D110';
+      }
+
+      console.log('Paired device:', device.name, 'ID:', device.id);
+      console.log('Niimbot detected:', this.isNiimbot, '| Model:', detectedModel);
 
       return device;
     } catch (err) {
@@ -217,14 +234,16 @@ export class ThermalPrinter {
    * Convert text to bitmap image for Niimbot label printer
    * Returns monochrome bitmap data (1 bit per pixel)
    *
-   * For B1 with 50x30mm labels: max 384x240 pixels at 203 DPI
+   * B1: 50mm width = 384px at 203 DPI
+   * B21: 20-50mm width (variable) = 157-384px at 203 DPI
+   * Standard 50x30mm labels = 384x240 pixels
    */
   private textToBitmap(text: string, width: number = 384, maxHeight: number = 240): { data: Uint8Array[], width: number, height: number } {
     // Create canvas to render text
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
 
-    // Niimbot B1 supports 384px width for 50mm labels
+    // B21 supports variable width (20-50mm), B1 supports 50mm
     canvas.width = width;
 
     // Set font - smaller to fit on 30mm labels
@@ -302,10 +321,11 @@ export class ThermalPrinter {
 
   /**
    * Print using Niimbot protocol with correct command sequence
+   * Supports B1, B21, B3S, D11, D110 models
    */
   private async niimbotPrint(text: string): Promise<void> {
     try {
-      console.log('🖨️ Niimbot B1: Starting print...');
+      console.log('🖨️ Niimbot: Starting print...');
       console.log('📝 Text to print:', text);
 
       // 0. Read RFID tag to get label information
@@ -339,15 +359,16 @@ export class ThermalPrinter {
           }
         }
       } else {
-        console.warn('⚠️ No RFID response - using default settings');
+        console.warn('⚠️ No RFID response - using default settings for 50x30mm labels');
+        console.warn('   Make sure label roll is loaded and positioned correctly');
       }
 
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Convert text to bitmap (50x30mm = 384x240 pixels at 203 DPI)
+      // Convert text to bitmap (50x30mm = 384x240 pixels at 203 DPI for both B1/B21)
       console.log('🖼️ Converting text to bitmap...');
       const bitmap = this.textToBitmap(text, 384, 240);
-      console.log(`📐 Bitmap: ${bitmap.width}x${bitmap.height} pixels`);
+      console.log(`📐 Bitmap: ${bitmap.width}x${bitmap.height} pixels (for 50x30mm labels)`);
 
       // 1. Set print density (1-5, where 3 is medium)
       console.log('📤 Step 1/9: Set density');
@@ -436,7 +457,7 @@ export class ThermalPrinter {
       await this.sendCommand(endPrintCmd);
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log('✅ Niimbot B1: Print job complete!');
+      console.log('✅ Niimbot: Print job complete!');
     } catch (err) {
       console.error('❌ Niimbot print failed:', err);
       throw err;
