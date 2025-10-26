@@ -282,7 +282,7 @@ export default function SettingsPage() {
           <FileText className="w-5 h-5 text-gray-600" />
           <div className="flex-1">
             <p className="font-semibold">Order History</p>
-            <p className="text-sm text-gray-500">View all your orders</p>
+            <p className="text-sm text-gray-500">View, reorder, and favorite your orders</p>
           </div>
           <span className="text-gray-400">→</span>
         </Link>

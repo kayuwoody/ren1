@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Printer, Bluetooth } from 'lucide-react';
+import { Printer, Bluetooth, Share2, Mail, MessageCircle, Star } from 'lucide-react';
+import QRCode from 'react-qr-code';
 import { printerManager } from '@/lib/printerService';
 
 export default function ReceiptPage() {
@@ -57,6 +58,42 @@ export default function ReceiptPage() {
     }
   };
 
+  const handleShareWhatsApp = () => {
+    const receiptUrl = window.location.href;
+    const message = `Coffee Oasis Receipt\nOrder #${order.id}\nTotal: RM ${order.total}\n\nView receipt: ${receiptUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const handleShareEmail = () => {
+    if (!order) return;
+    const receiptUrl = window.location.href;
+    const orderDate = order.date_created ? new Date(order.date_created) : new Date();
+    const formattedDate = orderDate.toLocaleDateString('en-MY', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const subject = `Coffee Oasis Receipt - Order #${order.id}`;
+    const body = `Thank you for your purchase!\n\nOrder Number: #${order.id}\nDate: ${formattedDate}\nTotal: RM ${order.total}\n\nView your receipt: ${receiptUrl}`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Coffee Oasis Receipt #${order.id}`,
+          text: `Order #${order.id} - Total: RM ${order.total}`,
+          url: window.location.href,
+        });
+      } catch (err) {
+        console.log('Share cancelled');
+      }
+    }
+  };
+
   if (loading) {
     return <div className="p-4">Loading receipt...</div>;
   }
@@ -75,39 +112,73 @@ export default function ReceiptPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-gray-50 p-4">
       <div className="max-w-md mx-auto">
-        {/* Print buttons */}
+        {/* Action buttons */}
         <div className="mb-4 no-print space-y-2">
-          {/* Browser print */}
-          <button
-            onClick={() => window.print()}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2"
-          >
-            <Printer className="w-5 h-5" />
-            Print Receipt (Browser)
-          </button>
-
-          {/* Bluetooth print */}
-          {bluetoothSupported && (
+          {/* Print buttons */}
+          <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={handleBluetoothPrint}
-              disabled={printing}
-              className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+              onClick={() => window.print()}
+              className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 text-sm"
             >
-              <Bluetooth className="w-5 h-5" />
-              {printing ? 'Printing...' : 'Print to Bluetooth Printer'}
+              <Printer className="w-4 h-4" />
+              Print
             </button>
-          )}
+
+            {bluetoothSupported && (
+              <button
+                onClick={handleBluetoothPrint}
+                disabled={printing}
+                className="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+              >
+                <Bluetooth className="w-4 h-4" />
+                {printing ? 'Printing...' : 'Bluetooth'}
+              </button>
+            )}
+          </div>
+
+          {/* Share buttons */}
+          <div className="grid grid-cols-3 gap-2">
+            {navigator.share && (
+              <button
+                onClick={handleNativeShare}
+                className="bg-green-600 text-white py-2 px-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-1 text-xs"
+              >
+                <Share2 className="w-4 h-4" />
+                Share
+              </button>
+            )}
+            <button
+              onClick={handleShareWhatsApp}
+              className="bg-emerald-600 text-white py-2 px-3 rounded-lg hover:bg-emerald-700 transition flex items-center justify-center gap-1 text-xs"
+            >
+              <MessageCircle className="w-4 h-4" />
+              WhatsApp
+            </button>
+            <button
+              onClick={handleShareEmail}
+              className="bg-gray-600 text-white py-2 px-3 rounded-lg hover:bg-gray-700 transition flex items-center justify-center gap-1 text-xs"
+            >
+              <Mail className="w-4 h-4" />
+              Email
+            </button>
+          </div>
         </div>
 
         {/* Receipt */}
         <div className="bg-white shadow-lg rounded-lg p-8 print:shadow-none print:rounded-none">
-          {/* Header */}
-          <div className="text-center mb-6 border-b pb-4">
-            <h1 className="text-2xl font-bold">Coffee Oasis</h1>
-            <p className="text-sm text-gray-600">Smart Locker Coffee Shop</p>
-            <p className="text-xs text-gray-500 mt-1">coffee-oasis.com.my</p>
+          {/* Header with Logo */}
+          <div className="text-center mb-6 border-b-2 border-amber-600 pb-4">
+            <div className="mb-3">
+              {/* Logo placeholder - you can replace with actual logo */}
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-600 to-amber-800 rounded-full mb-2">
+                <span className="text-2xl text-white">☕</span>
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-1">Coffee Oasis</h1>
+            <p className="text-sm text-amber-700 font-medium">Smart Locker Coffee Shop</p>
+            <p className="text-xs text-gray-500 mt-1">📍 Malaysia | 🌐 coffee-oasis.com.my</p>
           </div>
 
           {/* Order Info */}
@@ -178,15 +249,49 @@ export default function ReceiptPage() {
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="mt-8 pt-4 border-t text-center text-xs text-gray-500">
-            <p className="mb-1">Thank you for your purchase!</p>
-            <p>Your order will be ready soon.</p>
-            {order.status === 'ready-for-pickup' && order.meta_data?.find((m: any) => m.key === '_locker_number') && (
-              <p className="mt-2 font-semibold text-gray-700">
-                Locker: {order.meta_data.find((m: any) => m.key === '_locker_number')?.value}
-              </p>
-            )}
+          {/* QR Code & Footer */}
+          <div className="mt-8 pt-6 border-t-2 border-gray-200">
+            <div className="flex flex-col items-center space-y-4">
+              {/* QR Code */}
+              <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
+                <QRCode
+                  value={typeof window !== 'undefined' ? window.location.href : ''}
+                  size={120}
+                  level="M"
+                />
+                <p className="text-xs text-center text-gray-500 mt-2">Scan to view receipt</p>
+              </div>
+
+              {/* Locker info */}
+              {order.status === 'ready-for-pickup' && order.meta_data?.find((m: any) => m.key === '_locker_number') && (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-3 w-full">
+                  <p className="text-sm text-center font-bold text-amber-900">
+                    🔒 Locker Number: {order.meta_data.find((m: any) => m.key === '_locker_number')?.value}
+                  </p>
+                </div>
+              )}
+
+              {/* Thank you message */}
+              <div className="text-center">
+                <p className="text-base font-semibold text-gray-800 mb-1">Thank you for your purchase!</p>
+                <p className="text-sm text-gray-600">Your order will be ready soon.</p>
+              </div>
+
+              {/* Feedback link */}
+              <a
+                href={`/feedback?order=${order.id}`}
+                className="no-print flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-full transition text-sm font-medium"
+              >
+                <Star className="w-4 h-4" />
+                Rate Your Experience
+              </a>
+
+              {/* Contact info */}
+              <div className="text-center text-xs text-gray-500 pt-2 border-t border-gray-200 w-full">
+                <p>Questions? Contact us at support@coffee-oasis.com.my</p>
+                <p className="mt-1">📞 +60 12-345-6789</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -212,6 +317,13 @@ export default function ReceiptPage() {
           }
           @page {
             margin: 0.5cm;
+          }
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 640px) {
+          .receipt-container {
+            padding: 1rem;
           }
         }
       `}</style>

@@ -27,11 +27,18 @@ export default function HeaderNav() {
 
   // Fetch status for all active orders
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+
     const fetchActiveOrders = async () => {
       const activeOrderIds = JSON.parse(localStorage.getItem('activeOrders') || '[]');
 
       if (activeOrderIds.length === 0) {
         setActiveOrders([]);
+        // Stop polling when no active orders
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
+        }
         return;
       }
 
@@ -84,12 +91,14 @@ export default function HeaderNav() {
       }
 
       setActiveOrders(ordersData);
+
+      // Start polling only if we have active orders and interval not already running
+      if (ordersData.length > 0 && !interval) {
+        interval = setInterval(fetchActiveOrders, 30000); // Reduced from 10s to 30s
+      }
     };
 
     fetchActiveOrders();
-
-    // Poll every 10 seconds
-    const interval = setInterval(fetchActiveOrders, 10000);
 
     // Listen for manual refresh events (when payment is made)
     const handleRefresh = () => {
@@ -99,7 +108,7 @@ export default function HeaderNav() {
     window.addEventListener('refreshActiveOrders', handleRefresh);
 
     return () => {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       window.removeEventListener('refreshActiveOrders', handleRefresh);
     };
   }, []);

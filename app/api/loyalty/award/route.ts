@@ -15,20 +15,43 @@ import { cookies } from 'next/headers';
  */
 export async function POST(req: Request) {
   try {
-    // Get userId from cookie
+    const body = await req.json();
+    const { reason, orderId, userId: bodyUserId } = body;
+
+    console.log('🔍 Loyalty award request:', {
+      reason,
+      orderId,
+      bodyUserId,
+      bodyUserIdType: typeof bodyUserId
+    });
+
+    // Try to get userId from multiple sources
     const cookieStore = cookies();
     const userIdCookie = cookieStore.get('userId');
+    const userIdFromHeader = req.headers.get('x-user-id');
 
-    if (!userIdCookie?.value) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      );
+    console.log('🔍 userId sources:', {
+      bodyUserId,
+      cookieValue: userIdCookie?.value,
+      headerValue: userIdFromHeader
+    });
+
+    const userId = bodyUserId ||
+                   (userIdCookie?.value ? Number(userIdCookie.value) : null) ||
+                   (userIdFromHeader ? Number(userIdFromHeader) : null);
+
+    console.log('🔍 Final userId:', userId, 'isValid:', Boolean(userId && !isNaN(userId)));
+
+    if (!userId || isNaN(userId)) {
+      // If no userId provided, still succeed but don't award points (guest user)
+      console.warn('⚠️ No valid userId found - guest user, skipping points award');
+      return NextResponse.json({
+        success: true,
+        awarded: 0,
+        balance: 0,
+        message: 'Order completed (guest user - no points awarded)'
+      });
     }
-
-    const userId = Number(userIdCookie.value);
-    const body = await req.json();
-    const { reason, orderId } = body;
 
     // Determine points amount based on reason
     let amount = 0;
