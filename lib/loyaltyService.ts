@@ -77,12 +77,22 @@ export async function awardPoints(
   try {
     console.log(`🔍 [awardPoints] Starting for user ${userId}, amount ${amount}`);
 
-    // 1. Get current points
-    const current = await getCustomerPoints(userId);
-    console.log(`🔍 [awardPoints] Current points:`, current);
+    // 1. Fetch customer data ONCE (to get current points AND existing meta_data)
+    console.log(`🔍 [awardPoints] Fetching customer ${userId} from WooCommerce...`);
+    const { data: customer } = await wcApi.get(`customers/${userId}`);
+    console.log(`🔍 [awardPoints] Customer fetched, current meta_data count:`, customer.meta_data?.length || 0);
+
+    // Extract current points from the customer data we just fetched
+    const pointsMeta = customer.meta_data?.find((m: any) => m.key === 'loyalty_points');
+    const historyMeta = customer.meta_data?.find((m: any) => m.key === 'loyalty_history');
+
+    const currentBalance = Number(pointsMeta?.value || 0);
+    const currentHistory = JSON.parse(historyMeta?.value || '[]');
+
+    console.log(`🔍 [awardPoints] Current points:`, { balance: currentBalance, historyCount: currentHistory.length });
 
     // 2. Calculate new balance
-    const newBalance = current.balance + amount;
+    const newBalance = currentBalance + amount;
     console.log(`🔍 [awardPoints] New balance will be: ${newBalance}`);
 
     // 3. Add transaction to history
@@ -95,14 +105,10 @@ export async function awardPoints(
       timestamp: new Date().toISOString()
     };
 
-    const newHistory = [transaction, ...current.history].slice(0, 100); // Keep last 100 transactions
+    const newHistory = [transaction, ...currentHistory].slice(0, 100); // Keep last 100 transactions
     console.log(`🔍 [awardPoints] History entries: ${newHistory.length}`);
 
-    // 4. Update customer meta_data
-    console.log(`🔍 [awardPoints] Fetching customer ${userId} from WooCommerce...`);
-    const { data: customer } = await wcApi.get(`customers/${userId}`);
-    console.log(`🔍 [awardPoints] Customer fetched, current meta_data count:`, customer.meta_data?.length || 0);
-
+    // 4. Update customer meta_data (reusing the customer data we already fetched)
     const existingMeta = customer.meta_data || [];
 
     // Remove old points/history entries (using non-underscore keys - WooCommerce blocks private meta)
