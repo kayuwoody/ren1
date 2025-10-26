@@ -42,7 +42,7 @@ export default function OrderDetailPage() {
       }
     };
     fetchOrder();
-    const poll = setInterval(fetchOrder, 10_000);
+    const poll = setInterval(fetchOrder, 30_000); // Reduced from 10s to 30s to minimize API calls
     return () => {
       active = false;
       clearInterval(poll);
