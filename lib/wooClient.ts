@@ -9,6 +9,7 @@ const realWcApi = new WooCommerceRestApi({
   consumerKey: process.env.WC_CONSUMER_KEY!,
   consumerSecret: process.env.WC_CONSUMER_SECRET!,
   version: 'wc/v3',
+  queryStringAuth: true, // Force OAuth 1.0a (query parameters) instead of Basic Auth
 });
 
 /**
