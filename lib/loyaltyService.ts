@@ -136,9 +136,21 @@ export async function awardPoints(
     console.log(`🔍 [awardPoints] WooCommerce PUT response status:`, updateResponse.status);
     console.log(`🔍 [awardPoints] Updated customer meta_data count:`, updateResponse.data?.meta_data?.length || 0);
 
-    // Verify the update
+    // Verify the update in the response
     const savedPoints = updateResponse.data.meta_data?.find((m: any) => m.key === 'loyalty_points')?.value;
     console.log(`🔍 [awardPoints] Verified saved points in response:`, savedPoints);
+
+    // CRITICAL: Re-fetch customer to verify WooCommerce actually saved it
+    console.log(`🔍 [awardPoints] Re-fetching customer to verify save...`);
+    const { data: verifyCustomer } = await wcApi.get(`customers/${userId}`);
+    const actualPoints = verifyCustomer.meta_data?.find((m: any) => m.key === 'loyalty_points')?.value;
+    console.log(`🔍 [awardPoints] ACTUAL points in database:`, actualPoints);
+
+    if (actualPoints !== String(newBalance)) {
+      console.error(`❌ [awardPoints] SAVE FAILED! Expected ${newBalance}, got ${actualPoints}`);
+      console.error(`❌ [awardPoints] WooCommerce accepted PUT but didn't persist data`);
+      throw new Error(`Points save failed - WooCommerce returned success but data not persisted`);
+    }
 
     console.log(`✅ Awarded ${amount} points to customer #${userId}: ${reason} (new balance: ${newBalance})`);
 
