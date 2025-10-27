@@ -35,7 +35,7 @@ export interface LoyaltyPoints {
 export async function getCustomerPoints(userId: number): Promise<LoyaltyPoints> {
   try {
     console.log(`🔍 [getCustomerPoints] Fetching points for user ${userId}`);
-    const { data: customer } = await wcApi.get(`customers/${userId}`);
+    const { data: customer } = await wcApi.get(`customers/${userId}`) as { data: any };
     console.log(`🔍 [getCustomerPoints] Customer meta_data count:`, customer.meta_data?.length || 0);
 
     // Extract points from meta_data (without underscore prefix - WooCommerce blocks private meta)
@@ -79,7 +79,7 @@ export async function awardPoints(
 
     // 1. Fetch customer data ONCE (to get current points AND existing meta_data)
     console.log(`🔍 [awardPoints] Fetching customer ${userId} from WooCommerce...`);
-    const { data: customer } = await wcApi.get(`customers/${userId}`);
+    const { data: customer } = await wcApi.get(`customers/${userId}`) as { data: any };
     console.log(`🔍 [awardPoints] Customer fetched, current meta_data count:`, customer.meta_data?.length || 0);
 
     // Extract current points from the customer data we just fetched
@@ -130,9 +130,9 @@ export async function awardPoints(
     });
 
     console.log(`🔍 [awardPoints] Sending PUT request to WooCommerce...`);
-    const updateResponse = await wcApi.put(`customers/${userId}`, {
+    const updateResponse = (await wcApi.put(`customers/${userId}`, {
       meta_data: updatedMeta
-    });
+    })) as { data: any; status: number };
     console.log(`🔍 [awardPoints] WooCommerce PUT response status:`, updateResponse.status);
     console.log(`🔍 [awardPoints] Updated customer meta_data count:`, updateResponse.data?.meta_data?.length || 0);
 
@@ -142,7 +142,7 @@ export async function awardPoints(
 
     // CRITICAL: Re-fetch customer to verify WooCommerce actually saved it
     console.log(`🔍 [awardPoints] Re-fetching customer to verify save...`);
-    const { data: verifyCustomer } = await wcApi.get(`customers/${userId}`);
+    const { data: verifyCustomer } = await wcApi.get(`customers/${userId}`) as { data: any };
     const actualPoints = verifyCustomer.meta_data?.find((m: any) => m.key === 'loyalty_points')?.value;
     console.log(`🔍 [awardPoints] ACTUAL points in database:`, actualPoints);
 
@@ -194,7 +194,7 @@ export async function redeemPoints(
 
     const newHistory = [transaction, ...current.history].slice(0, 100);
 
-    const { data: customer } = await wcApi.get(`customers/${userId}`);
+    const { data: customer } = await wcApi.get(`customers/${userId}`) as { data: any };
     const existingMeta = customer.meta_data || [];
 
     const filteredMeta = existingMeta.filter((m: any) =>
@@ -209,7 +209,7 @@ export async function redeemPoints(
 
     await wcApi.put(`customers/${userId}`, {
       meta_data: updatedMeta
-    });
+    }) as unknown;
 
     console.log(`✅ Redeemed ${amount} points from customer #${userId}: ${reason}`);
 

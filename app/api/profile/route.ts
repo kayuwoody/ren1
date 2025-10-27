@@ -1,6 +1,6 @@
 // app/api/profile/route.ts
 import { NextResponse } from 'next/server';
-import api from '@/lib/wooapi';
+import api from '@/lib/wooApi';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

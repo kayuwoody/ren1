@@ -12,18 +12,18 @@ export interface PrinterConfig {
 }
 
 export class ThermalPrinter {
-  private device: BluetoothDevice | null = null;
-  private characteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private device: any = null;
+  private characteristic: any = null;
   private isNiimbot: boolean = false;
 
   /**
    * Request bluetooth printer pairing
    * Updated to support Niimbot and other printers
    */
-  async pair(): Promise<BluetoothDevice> {
+  async pair(): Promise<any> {
     try {
       // Accept all devices to support Niimbot and other proprietary printers
-      const device = await navigator.bluetooth.requestDevice({
+      const device = await (navigator as any).bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: [
           '000018f0-0000-1000-8000-00805f9b34fb', // Standard ESC/POS
@@ -77,7 +77,7 @@ export class ThermalPrinter {
    * Connect to paired printer
    * Auto-discovers services and characteristics
    */
-  async connect(device?: BluetoothDevice): Promise<void> {
+  async connect(device?: any): Promise<void> {
     try {
       const targetDevice = device || this.device;
       if (!targetDevice) {

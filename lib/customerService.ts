@@ -1,5 +1,5 @@
 // lib/customerService.ts
-import api from './wooapi';
+import api from './wooApi';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function createOrFindWooCustomer({ name, email, phone, address }: {

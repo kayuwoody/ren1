@@ -140,7 +140,7 @@ export default function ReceiptPage() {
 
           {/* Share buttons */}
           <div className="grid grid-cols-3 gap-2">
-            {navigator.share && (
+            {(typeof navigator !== 'undefined' && 'share' in navigator) && (
               <button
                 onClick={handleNativeShare}
                 className="bg-green-600 text-white py-2 px-3 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-1 text-xs"

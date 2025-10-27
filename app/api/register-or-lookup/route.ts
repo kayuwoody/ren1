@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import woo from '@/lib/wooapi';
+import woo from '@/lib/wooApi';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {

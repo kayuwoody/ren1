@@ -1,15 +1,19 @@
 // app/cart/CartPage.tsx
-import React, { useContext } from "react";
+import React from "react";
 import { CartItem } from "@/components/cart/CartItem";
-import { CartContext } from "@/context/cartContext";
+import { useCart } from "@/context/cartContext";
 import { useRouter } from "next/router";
 
 const CartPage: React.FC = () => {
-  const { cartItems, removeItem, getTotalPrice } = useContext(CartContext);
+  const { cartItems, removeFromCart, clearCart } = useCart();
   const router = useRouter();
 
   const handleCheckout = () => {
     router.push("/checkout");
+  };
+
+  const getTotalPrice = () => {
+    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
   return (
@@ -19,14 +23,14 @@ const CartPage: React.FC = () => {
         <p className="text-gray-600">Your cart is empty.</p>
       ) : (
         <div>
-          {cartItems.map((item, index) => (
+          {cartItems.map((item) => (
             <CartItem
-              key={index}
+              key={item.productId}
               name={item.name}
               quantity={item.quantity}
               price={item.price}
-              customizations={item.customizations}
-              onRemove={() => removeItem(index)}
+              customizations={undefined}
+              onRemove={() => removeFromCart(item.productId)}
             />
           ))}
           <div className="border-t pt-4 mt-4">

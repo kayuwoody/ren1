@@ -14,8 +14,8 @@ interface PrintLog {
 }
 
 export default function PrintersAdminPage() {
-  const [receiptPrinter, setReceiptPrinter] = useState<BluetoothDevice | null>(null);
-  const [kitchenPrinter, setKitchenPrinter] = useState<BluetoothDevice | null>(null);
+  const [receiptPrinter, setReceiptPrinter] = useState<any>(null);
+  const [kitchenPrinter, setKitchenPrinter] = useState<any>(null);
   const [bluetoothSupported, setBluetoothSupported] = useState(true);
   const [testResult, setTestResult] = useState<string>('');
   const [printLogs, setPrintLogs] = useState<PrintLog[]>([]);

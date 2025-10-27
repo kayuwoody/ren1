@@ -29,20 +29,20 @@ export async function POST(req: Request) {
     }
 
     // Lookup
-    const { data: found } = await wcApi.get('customers', { email });
+    const { data: found } = (await wcApi.get('customers', { email })) as { data: any };
     let customer = Array.isArray(found) ? found[0] : null;
     let created = false;
 
     // Create if missing
     if (!customer) {
       const password = randomUUID(); // throwaway
-      const { data: createdCust } = await wcApi.post('customers', {
+      const { data: createdCust } = (await wcApi.post('customers', {
         email,
         username: email,
         password,
         billing: { email },
         shipping: { email },
-      });
+      })) as { data: any };
       customer = createdCust;
       created = true;
       console.log('[API /login] created Woo customer:', customer.id);

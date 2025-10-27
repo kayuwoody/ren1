@@ -16,11 +16,11 @@ export async function GET(req: Request) {
     // if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Fetch all orders with expanded parameters
-    const { data: orders } = await wcApi.get('orders', {
+    const { data: orders } = (await wcApi.get('orders', {
       per_page: 100, // Adjust as needed
       orderby: 'date',
       order: 'desc'
-    });
+    })) as { data: any };
 
     return NextResponse.json(orders);
   } catch (err: any) {
