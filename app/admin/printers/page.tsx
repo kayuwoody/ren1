@@ -87,6 +87,33 @@ export default function PrintersAdminPage() {
     }
   };
 
+  const handleDebugTestPrint = async () => {
+    setTestResult('Printing simple black rectangle test...');
+    try {
+      const printer = printerManager.getReceiptPrinter();
+      await printer.connect(receiptPrinter || undefined);
+
+      // Call the testPrint function that prints a simple rectangle
+      await printer.testPrint();
+      setTestResult('✅ Debug test printed! Check if you see a black rectangle.');
+
+      addPrintLog({
+        type: 'receipt',
+        orderId: 'DEBUG-TEST',
+        status: 'success',
+      });
+    } catch (err: any) {
+      setTestResult(`❌ Debug test failed: ${err.message}`);
+
+      addPrintLog({
+        type: 'receipt',
+        orderId: 'DEBUG-TEST',
+        status: 'failed',
+        error: err.message,
+      });
+    }
+  };
+
   const handleTestReceiptPrint = async () => {
     setTestResult('Printing test receipt...');
     try {
@@ -246,12 +273,20 @@ export default function PrintersAdminPage() {
               </button>
 
               {receiptPrinter && (
-                <button
-                  onClick={handleTestReceiptPrint}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
-                >
-                  Test Print
-                </button>
+                <>
+                  <button
+                    onClick={handleDebugTestPrint}
+                    className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
+                  >
+                    Debug: Simple Test
+                  </button>
+                  <button
+                    onClick={handleTestReceiptPrint}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+                  >
+                    Test Print
+                  </button>
+                </>
               )}
             </div>
           </div>
