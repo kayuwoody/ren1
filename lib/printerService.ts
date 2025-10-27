@@ -332,6 +332,11 @@ export class ThermalPrinter {
 
     console.log(`🔍 White pixel count: ${whitePixelCount} out of ${canvas.width * canvas.height} total pixels`);
 
+    // Debug: Check row 10 before returning
+    if (bitmapLines.length > 10) {
+      console.log('🔍 Row 10 at return:', Array.from(bitmapLines[10].slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+    }
+
     return {
       data: bitmapLines,
       width: canvas.width,
@@ -575,9 +580,11 @@ export class ThermalPrinter {
       // Debug: Check first few rows of bitmap data
       if (bitmap.data.length > 0) {
         const firstRow = bitmap.data[0];
-        const lastRow = bitmap.data[bitmap.data.length - 1];
+        const row10 = bitmap.data[10];  // Should have white pixel at byte[1]
         const middleRow = bitmap.data[Math.floor(bitmap.data.length / 2)];
-        console.log('🔍 First row sample:', Array.from(firstRow.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+        const lastRow = bitmap.data[bitmap.data.length - 1];
+        console.log('🔍 Row 0 sample:', Array.from(firstRow.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+        console.log('🔍 Row 10 sample:', Array.from(row10.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
         console.log('🔍 Middle row sample:', Array.from(middleRow.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
         console.log('🔍 Last row sample:', Array.from(lastRow.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
       }
