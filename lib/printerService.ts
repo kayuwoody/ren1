@@ -488,10 +488,33 @@ export class ThermalPrinter {
     for (let rowNum = 0; rowNum < bitmapLines.length; rowNum++) {
       const rowData = bitmapLines[rowNum];
 
+      // Calculate left/right pixel counts (like niimbotjs does)
+      const midPoint = Math.floor((rowData.length * 8) / 2);
+      let leftCount = 0;
+      let rightCount = 0;
+
+      for (let byteIndex = 0; byteIndex < rowData.length; byteIndex++) {
+        const byte = rowData[byteIndex];
+        for (let bitIndex = 0; bitIndex < 8; bitIndex++) {
+          const pixelIndex = byteIndex * 8 + bitIndex;
+          const bitSet = (byte & (1 << (7 - bitIndex))) !== 0;
+
+          if (bitSet) {
+            if (pixelIndex < midPoint) {
+              leftCount++;
+            } else {
+              rightCount++;
+            }
+          }
+        }
+      }
+
       const packetData = [
         (rowNum >> 8) & 0xFF,
         rowNum & 0xFF,
-        0x00, 0x00, 0x00, 0x01,
+        midPoint - leftCount,   // FIX: Pixels left of center
+        midPoint - rightCount,  // FIX: Pixels right of center
+        0x00, 0x01,             // Repeat count
         ...Array.from(rowData)
       ];
 
