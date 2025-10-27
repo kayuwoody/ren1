@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat } from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -275,17 +275,6 @@ export default function AdminDashboard() {
               <h2 className="text-xl font-semibold">Printers</h2>
             </div>
             <p className="text-gray-600">Manage receipt and kitchen printers</p>
-          </Link>
-
-          <Link
-            href="/admin/loyalty"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <Star className="w-6 h-6 text-yellow-600" />
-              <h2 className="text-xl font-semibold">Loyalty Points</h2>
-            </div>
-            <p className="text-gray-600">Manage customer loyalty points and rewards</p>
           </Link>
         </div>
 
