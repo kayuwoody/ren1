@@ -541,6 +541,16 @@ export class ThermalPrinter {
       const bitmap = this.textToBitmap(text, 384, 240);
       console.log(`📐 Bitmap: ${bitmap.width}x${bitmap.height} pixels (for 50x30mm labels)`);
 
+      // Debug: Check first few rows of bitmap data
+      if (bitmap.data.length > 0) {
+        const firstRow = bitmap.data[0];
+        const lastRow = bitmap.data[bitmap.data.length - 1];
+        const middleRow = bitmap.data[Math.floor(bitmap.data.length / 2)];
+        console.log('🔍 First row sample:', Array.from(firstRow.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+        console.log('🔍 Middle row sample:', Array.from(middleRow.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+        console.log('🔍 Last row sample:', Array.from(lastRow.slice(0, 8)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+      }
+
       // 1. Set print density (1-5, where 3 is medium)
       console.log('📤 Step 1/9: Set density');
       const densityCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_DENSITY, [3]);
