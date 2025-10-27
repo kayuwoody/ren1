@@ -289,14 +289,15 @@ export class ThermalPrinter {
     // Convert to 1-bit per pixel (8 pixels per byte, MSB first)
     // Based on NiimPrintX: inverted grayscale converted to 1-bit
     const bitmapLines: Uint8Array[] = [];
-    const bytesPerLine = Math.ceil(width / 8);
+    const bytesPerLine = Math.ceil(canvas.width / 8);  // FIX: Use canvas.width not parameter width!
     let whitePixelCount = 0;
+    let firstWhitePixel: any = null;
 
     for (let y = 0; y < canvas.height; y++) {
       const lineBytes = new Uint8Array(bytesPerLine);
 
-      for (let x = 0; x < width; x++) {
-        const pixelIndex = (y * width + x) * 4;
+      for (let x = 0; x < canvas.width; x++) {  // FIX: Use canvas.width not parameter width!
+        const pixelIndex = (y * canvas.width + x) * 4;  // FIX: Use canvas.width!
         const r = pixels[pixelIndex];
         const g = pixels[pixelIndex + 1];
         const b = pixels[pixelIndex + 2];
@@ -313,10 +314,20 @@ export class ThermalPrinter {
           const byteIndex = Math.floor(x / 8);
           const bitIndex = 7 - (x % 8);  // MSB first
           lineBytes[byteIndex] |= (1 << bitIndex);
+
+          if (!firstWhitePixel) {
+            firstWhitePixel = { x, y, byteIndex, bitIndex, before: lineBytes[byteIndex] };
+            lineBytes[byteIndex] |= (1 << bitIndex);
+            firstWhitePixel.after = lineBytes[byteIndex];
+          }
         }
       }
 
       bitmapLines.push(lineBytes);
+    }
+
+    if (firstWhitePixel) {
+      console.log(`🔍 First white pixel: (${firstWhitePixel.x},${firstWhitePixel.y}) -> byte[${firstWhitePixel.byteIndex}] bit ${firstWhitePixel.bitIndex}: ${firstWhitePixel.before} -> ${firstWhitePixel.after}`);
     }
 
     console.log(`🔍 White pixel count: ${whitePixelCount} out of ${canvas.width * canvas.height} total pixels`);
