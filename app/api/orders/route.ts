@@ -33,7 +33,7 @@ export async function GET(req: Request) {
       };
       if (status) params.status = status;
 
-      const { data } = await wcApi.get('orders', params);
+      const { data } = (await wcApi.get('orders', params)) as { data: any };
       const orders = Array.isArray(data) ? data : [];
       sortNewestFirst(orders);
       return NextResponse.json(orders);
@@ -49,7 +49,7 @@ export async function GET(req: Request) {
       };
       if (status) params.status = status;
 
-      const { data } = await wcApi.get('orders', params);
+      const { data } = (await wcApi.get('orders', params)) as { data: any };
       const orders = Array.isArray(data) ? data : [];
       sortNewestFirst(orders);
       return NextResponse.json(orders);

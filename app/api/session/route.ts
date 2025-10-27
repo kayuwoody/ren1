@@ -6,7 +6,7 @@ export async function GET() {
   const userId = cookies().get('userId')?.value;
   if (userId) {
     try {
-      const { data } = await wcApi.get(`customers/${userId}`);
+      const { data } = (await wcApi.get(`customers/${userId}`)) as { data: any };
       return NextResponse.json({ userId: Number(userId), email: data?.email });
     } catch {
       // stale cookie; ignore

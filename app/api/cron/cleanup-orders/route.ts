@@ -37,10 +37,10 @@ export async function GET(req: Request) {
     // }
 
     // 2. Fetch all orders with ready-for-pickup status
-    const { data: readyOrders } = await wcApi.get('orders', {
+    const { data: readyOrders } = (await wcApi.get('orders', {
       status: 'ready-for-pickup',
       per_page: 100, // Adjust as needed
-    });
+    })) as { data: any };
 
     if (!Array.isArray(readyOrders) || readyOrders.length === 0) {
       console.log('✅ No orders to clean up');

@@ -17,10 +17,10 @@ export async function GET(request: NextRequest) {
     // Search for customer in WooCommerce
     // WooCommerce doesn't have direct phone search, so we search all customers
     // and filter by billing phone
-    const { data: customers } = await wcApi.get('customers', {
+    const { data: customers } = (await wcApi.get('customers', {
       per_page: 100, // Get more customers to search through
       role: 'all',
-    });
+    })) as { data: any };
 
     let foundCustomer = null;
 

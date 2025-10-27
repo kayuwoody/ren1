@@ -71,7 +71,7 @@ function logWooErr(where: string, err: any) {
 export async function createWooOrder(payload: NewOrderPayload): Promise<WooOrder> {
   const wooPayload = buildCreatePayload(payload);
   try {
-    const { data } = await wcApi.post('orders', wooPayload);
+    const { data } = (await wcApi.post('orders', wooPayload)) as { data: any };
     return data;
   } catch (err: any) {
     throw logWooErr('createWooOrder', err);
@@ -83,7 +83,7 @@ export async function createWooOrder(payload: NewOrderPayload): Promise<WooOrder
  * ---------------------------------------------------------------- */
 export async function getWooOrder(id: number | string): Promise<WooOrder> {
   try {
-    const { data } = await wcApi.get(`orders/${id}`);
+    const { data } = (await wcApi.get(`orders/${id}`)) as { data: any };
     return data;
   } catch (err: any) {
     throw logWooErr('getWooOrder', err);
@@ -98,7 +98,7 @@ export async function updateWooOrder(
   patch: Record<string, any>
 ): Promise<WooOrder> {
   try {
-    const { data } = await wcApi.put(`orders/${id}`, patch);
+    const { data } = (await wcApi.put(`orders/${id}`, patch)) as { data: any };
     return data;
   } catch (err: any) {
     throw logWooErr('updateWooOrder', err);
@@ -190,7 +190,7 @@ export async function listOrdersByUser(
   if (status) params.status = status;
 
   try {
-    const { data } = await wcApi.get('orders', params);
+    const { data } = (await wcApi.get('orders', params)) as { data: any };
     return Array.isArray(data) ? data : [];
   } catch (err: any) {
     throw logWooErr('listOrdersByUser', err);
@@ -213,7 +213,7 @@ export async function listOrdersByGuest(
   if (status) params.status = status;
 
   try {
-    const { data } = await wcApi.get('orders', params);
+    const { data } = (await wcApi.get('orders', params)) as { data: any };
     return Array.isArray(data) ? data : [];
   } catch (err: any) {
     throw logWooErr('listOrdersByGuest', err);

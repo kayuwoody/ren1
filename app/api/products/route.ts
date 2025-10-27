@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic"; // ensures this API route runs fresh eac
 export async function GET() {
   console.log("📦 Calling WooCommerce /products");
   try {
-    const { data } = await wcApi.get("products");
+    const { data } = (await wcApi.get("products")) as { data: any };
     console.log("✅ WooCommerce returned:", data.length, "products");
     return NextResponse.json(data);
   } catch (error: any) {
