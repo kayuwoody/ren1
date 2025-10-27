@@ -315,7 +315,7 @@ export class ThermalPrinter {
    */
   async testPrint(): Promise<void> {
     try {
-      console.log('🧪 TEST: Printing solid black rectangle...');
+      console.log('🧪 TEST: Printing solid black rectangle (1 = black)...');
 
       // Create a simple 384x100 bitmap with a solid black rectangle in the middle
       const width = 384;
@@ -350,6 +350,51 @@ export class ThermalPrinter {
 
     } catch (err) {
       console.error('❌ Test print failed:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * TEST 2: Print with INVERTED bits (0 = black, 1 = white)
+   * Many thermal printers use 0 for "print" and 1 for "don't print"
+   */
+  async testPrintInverted(): Promise<void> {
+    try {
+      console.log('🧪 TEST 2: Printing with INVERTED bits (0 = black)...');
+
+      const width = 384;
+      const height = 100;
+      const bytesPerLine = Math.ceil(width / 8); // 48 bytes
+
+      const bitmapLines: Uint8Array[] = [];
+
+      for (let y = 0; y < height; y++) {
+        // Start with all bits set to 1 (white background)
+        const lineBytes = new Uint8Array(bytesPerLine);
+        lineBytes.fill(0xFF);
+
+        // Create a rectangle by CLEARING bits (set to 0 for black)
+        if (y >= 20 && y < 80) {
+          for (let x = 0; x < width; x++) {
+            if (x >= 50 && x < 334) {
+              // Clear bit to 0 for black pixel
+              const byteIndex = Math.floor(x / 8);
+              const bitIndex = 7 - (x % 8);  // MSB first
+              lineBytes[byteIndex] &= ~(1 << bitIndex);
+            }
+          }
+        }
+
+        bitmapLines.push(lineBytes);
+      }
+
+      console.log(`📐 Test bitmap (inverted): ${width}x${height} pixels`);
+      console.log(`📦 Bytes per line: ${bytesPerLine}`);
+
+      await this.printBitmapData(bitmapLines, width, height);
+
+    } catch (err) {
+      console.error('❌ Inverted test print failed:', err);
       throw err;
     }
   }
