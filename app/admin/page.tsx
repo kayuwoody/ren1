@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star } from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -210,7 +210,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Link
             href="/admin/lockers"
             className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
@@ -231,6 +231,61 @@ export default function AdminDashboard() {
               <h2 className="text-xl font-semibold">Order Management</h2>
             </div>
             <p className="text-gray-600">Monitor and manage all orders</p>
+          </Link>
+
+          <Link
+            href="/admin/materials"
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <ShoppingBag className="w-6 h-6 text-green-600" />
+              <h2 className="text-xl font-semibold">Materials</h2>
+            </div>
+            <p className="text-gray-600">Manage ingredients, packaging, and stock</p>
+          </Link>
+
+          <Link
+            href="/admin/recipes"
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <ChefHat className="w-6 h-6 text-orange-600" />
+              <h2 className="text-xl font-semibold">Recipes</h2>
+            </div>
+            <p className="text-gray-600">Build product recipes and calculate COGS</p>
+          </Link>
+
+          <Link
+            href="/admin/costs"
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <DollarSign className="w-6 h-6 text-emerald-600" />
+              <h2 className="text-xl font-semibold">Costs Overview</h2>
+            </div>
+            <p className="text-gray-600">View product costs and profit margins</p>
+          </Link>
+
+          <Link
+            href="/admin/printers"
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <Printer className="w-6 h-6 text-indigo-600" />
+              <h2 className="text-xl font-semibold">Printers</h2>
+            </div>
+            <p className="text-gray-600">Manage receipt and kitchen printers</p>
+          </Link>
+
+          <Link
+            href="/admin/loyalty"
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <Star className="w-6 h-6 text-yellow-600" />
+              <h2 className="text-xl font-semibold">Loyalty Points</h2>
+            </div>
+            <p className="text-gray-600">Manage customer loyalty points and rewards</p>
           </Link>
         </div>
 

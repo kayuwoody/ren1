@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, ChefHat, Calculator } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ChefHat, Calculator, Search, RefreshCw } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -42,12 +42,15 @@ interface Recipe {
 
 export default function RecipesPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [showAddIngredient, setShowAddIngredient] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
 
   useEffect(() => {
     fetchProducts();
@@ -60,13 +63,29 @@ export default function RecipesPage() {
     }
   }, [selectedProduct]);
 
+  useEffect(() => {
+    if (productSearch) {
+      const filtered = products.filter(p =>
+        p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+        p.sku.toLowerCase().includes(productSearch.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts(products);
+    }
+  }, [productSearch, products]);
+
   async function fetchProducts() {
     try {
-      const res = await fetch('/api/admin/products/costs');
+      setSyncing(true);
+      const res = await fetch('/api/admin/products');
       const data = await res.json();
       setProducts(data.products || []);
+      setFilteredProducts(data.products || []);
     } catch (error) {
       console.error('Failed to fetch products:', error);
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -199,37 +218,67 @@ export default function RecipesPage() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <Link href="/admin/costs" className="text-blue-600 hover:text-blue-800">
-            <ArrowLeft className="w-6 h-6" />
-          </Link>
-          <h1 className="text-3xl font-bold">Recipe Management</h1>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <Link href="/admin/costs" className="p-2 hover:bg-gray-100 rounded-lg transition">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <ChefHat className="w-7 h-7 text-orange-600" />
+                Recipe Management
+              </h1>
+              <p className="text-sm text-gray-500">Build product recipes and calculate COGS</p>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Product Selection */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <ChefHat className="w-5 h-5 text-blue-600" />
-                Select Product
-              </h2>
-              <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                {products.map((product) => (
+      <div className="flex h-[calc(100vh-120px)]">
+        {/* Product List Sidebar */}
+        <div className="w-80 bg-white border-r flex flex-col">
+          <div className="p-4 border-b space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              onClick={fetchProducts}
+              disabled={syncing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition text-sm font-medium disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing...' : 'Sync from WooCommerce'}
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {filteredProducts.length === 0 ? (
+              <div className="p-4 text-center text-gray-500">
+                <p>No products found</p>
+                <p className="text-xs mt-1">Click sync to load from WooCommerce</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {filteredProducts.map((product) => (
                   <button
                     key={product.id}
                     onClick={() => setSelectedProduct(product)}
-                    className={`w-full text-left p-3 rounded-lg border-2 transition ${
-                      selectedProduct?.id === product.id
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-gray-200 hover:border-blue-300'
+                    className={`w-full text-left p-4 hover:bg-gray-50 transition ${
+                      selectedProduct?.id === product.id ? 'bg-orange-50 border-l-4 border-orange-500' : ''
                     }`}
                   >
                     <div className="font-medium">{product.name}</div>
-                    <div className="text-sm text-gray-500">{product.sku}</div>
+                    <div className="text-sm text-gray-600">{product.sku}</div>
                     <div className="text-sm mt-1">
                       <span className="text-gray-600">COGS: </span>
                       <span className="font-semibold">RM {product.unitCost.toFixed(2)}</span>
@@ -237,12 +286,20 @@ export default function RecipesPage() {
                   </button>
                 ))}
               </div>
-            </div>
+            )}
           </div>
+        </div>
 
-          {/* Recipe Editor */}
-          <div className="lg:col-span-2">
-            {selectedProduct ? (
+        {/* Main Content - Recipe Editor */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {!selectedProduct ? (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="text-center">
+                <ChefHat className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p>Select a product to build or edit its recipe</p>
+              </div>
+            </div>
+          ) : (
               <div className="space-y-6">
                 {/* Product Info */}
                 <div className="bg-white rounded-lg shadow p-6">
