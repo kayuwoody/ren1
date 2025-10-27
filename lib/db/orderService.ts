@@ -6,6 +6,7 @@
 import db from './init';
 import { v4 as uuidv4 } from 'uuid';
 import { getProduct, recordStockMovement } from './productService';
+import { getProductRecipe } from './recipeService';
 
 // ============================================================================
 // Types
@@ -38,17 +39,21 @@ export interface OrderItem {
   orderId: string;
   productId: string;
   productName: string;
+  category: string;
   sku: string;
   quantity: number;
+  basePrice: number;
   unitPrice: number;
   subtotal: number;
   unitCost: number;
   totalCost: number;
   itemProfit: number;
   itemMargin: number;
+  recipeSnapshot?: any;
   variations?: any;
   discountApplied: number;
   finalPrice: number;
+  soldAt: string;
 }
 
 export interface CreateOrderInput {
@@ -94,6 +99,16 @@ export function createOrder(input: CreateOrderInput): Order {
       throw new Error(`Product not found: ${item.productId}`);
     }
 
+    // Capture recipe snapshot at time of sale
+    const recipe = getProductRecipe(item.productId);
+    const recipeSnapshot = recipe.length > 0 ? recipe.map(r => ({
+      materialId: r.materialId,
+      materialName: r.materialName,
+      quantity: r.quantity,
+      unit: r.unit,
+      cost: r.calculatedCost,
+    })) : null;
+
     const itemId = uuidv4();
     const itemSubtotal = item.unitPrice * item.quantity;
     const itemTotalCost = product.unitCost * item.quantity;
@@ -110,17 +125,21 @@ export function createOrder(input: CreateOrderInput): Order {
       orderId,
       productId: item.productId,
       productName: product.name,
+      category: product.category,
       sku: product.sku,
       quantity: item.quantity,
+      basePrice: product.basePrice,
       unitPrice: item.unitPrice,
       subtotal: itemSubtotal,
       unitCost: product.unitCost,
       totalCost: itemTotalCost,
       itemProfit,
       itemMargin,
+      recipeSnapshot,
       variations: item.variations,
       discountApplied,
       finalPrice,
+      soldAt: now,
     });
   }
 
@@ -165,11 +184,11 @@ export function createOrder(input: CreateOrderInput): Order {
     // Insert order items
     const itemStmt = db.prepare(`
       INSERT INTO OrderItem (
-        id, orderId, productId, productName, sku,
-        quantity, unitPrice, subtotal,
+        id, orderId, productId, productName, category, sku,
+        quantity, basePrice, unitPrice, subtotal,
         unitCost, totalCost, itemProfit, itemMargin,
-        variations, discountApplied, finalPrice
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        recipeSnapshot, variations, discountApplied, finalPrice, soldAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const item of orderItems) {
@@ -178,17 +197,21 @@ export function createOrder(input: CreateOrderInput): Order {
         item.orderId,
         item.productId,
         item.productName,
+        item.category,
         item.sku,
         item.quantity,
+        item.basePrice,
         item.unitPrice,
         item.subtotal,
         item.unitCost,
         item.totalCost,
         item.itemProfit,
         item.itemMargin,
+        item.recipeSnapshot ? JSON.stringify(item.recipeSnapshot) : null,
         item.variations ? JSON.stringify(item.variations) : null,
         item.discountApplied,
-        item.finalPrice
+        item.finalPrice,
+        item.soldAt
       );
 
       // Record stock movement for each item
@@ -255,6 +278,7 @@ export function getOrderItems(orderId: string): OrderItem[] {
 
   return rows.map(row => ({
     ...row,
+    recipeSnapshot: row.recipeSnapshot ? JSON.parse(row.recipeSnapshot) : undefined,
     variations: row.variations ? JSON.parse(row.variations) : undefined,
   }));
 }

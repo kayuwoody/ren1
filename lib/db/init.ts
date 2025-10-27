@@ -227,30 +227,36 @@ export function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_order_created ON "Order"(createdAt);
   `);
 
-  // Order items table
+  // Order items table (transaction-level data capture)
   db.exec(`
     CREATE TABLE IF NOT EXISTS OrderItem (
       id TEXT PRIMARY KEY,
       orderId TEXT NOT NULL,
       productId TEXT NOT NULL,
       productName TEXT NOT NULL,
+      category TEXT NOT NULL,
       sku TEXT NOT NULL,
       quantity REAL NOT NULL,
+      basePrice REAL NOT NULL,
       unitPrice REAL NOT NULL,
       subtotal REAL NOT NULL,
       unitCost REAL NOT NULL,
       totalCost REAL NOT NULL,
       itemProfit REAL NOT NULL,
       itemMargin REAL NOT NULL,
+      recipeSnapshot TEXT,
       variations TEXT,
       discountApplied REAL DEFAULT 0,
       finalPrice REAL NOT NULL,
+      soldAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (orderId) REFERENCES "Order"(id) ON DELETE CASCADE,
       FOREIGN KEY (productId) REFERENCES Product(id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_orderitem_order ON OrderItem(orderId);
     CREATE INDEX IF NOT EXISTS idx_orderitem_product ON OrderItem(productId);
+    CREATE INDEX IF NOT EXISTS idx_orderitem_category ON OrderItem(category);
+    CREATE INDEX IF NOT EXISTS idx_orderitem_soldAt ON OrderItem(soldAt);
   `);
 
   // Applied discounts table
