@@ -81,24 +81,63 @@ export function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_ingredient_product ON IngredientCost(productId);
   `);
 
-  // Material costs table
+  // Materials table (ingredients and packaging)
   db.exec(`
-    CREATE TABLE IF NOT EXISTS MaterialCost (
+    CREATE TABLE IF NOT EXISTS Material (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       category TEXT NOT NULL,
+      purchaseUnit TEXT NOT NULL,
+      purchaseQuantity REAL NOT NULL,
+      purchaseCost REAL NOT NULL,
       costPerUnit REAL NOT NULL,
-      unit TEXT NOT NULL,
-      supplier TEXT,
       stockQuantity REAL NOT NULL DEFAULT 0,
-      usageRate TEXT,
+      lowStockThreshold REAL NOT NULL DEFAULT 0,
+      supplier TEXT,
       lastPurchaseDate TEXT,
-      lastPurchaseCost REAL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE INDEX IF NOT EXISTS idx_material_category ON MaterialCost(category);
+    CREATE INDEX IF NOT EXISTS idx_material_category ON Material(category);
+    CREATE INDEX IF NOT EXISTS idx_material_name ON Material(name);
+  `);
+
+  // Product Recipe (ingredients list for each product)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ProductRecipe (
+      id TEXT PRIMARY KEY,
+      productId TEXT NOT NULL,
+      materialId TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      unit TEXT NOT NULL,
+      calculatedCost REAL NOT NULL,
+      isOptional INTEGER NOT NULL DEFAULT 0,
+      sortOrder INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (productId) REFERENCES Product(id) ON DELETE CASCADE,
+      FOREIGN KEY (materialId) REFERENCES Material(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_recipe_product ON ProductRecipe(productId);
+    CREATE INDEX IF NOT EXISTS idx_recipe_material ON ProductRecipe(materialId);
+  `);
+
+  // Material price history
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS MaterialPriceHistory (
+      id TEXT PRIMARY KEY,
+      materialId TEXT NOT NULL,
+      purchaseQuantity REAL NOT NULL,
+      purchaseCost REAL NOT NULL,
+      costPerUnit REAL NOT NULL,
+      effectiveDate TEXT NOT NULL,
+      notes TEXT,
+      FOREIGN KEY (materialId) REFERENCES Material(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_price_history_material ON MaterialPriceHistory(materialId, effectiveDate);
   `);
 
   // Product cost breakdown table
