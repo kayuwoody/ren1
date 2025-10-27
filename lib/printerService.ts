@@ -509,17 +509,25 @@ export class ThermalPrinter {
         }
       }
 
+      const leftOffset = midPoint - leftCount;
+      const rightOffset = midPoint - rightCount;
+
       const packetData = [
         (rowNum >> 8) & 0xFF,
         rowNum & 0xFF,
-        midPoint - leftCount,   // FIX: Pixels left of center
-        midPoint - rightCount,  // FIX: Pixels right of center
-        0x00, 0x01,             // Repeat count
+        leftOffset,   // Pixels left of center
+        rightOffset,  // Pixels right of center
+        0x00, 0x01,   // Repeat count
         ...Array.from(rowData)
       ];
 
       const rowCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_BITMAP_ROW, packetData);
       await this.sendCommand(rowCmd);
+
+      if (rowNum === 10) {
+        console.log(`🔍 Row 10 header: rowNum=${rowNum}, midPoint=${midPoint}, left=${leftCount}, right=${rightCount}, leftOffset=${leftOffset}, rightOffset=${rightOffset}`);
+        console.log(`🔍 Row 10 packet (first 12 bytes):`, Array.from(packetData.slice(0, 12)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+      }
 
       if (rowNum % 20 === 0 || rowNum === bitmapLines.length - 1) {
         console.log(`   Row ${rowNum + 1}/${bitmapLines.length}`);
