@@ -1,0 +1,339 @@
+// Prisma schema for Coffee Oasis POS
+// Cost tracking, inventory management, and profit analytics
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// PRODUCTS & INVENTORY
+// ============================================================================
+
+model Product {
+  id                 String   @id @default(uuid())
+  woocommerceId      Int?     @unique
+  name               String
+  category           String   // 'beverage' | 'food' | 'merchandise'
+  sku                String   @unique
+
+  // Pricing
+  basePrice          Float
+  currentPrice       Float    // May differ due to promotions
+
+  // Inventory
+  stockQuantity      Float
+  lowStockThreshold  Float
+  unit               String   // 'unit' | 'kg' | 'g' | 'ml' | 'L'
+
+  // Cost tracking
+  unitCost           Float    // Current cost per unit (COGS)
+
+  // Status
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  stockMovements     StockMovement[]
+  orderItems         OrderItem[]
+  ingredientCosts    IngredientCost[]
+  productCosts       ProductCostBreakdown[]
+
+  @@index([woocommerceId])
+  @@index([sku])
+  @@index([category])
+  @@index([isActive])
+}
+
+// ============================================================================
+// STOCK MOVEMENTS
+// ============================================================================
+
+model StockMovement {
+  id                String   @id @default(uuid())
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id])
+
+  type              String   // 'purchase' | 'sale' | 'waste' | 'adjustment'
+  quantity          Float
+  previousStock     Float
+  newStock          Float
+
+  // Cost tracking (for purchases)
+  unitCost          Float?
+  totalCost         Float?
+
+  // References
+  orderId           String?
+  purchaseOrderId   String?
+
+  reason            String?
+  performedBy       String
+  timestamp         DateTime @default(now())
+
+  @@index([productId, timestamp])
+  @@index([type, timestamp])
+}
+
+// ============================================================================
+// COST OF GOODS SOLD (COGS)
+// ============================================================================
+
+model IngredientCost {
+  id                   String   @id @default(uuid())
+  productId            String
+  product              Product  @relation(fields: [productId], references: [id])
+  name                 String   // e.g., "Espresso Beans", "Milk", "Sugar"
+
+  ingredients          String   // JSON array of ingredient items
+  totalIngredientCost  Float
+
+  lastUpdated          DateTime @updatedAt
+
+  @@index([productId])
+}
+
+model MaterialCost {
+  id                String   @id @default(uuid())
+  name              String
+  category          String   // 'packaging' | 'consumable' | 'supplies'
+
+  costPerUnit       Float
+  unit              String
+  supplier          String?
+  stockQuantity     Float
+
+  // Usage tracking (JSON)
+  usageRate         String?  // JSON object with perOrder and perProduct rates
+
+  lastPurchaseDate  DateTime?
+  lastPurchaseCost  Float?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([category])
+}
+
+model ProductCostBreakdown {
+  id                      String   @id @default(uuid())
+  productId               String
+  product                 Product  @relation(fields: [productId], references: [id])
+
+  // Primary costs (JSON arrays)
+  ingredientCosts         String   // JSON array
+  totalIngredientCost     Float
+
+  // Secondary costs
+  packagingCosts          String   // JSON array
+  totalPackagingCost      Float
+
+  consumables             String   // JSON array
+  totalConsumableCost     Float
+
+  // Total COGS
+  totalCost               Float
+
+  // Margin calculations
+  sellingPrice            Float
+  grossProfit             Float
+  grossMargin             Float    // Percentage
+
+  calculatedAt            DateTime @default(now())
+
+  @@index([productId])
+}
+
+// ============================================================================
+// DISCOUNTS & PROMOTIONS
+// ============================================================================
+
+model Discount {
+  id                    String    @id @default(uuid())
+  code                  String?   @unique
+  name                  String
+  description           String
+
+  // Discount type
+  type                  String    // 'percentage' | 'fixed_amount' | 'buy_x_get_y' | 'combo'
+  value                 Float     // Percentage (0-100) or fixed amount
+
+  // Conditions
+  minPurchaseAmount     Float?
+  maxDiscount           Float?
+  applicableProducts    String?   // JSON array of product IDs
+  applicableCategories  String?   // JSON array of categories
+
+  // Combo details (JSON)
+  comboItems            String?   // JSON array
+  comboPrice            Float?
+
+  // Buy X Get Y details
+  buyQuantity           Int?
+  getQuantity           Int?
+  getProductId          String?
+
+  // Validity
+  startDate             DateTime
+  endDate               DateTime?
+  isActive              Boolean   @default(true)
+
+  // Usage limits
+  maxUsesTotal          Int?
+  maxUsesPerCustomer    Int?
+  currentUses           Int       @default(0)
+
+  // Priority (for stacking)
+  priority              Int       @default(0)
+  stackable             Boolean   @default(false)
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  appliedDiscounts      AppliedDiscount[]
+
+  @@index([code])
+  @@index([isActive, startDate, endDate])
+}
+
+// ============================================================================
+// ORDERS & SALES
+// ============================================================================
+
+model Order {
+  id                String   @id @default(uuid())
+  woocommerceId     Int?     @unique
+  orderNumber       String   @unique
+
+  // Customer
+  customerId        String?
+  customerEmail     String?
+
+  // Financials
+  subtotal          Float
+  totalDiscount     Float    @default(0)
+  tax               Float    @default(0)
+  total             Float
+
+  // Cost tracking
+  totalCOGS         Float    // Sum of all item costs
+  grossProfit       Float    // total - totalCOGS
+  grossMargin       Float    // (grossProfit / total) * 100
+
+  // Payment
+  paymentMethod     String
+  paymentStatus     String   // 'pending' | 'paid' | 'refunded'
+
+  // Fulfillment
+  status            String   // 'pending' | 'processing' | 'ready' | 'completed' | 'cancelled'
+  lockerSlot        String?
+
+  // Timestamps
+  createdAt         DateTime @default(now())
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+
+  // Relations
+  items             OrderItem[]
+  appliedDiscounts  AppliedDiscount[]
+
+  @@index([woocommerceId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id              String   @id @default(uuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id])
+  productName     String
+  sku             String
+
+  // Quantity & pricing
+  quantity        Float
+  unitPrice       Float
+  subtotal        Float
+
+  // Cost tracking
+  unitCost        Float    // COGS per unit at time of sale
+  totalCost       Float    // quantity * unitCost
+
+  // Profit
+  itemProfit      Float    // subtotal - totalCost
+  itemMargin      Float    // (itemProfit / subtotal) * 100
+
+  // Modifiers/variations (JSON)
+  variations      String?
+
+  // Discounts (item-level)
+  discountApplied Float?   @default(0)
+  finalPrice      Float
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model AppliedDiscount {
+  id             String   @id @default(uuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  discountId     String
+  discount       Discount @relation(fields: [discountId], references: [id])
+
+  discountName   String
+  type           String
+  amountSaved    Float
+  appliedTo      String   // 'order' | 'product'
+  productIds     String?  // JSON array if applied to specific products
+
+  createdAt      DateTime @default(now())
+
+  @@index([orderId])
+  @@index([discountId])
+}
+
+// ============================================================================
+// REPORTING & ANALYTICS
+// ============================================================================
+
+model DailySales {
+  id                  String   @id @default(uuid())
+  date                DateTime @unique
+
+  // Sales metrics
+  totalOrders         Int
+  totalRevenue        Float
+  averageOrderValue   Float
+
+  // Cost metrics
+  totalCOGS           Float
+  totalDiscounts      Float
+
+  // Profit metrics
+  grossProfit         Float
+  grossMargin         Float
+
+  // Breakdown data (JSON)
+  productSales        String   // JSON array
+  categorySales       String   // JSON array
+  topProducts         String   // JSON array
+
+  // Waste/shrinkage
+  wasteValue          Float?   @default(0)
+
+  calculatedAt        DateTime @default(now())
+
+  @@index([date])
+}

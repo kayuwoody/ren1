@@ -1,3 +1,9 @@
+import dotenv from 'dotenv';
+// Load environment variables from .env.local for standalone scripts
+if (!process.env.NEXT_RUNTIME) {
+  dotenv.config({ path: '.env.local' });
+}
+
 import WooCommerceRestApi from '@woocommerce/woocommerce-rest-api';
 import { mockWcApi } from './mockWooClient';
 
