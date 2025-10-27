@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, Printer, DollarSign } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, Printer, DollarSign, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -210,7 +210,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           <Link
             href="/admin/lockers"
             className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
@@ -233,6 +233,19 @@ export default function AdminDashboard() {
             <p className="text-gray-600">Monitor and manage all orders</p>
           </Link>
 
+          <Link
+            href="/admin/analytics"
+            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <BarChart3 className="w-6 h-6 text-indigo-600" />
+              <h2 className="text-xl font-semibold">Analytics & Insights</h2>
+            </div>
+            <p className="text-gray-600">Profitability trends and business insights</p>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Link
             href="/admin/costs"
             className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
