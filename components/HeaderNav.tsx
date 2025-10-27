@@ -29,6 +29,37 @@ export default function HeaderNav() {
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
 
+    // Sync active orders from WooCommerce on initial load
+    const syncActiveOrdersFromWooCommerce = async () => {
+      try {
+        console.log('🔄 Syncing active orders from WooCommerce...');
+
+        // Fetch all processing and ready-for-pickup orders
+        const processingRes = await fetch('/api/orders?status=processing&per_page=20');
+        const readyRes = await fetch('/api/orders?status=ready-for-pickup&per_page=20');
+
+        const processingOrders = processingRes.ok ? await processingRes.json() : [];
+        const readyOrders = readyRes.ok ? await readyRes.json() : [];
+
+        const allActiveOrders = [...processingOrders, ...readyOrders];
+
+        if (allActiveOrders.length > 0) {
+          const orderIds = allActiveOrders.map((order: any) => String(order.id));
+
+          // Merge with existing localStorage (don't overwrite)
+          const existingIds = JSON.parse(localStorage.getItem('activeOrders') || '[]');
+          const mergedIds = [...new Set([...existingIds, ...orderIds])];
+
+          localStorage.setItem('activeOrders', JSON.stringify(mergedIds));
+          console.log(`✅ Synced ${orderIds.length} active orders from WooCommerce`);
+        } else {
+          console.log('ℹ️ No active orders found in WooCommerce');
+        }
+      } catch (err) {
+        console.error('Failed to sync active orders from WooCommerce:', err);
+      }
+    };
+
     const fetchActiveOrders = async () => {
       const activeOrderIds = JSON.parse(localStorage.getItem('activeOrders') || '[]');
 
@@ -98,7 +129,10 @@ export default function HeaderNav() {
       }
     };
 
-    fetchActiveOrders();
+    // Run sync first, then fetch active orders
+    syncActiveOrdersFromWooCommerce().then(() => {
+      fetchActiveOrders();
+    });
 
     // Listen for manual refresh events (when payment is made)
     const handleRefresh = () => {
