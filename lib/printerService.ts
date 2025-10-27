@@ -672,20 +672,39 @@ export class ThermalPrinter {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // 7. Send bitmap data row by row
-      // NiimPrintX format: [ROW_HI] [ROW_LO] [0] [0] [0] [1] [BITMAP_DATA...]
+      // Niimbot format: [ROW_HI] [ROW_LO] [LEFT_OFFSET] [RIGHT_OFFSET] [0] [1] [BITMAP_DATA...]
       console.log(`📤 Step 7/8: Sending ${bitmap.data.length} bitmap rows...`);
       for (let rowNum = 0; rowNum < bitmap.data.length; rowNum++) {
         const rowData = bitmap.data[rowNum];
 
-        // Build packet data per NiimPrintX protocol
+        // Calculate left/right pixel counts (like niimbotjs does)
+        const midPoint = Math.floor((rowData.length * 8) / 2);
+        let leftCount = 0;
+        let rightCount = 0;
+
+        for (let byteIndex = 0; byteIndex < rowData.length; byteIndex++) {
+          const byte = rowData[byteIndex];
+          for (let bitIndex = 0; bitIndex < 8; bitIndex++) {
+            const pixelIndex = byteIndex * 8 + bitIndex;
+            const bitSet = (byte & (1 << (7 - bitIndex))) !== 0;
+
+            if (bitSet) {
+              if (pixelIndex < midPoint) {
+                leftCount++;
+              } else {
+                rightCount++;
+              }
+            }
+          }
+        }
+
         const packetData = [
-          (rowNum >> 8) & 0xFF,      // Row number high byte (big-endian)
-          rowNum & 0xFF,             // Row number low byte
-          0x00,                      // Always 0
-          0x00,                      // Always 0
-          0x00,                      // Always 0
-          0x01,                      // Always 1
-          ...Array.from(rowData)     // Bitmap data (48 bytes for 384 pixels)
+          (rowNum >> 8) & 0xFF,
+          rowNum & 0xFF,
+          midPoint - leftCount,   // Pixels left of center
+          midPoint - rightCount,  // Pixels right of center
+          0x00, 0x01,             // Repeat count
+          ...Array.from(rowData)
         ];
 
         const rowCmd = this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_BITMAP_ROW, packetData);
