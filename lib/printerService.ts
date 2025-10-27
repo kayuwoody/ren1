@@ -287,12 +287,11 @@ export class ThermalPrinter {
         // Grayscale
         const gray = (r + g + b) / 3;
 
-        // For 1-bit: 0 = black pixel, 1 = white pixel (in bitmap)
-        // Since we inverted colors in canvas (black bg, white text),
-        // threshold at 128: < 128 = black = 0, >= 128 = white = 1
+        // FIXED: Printer uses 1=black, 0=white
+        // Canvas has black bg + white text, so we want white pixels to print black
         const isWhite = gray >= 128;
 
-        if (!isWhite) {  // If black, set bit
+        if (isWhite) {  // If white pixel on canvas, set bit to 1 (prints black)
           const byteIndex = Math.floor(x / 8);
           const bitIndex = 7 - (x % 8);  // MSB first
           lineBytes[byteIndex] |= (1 << bitIndex);
