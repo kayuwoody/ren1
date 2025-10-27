@@ -87,6 +87,60 @@ export default function PrintersAdminPage() {
     }
   };
 
+  const handleDebugTestPrint = async () => {
+    setTestResult('Printing simple black rectangle test...');
+    try {
+      const printer = printerManager.getReceiptPrinter();
+      await printer.connect(receiptPrinter || undefined);
+
+      // Call the testPrint function that prints a simple rectangle
+      await printer.testPrint();
+      setTestResult('✅ Debug test printed! Check if you see a black rectangle.');
+
+      addPrintLog({
+        type: 'receipt',
+        orderId: 'DEBUG-TEST',
+        status: 'success',
+      });
+    } catch (err: any) {
+      setTestResult(`❌ Debug test failed: ${err.message}`);
+
+      addPrintLog({
+        type: 'receipt',
+        orderId: 'DEBUG-TEST',
+        status: 'failed',
+        error: err.message,
+      });
+    }
+  };
+
+  const handleInvertedTestPrint = async () => {
+    setTestResult('Printing INVERTED bit test (0=black)...');
+    try {
+      const printer = printerManager.getReceiptPrinter();
+      await printer.connect(receiptPrinter || undefined);
+
+      // Call the inverted test
+      await printer.testPrintInverted();
+      setTestResult('✅ Inverted test printed! Check if you see a black rectangle.');
+
+      addPrintLog({
+        type: 'receipt',
+        orderId: 'INVERTED-TEST',
+        status: 'success',
+      });
+    } catch (err: any) {
+      setTestResult(`❌ Inverted test failed: ${err.message}`);
+
+      addPrintLog({
+        type: 'receipt',
+        orderId: 'INVERTED-TEST',
+        status: 'failed',
+        error: err.message,
+      });
+    }
+  };
+
   const handleTestReceiptPrint = async () => {
     setTestResult('Printing test receipt...');
     try {
@@ -246,12 +300,26 @@ export default function PrintersAdminPage() {
               </button>
 
               {receiptPrinter && (
-                <button
-                  onClick={handleTestReceiptPrint}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
-                >
-                  Test Print
-                </button>
+                <>
+                  <button
+                    onClick={handleDebugTestPrint}
+                    className="bg-orange-600 text-white px-3 py-2 rounded-lg hover:bg-orange-700 transition text-sm"
+                  >
+                    Test: 1=Black
+                  </button>
+                  <button
+                    onClick={handleInvertedTestPrint}
+                    className="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition text-sm"
+                  >
+                    Test: 0=Black
+                  </button>
+                  <button
+                    onClick={handleTestReceiptPrint}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+                  >
+                    Test Print
+                  </button>
+                </>
               )}
             </div>
           </div>
