@@ -66,13 +66,19 @@ export function upsertProduct(
 ): Product {
   const now = new Date().toISOString();
 
-  // Check if product exists by ID or wcId
+  // Check if product exists by ID, wcId, or SKU
   let existing: Product | undefined;
 
   if (product.id) {
     existing = db.prepare('SELECT * FROM Product WHERE id = ?').get(product.id) as Product | undefined;
-  } else if (product.wcId) {
+  }
+
+  if (!existing && product.wcId) {
     existing = db.prepare('SELECT * FROM Product WHERE wcId = ?').get(product.wcId) as Product | undefined;
+  }
+
+  if (!existing && product.sku) {
+    existing = db.prepare('SELECT * FROM Product WHERE sku = ?').get(product.sku) as Product | undefined;
   }
 
   const id = existing?.id || product.id || uuidv4();
