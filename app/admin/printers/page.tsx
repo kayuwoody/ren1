@@ -65,39 +65,41 @@ export default function PrintersAdminPage() {
   const handlePairReceiptPrinter = async () => {
     try {
       const printer = printerManager.getReceiptPrinter();
-      const device = await printer.connect();
+      const device = await printer.pair();
       setReceiptPrinter(device);
-      printerManager.savePrinterConfig('receipt', device.name || 'Niimbot');
-      alert(`Receipt printer connected: ${device.name}`);
+      printerManager.savePrinterConfig('receipt', device.id);
+      alert(`Receipt printer paired: ${device.name}`);
     } catch (err: any) {
       console.error('Receipt printer error:', err);
-      alert(`Failed to connect receipt printer: ${err.message}`);
+      alert(`Failed to pair receipt printer: ${err.message}`);
     }
   };
 
   const handlePairKitchenPrinter = async () => {
     try {
       const printer = printerManager.getKitchenPrinter();
-      const device = await printer.pair();
+      const device = await printer.connect();
       setKitchenPrinter(device);
-      printerManager.savePrinterConfig('kitchen', device.id);
-      alert(`Kitchen printer paired: ${device.name}`);
-    } catch (err) {
-      alert('Failed to pair kitchen printer');
+      printerManager.savePrinterConfig('kitchen', device.name || 'Niimbot');
+      alert(`Kitchen printer connected: ${device.name}`);
+    } catch (err: any) {
+      console.error('Kitchen printer error:', err);
+      alert(`Failed to connect kitchen printer: ${err.message}`);
     }
   };
 
   const handleTestReceiptPrint = async () => {
-    setTestResult('Printing test label on Niimbot...');
+    setTestResult('Printing test receipt...');
     try {
       const printer = printerManager.getReceiptPrinter();
 
-      if (!printer.isConnected()) {
-        throw new Error('Printer not connected. Please connect first.');
+      if (!receiptPrinter) {
+        throw new Error('Receipt printer not paired. Please pair first.');
       }
 
+      await printer.connect(receiptPrinter);
       await printer.testPrint();
-      setTestResult('✅ Test label printed successfully!');
+      setTestResult('✅ Receipt test printed successfully!');
 
       addPrintLog({
         type: 'receipt',
@@ -117,18 +119,16 @@ export default function PrintersAdminPage() {
   };
 
   const handleTestKitchenPrint = async () => {
-    setTestResult('Printing test kitchen stub...');
+    setTestResult('Printing test kitchen label...');
     try {
       const printer = printerManager.getKitchenPrinter();
 
-      if (!kitchenPrinter) {
-        throw new Error('Kitchen printer not paired. Please pair first.');
+      if (!printer.isConnected()) {
+        throw new Error('Niimbot printer not connected. Please connect first.');
       }
 
-      await printer.connect(kitchenPrinter);
-
       await printer.testPrint();
-      setTestResult('✅ Kitchen test printed successfully!');
+      setTestResult('✅ Kitchen label printed successfully!');
 
       addPrintLog({
         type: 'kitchen',
@@ -241,7 +241,7 @@ export default function PrintersAdminPage() {
           </div>
 
           <p className="text-xs text-gray-500">
-            Niimbot label printer for customer receipts and order labels. Bluetooth connection using niimbluelib.
+            Standard thermal Bluetooth printer for customer receipts (ESC/POS). Prints full receipt with items, prices, and totals.
           </p>
         </div>
       </div>
@@ -250,7 +250,7 @@ export default function PrintersAdminPage() {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center gap-3 mb-4">
           <Printer className="w-6 h-6 text-purple-600" />
-          <h2 className="text-xl font-semibold">Kitchen Printer</h2>
+          <h2 className="text-xl font-semibold">Kitchen Printer (Niimbot)</h2>
         </div>
 
         <div className="space-y-4">
@@ -306,7 +306,7 @@ export default function PrintersAdminPage() {
           </div>
 
           <p className="text-xs text-gray-500">
-            Auto-prints when orders are placed. Prints simplified stub with order items and quantities.
+            Niimbot label printer for kitchen order stubs (niimbluelib). Auto-prints when orders are placed. Prints order labels with items and quantities.
           </p>
         </div>
       </div>
