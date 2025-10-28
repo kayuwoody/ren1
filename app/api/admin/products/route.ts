@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   try {
     const { data: products } = (await wcApi.get('products', {
       per_page: 100,
-      orderby: 'name',
+      orderby: 'title',
       order: 'asc'
     })) as { data: any };
 
