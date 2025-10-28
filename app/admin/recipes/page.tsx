@@ -363,7 +363,7 @@ export default function RecipesPage() {
                 <div className="p-6">
                   {loading ? (
                     <p className="text-center text-gray-500 py-8">Loading recipe...</p>
-                  ) : recipe && recipe.items.length > 0 ? (
+                  ) : recipe && recipe.items && recipe.items.length > 0 ? (
                     <div className="space-y-3">
                       {recipe.items.map((item, index) => (
                         <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
