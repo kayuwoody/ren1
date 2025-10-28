@@ -1,29 +1,45 @@
 import { NextResponse } from 'next/server';
 import { wcApi } from '@/lib/wooClient';
+import { syncProductFromWooCommerce, getAllProducts } from '@/lib/db/productService';
 
 /**
  * GET /api/admin/products
- * Fetch all products from WooCommerce with local COGS data
+ * Fetch all products from WooCommerce and sync to local database
  */
 export async function GET(req: Request) {
   try {
-    const { data: products } = (await wcApi.get('products', {
+    const { data: wcProducts } = (await wcApi.get('products', {
       per_page: 100,
       orderby: 'title',
       order: 'asc'
     })) as { data: any };
 
-    // Transform WooCommerce products to include necessary fields
-    const transformedProducts = products.map((product: any) => ({
-      id: product.id.toString(),
-      wcId: product.id,
-      name: product.name,
-      sku: product.sku || `product-${product.id}`,
-      category: product.categories?.[0]?.name || 'Uncategorized',
-      currentPrice: parseFloat(product.price) || 0,
-      unitCost: 0, // Will be calculated from recipes
-      imageUrl: product.images?.[0]?.src || null,
-    }));
+    // Sync each product to local database
+    wcProducts.forEach((wcProduct: any) => {
+      try {
+        syncProductFromWooCommerce(wcProduct);
+      } catch (err) {
+        console.error(`Failed to sync product ${wcProduct.id}:`, err);
+      }
+    });
+
+    // Get all products from local database (includes COGS from recipes)
+    const localProducts = getAllProducts();
+
+    // Transform for API response with current price from WooCommerce
+    const transformedProducts = localProducts.map((product) => {
+      const wcProduct = wcProducts.find((p: any) => p.id === product.wcId);
+      return {
+        id: product.id,
+        wcId: product.wcId,
+        name: product.name,
+        sku: product.sku,
+        category: product.category,
+        currentPrice: wcProduct ? parseFloat(wcProduct.price) || 0 : product.basePrice,
+        unitCost: product.unitCost,
+        imageUrl: product.imageUrl,
+      };
+    });
 
     return NextResponse.json({ products: transformedProducts });
   } catch (err: any) {

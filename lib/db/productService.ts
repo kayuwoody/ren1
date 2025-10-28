@@ -64,13 +64,18 @@ export function getProductsByCategory(category: string): Product[] {
 export function upsertProduct(
   product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 ): Product {
-  const id = product.id || uuidv4();
   const now = new Date().toISOString();
 
-  // Check if product exists
-  const existing = product.id
-    ? db.prepare('SELECT * FROM Product WHERE id = ?').get(product.id) as Product | undefined
-    : null;
+  // Check if product exists by ID or wcId
+  let existing: Product | undefined;
+
+  if (product.id) {
+    existing = db.prepare('SELECT * FROM Product WHERE id = ?').get(product.id) as Product | undefined;
+  } else if (product.wcId) {
+    existing = db.prepare('SELECT * FROM Product WHERE wcId = ?').get(product.wcId) as Product | undefined;
+  }
+
+  const id = existing?.id || product.id || uuidv4();
 
   if (existing) {
     // Update existing product
