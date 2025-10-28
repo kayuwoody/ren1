@@ -8,6 +8,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@mmote/niimbluelib": "0.0.1-alpha.29",
     "@woocommerce/woocommerce-rest-api": "^1.0.1",
     "axios": "^1.6.8",
     "better-sqlite3": "^9.4.3",
