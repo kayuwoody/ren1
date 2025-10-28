@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Save, Edit2, DollarSign, TrendingUp, Package, ChefHat } from 'lucide-react';
+import { ArrowLeft, Save, Edit2, DollarSign, TrendingUp, Package, ChefHat, Search, RefreshCw } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -19,24 +19,42 @@ interface Product {
 
 export default function CostsManagementPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
 
   useEffect(() => {
     fetchProducts();
   }, []);
 
+  useEffect(() => {
+    if (productSearch) {
+      const filtered = products.filter(p =>
+        p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+        p.sku.toLowerCase().includes(productSearch.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts(products);
+    }
+  }, [productSearch, products]);
+
   async function fetchProducts() {
     try {
-      setLoading(true);
+      setSyncing(true);
       const res = await fetch('/api/admin/products/costs');
       const data = await res.json();
       setProducts(data.products || []);
+      setFilteredProducts(data.products || []);
     } catch (error) {
       console.error('Failed to fetch products:', error);
     } finally {
+      setSyncing(false);
       setLoading(false);
     }
   }
@@ -70,8 +88,19 @@ export default function CostsManagementPage() {
         throw new Error('Failed to update cost');
       }
 
+      alert('Cost updated successfully!');
+
       // Refresh products list
       await fetchProducts();
+
+      // Update selected product with the new data
+      if (selectedProduct) {
+        const updated = products.find(p => p.id === productId);
+        if (updated) {
+          setSelectedProduct(updated);
+        }
+      }
+
       setEditingId(null);
       setEditValue('');
     } catch (error) {
@@ -97,24 +126,6 @@ export default function CostsManagementPage() {
     return 'text-red-600';
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-4 mb-6">
-            <Link href="/admin" className="text-blue-600 hover:text-blue-800">
-              <ArrowLeft className="w-6 h-6" />
-            </Link>
-            <h1 className="text-3xl font-bold">Product Costs (COGS)</h1>
-          </div>
-          <div className="text-center py-12">
-            <p className="text-gray-500">Loading products...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const totalProducts = products.length;
   const avgMargin = products.length > 0
     ? products.reduce((sum, p) => sum + p.grossMargin, 0) / products.length
@@ -122,196 +133,236 @@ export default function CostsManagementPage() {
   const productsNeedingCost = products.filter(p => p.unitCost === 0).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <Link href="/admin" className="text-blue-600 hover:text-blue-800">
-              <ArrowLeft className="w-6 h-6" />
+            <Link href="/admin" className="p-2 hover:bg-gray-100 rounded-lg transition">
+              <ArrowLeft className="w-5 h-5" />
             </Link>
-            <h1 className="text-3xl font-bold">Product Costs (COGS)</h1>
-          </div>
-
-          <div className="flex gap-3">
-            <Link
-              href="/admin/materials"
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              <Package className="w-5 h-5" />
-              Manage Materials
-            </Link>
-            <Link
-              href="/admin/recipes"
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-            >
-              <ChefHat className="w-5 h-5" />
-              Build Recipes
-            </Link>
-          </div>
-        </div>
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center gap-3">
-              <DollarSign className="w-8 h-8 text-blue-600" />
-              <div>
-                <p className="text-sm text-gray-500">Total Products</p>
-                <p className="text-2xl font-bold">{totalProducts}</p>
-              </div>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <DollarSign className="w-7 h-7 text-green-600" />
+                Product Costs (COGS)
+              </h1>
+              <p className="text-sm text-gray-500">Manage unit costs and view profit margins</p>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-8 h-8 text-green-600" />
-              <div>
-                <p className="text-sm text-gray-500">Avg Gross Margin</p>
-                <p className={`text-2xl font-bold ${getMarginColor(avgMargin)}`}>
+      <div className="flex h-[calc(100vh-120px)]">
+        {/* Product List Sidebar */}
+        <div className="w-80 bg-white border-r flex flex-col">
+          <div className="p-4 border-b space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              onClick={fetchProducts}
+              disabled={syncing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm font-medium disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing...' : 'Sync from WooCommerce'}
+            </button>
+
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <div className="bg-gray-50 rounded p-2">
+                <p className="text-xs text-gray-500">Total</p>
+                <p className="font-semibold">{totalProducts}</p>
+              </div>
+              <div className="bg-gray-50 rounded p-2">
+                <p className="text-xs text-gray-500">Avg Margin</p>
+                <p className={`font-semibold ${getMarginColor(avgMargin)}`}>
                   {avgMargin.toFixed(1)}%
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
-            <div className="flex items-center gap-3">
-              <Edit2 className="w-8 h-8 text-orange-600" />
-              <div>
-                <p className="text-sm text-gray-500">Needs Cost Setup</p>
-                <p className="text-2xl font-bold text-orange-600">
-                  {productsNeedingCost}
-                </p>
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="p-4 text-center text-gray-500">
+                <p>Loading products...</p>
               </div>
-            </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="p-4 text-center text-gray-500">
+                <p>No products found</p>
+                <p className="text-xs mt-1">Click sync to load from WooCommerce</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {filteredProducts.map((product) => (
+                  <button
+                    key={product.id}
+                    onClick={() => setSelectedProduct(product)}
+                    className={`w-full text-left p-4 hover:bg-gray-50 transition ${
+                      selectedProduct?.id === product.id ? 'bg-green-50 border-l-4 border-green-500' : ''
+                    }`}
+                  >
+                    <div className="font-medium">{product.name}</div>
+                    <div className="text-sm text-gray-600">{product.sku}</div>
+                    <div className="text-sm mt-1 flex items-center justify-between">
+                      <span className="text-gray-600">COGS: </span>
+                      <span className={`font-semibold ${product.unitCost === 0 ? 'text-red-600' : ''}`}>
+                        RM {product.unitCost.toFixed(2)}
+                        {product.unitCost === 0 && ' ⚠️'}
+                      </span>
+                    </div>
+                    <div className="text-sm mt-1 flex items-center justify-between">
+                      <span className="text-gray-600">Margin: </span>
+                      <span className={`font-semibold ${getMarginColor(product.grossMargin)}`}>
+                        {product.grossMargin.toFixed(1)}%
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Instructions */}
-        {productsNeedingCost > 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-yellow-800">
-              <strong>Action Required:</strong> {productsNeedingCost} product(s) don't have a cost set yet.
-              Click the edit icon to set the unit cost (COGS) for each product.
-            </p>
-          </div>
-        )}
-
-        {/* Products Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Product</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Category</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Price</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Unit Cost</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Profit</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Margin</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {products.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div>
-                      <p className="font-medium text-gray-900">{product.name}</p>
-                      <p className="text-sm text-gray-500">{product.sku}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getCategoryColor(product.category)}`}>
-                      {product.category}
+        {/* Main Content - Product Details */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {!selectedProduct ? (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="text-center">
+                <DollarSign className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p>Select a product to view and edit its cost details</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Product Info Card */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">{selectedProduct.name}</h2>
+                    <p className="text-sm text-gray-500">{selectedProduct.sku}</p>
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-medium mt-2 ${getCategoryColor(selectedProduct.category)}`}>
+                      {selectedProduct.category}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium">
-                    RM {product.currentPrice.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {editingId === product.id ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="text-gray-500">RM</span>
+                  </div>
+                  <Link
+                    href="/admin/recipes"
+                    className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 text-sm"
+                  >
+                    <ChefHat className="w-4 h-4" />
+                    Edit Recipe
+                  </Link>
+                </div>
+
+                {/* Financial Metrics */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <p className="text-sm text-blue-700 font-medium">Selling Price</p>
+                    <p className="text-2xl font-bold text-blue-900">
+                      RM {selectedProduct.currentPrice.toFixed(2)}
+                    </p>
+                  </div>
+
+                  <div className="bg-orange-50 rounded-lg p-4">
+                    <p className="text-sm text-orange-700 font-medium">Unit Cost (COGS)</p>
+                    {editingId === selectedProduct.id ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-sm text-gray-500">RM</span>
                         <input
                           type="number"
                           step="0.01"
                           min="0"
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
-                          className="w-20 px-2 py-1 border rounded text-right"
+                          className="w-24 px-2 py-1 border rounded text-right font-bold text-xl"
                           autoFocus
                           disabled={saving}
                         />
                       </div>
                     ) : (
-                      <span className={product.unitCost === 0 ? 'text-red-600 font-medium' : ''}>
-                        RM {product.unitCost.toFixed(2)}
-                        {product.unitCost === 0 && ' ⚠️'}
-                      </span>
+                      <p className={`text-2xl font-bold ${selectedProduct.unitCost === 0 ? 'text-red-600' : 'text-orange-900'}`}>
+                        RM {selectedProduct.unitCost.toFixed(2)}
+                      </p>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    RM {product.grossProfit.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className={`font-medium ${getMarginColor(product.grossMargin)}`}>
-                      {product.grossMargin.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-center gap-2">
-                      {editingId === product.id ? (
-                        <>
-                          <button
-                            onClick={() => saveEdit(product.id)}
-                            disabled={saving}
-                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 text-sm flex items-center gap-1"
-                          >
-                            <Save className="w-4 h-4" />
-                            Save
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            disabled={saving}
-                            className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50 text-sm"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => startEdit(product)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                          title="Edit cost"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
 
-          {products.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              <p>No products found. Sync products from WooCommerce first.</p>
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <p className="text-sm text-green-700 font-medium">Gross Profit</p>
+                    <p className="text-2xl font-bold text-green-900">
+                      RM {selectedProduct.grossProfit.toFixed(2)}
+                    </p>
+                  </div>
+
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <p className="text-sm text-purple-700 font-medium">Gross Margin</p>
+                    <p className={`text-2xl font-bold ${getMarginColor(selectedProduct.grossMargin)}`}>
+                      {selectedProduct.grossMargin.toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+
+                {/* Edit Actions */}
+                <div className="mt-6 pt-6 border-t">
+                  {editingId === selectedProduct.id ? (
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => saveEdit(selectedProduct.id)}
+                        disabled={saving}
+                        className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-semibold"
+                      >
+                        <Save className="w-5 h-5" />
+                        {saving ? 'Saving...' : 'Save Unit Cost'}
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        disabled={saving}
+                        className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 font-semibold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEdit(selectedProduct)}
+                      className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                      Edit Unit Cost
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Help Text */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-900 mb-2">About COGS (Cost of Goods Sold)</h3>
+                <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                  <li><strong>Unit Cost:</strong> Total cost to make/serve one unit (ingredients + packaging + consumables)</li>
+                  <li><strong>Gross Profit:</strong> Selling price minus unit cost (RM {selectedProduct.currentPrice.toFixed(2)} - RM {selectedProduct.unitCost.toFixed(2)} = RM {selectedProduct.grossProfit.toFixed(2)})</li>
+                  <li><strong>Gross Margin:</strong> Profit as a percentage of selling price ({((selectedProduct.grossProfit / selectedProduct.currentPrice) * 100).toFixed(1)}%)</li>
+                  <li>You can manually set the cost here, or use the <ChefHat className="w-3 h-3 inline" /> Recipe Builder to calculate it automatically</li>
+                  <li>Costs are stored locally and used for profit calculations on all orders</li>
+                </ul>
+              </div>
+
+              {selectedProduct.unitCost === 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Action Required:</strong> This product doesn't have a cost set yet.
+                    Click "Edit Unit Cost" to set it manually, or use the Recipe Builder to calculate it automatically.
+                  </p>
+                </div>
+              )}
             </div>
           )}
-        </div>
-
-        {/* Help Text */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-900 mb-2">About COGS (Cost of Goods Sold)</h3>
-          <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-            <li><strong>Unit Cost:</strong> Total cost to make/serve one unit (ingredients + packaging + consumables)</li>
-            <li><strong>Gross Profit:</strong> Selling price minus unit cost</li>
-            <li><strong>Gross Margin:</strong> Profit as a percentage of selling price</li>
-            <li>Costs are stored locally and used for profit calculations on all orders</li>
-            <li>WooCommerce only stores product prices - COGS is managed here</li>
-          </ul>
         </div>
       </div>
     </div>
