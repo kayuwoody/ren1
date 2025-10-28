@@ -135,7 +135,7 @@ export class NiimbotPrinter {
    * Test print (simple test pattern)
    */
   async testPrint(): Promise<void> {
-    const testText = `COFFEE OASIS\nTEST PRINT\n${new Date().toLocaleString()}`;
+    const testText = `KITCHEN LABEL\nTEST PRINT\n${new Date().toLocaleString()}`;
     await this.printText(testText, 3);
   }
 
@@ -277,7 +277,50 @@ export class ThermalPrinter {
   }
 
   /**
-   * Print kitchen stub
+   * Print receipt (full customer receipt)
+   */
+  async printReceipt(order: any): Promise<void> {
+    // Initialize printer
+    await this.sendCommand(new Uint8Array([0x1B, 0x40])); // ESC @
+
+    // Bold + Center
+    await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x01])); // Bold ON
+    await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
+
+    const encoder = new TextEncoder();
+    await this.sendCommand(encoder.encode('COFFEE OASIS\n'));
+    await this.sendCommand(encoder.encode(`Order #${order.id}\n`));
+    await this.sendCommand(encoder.encode(`${new Date(order.date_created).toLocaleString('en-MY')}\n\n`));
+
+    // Regular + Left
+    await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
+    await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x00])); // Left
+
+    // Items
+    for (const item of order.line_items) {
+      await this.sendCommand(encoder.encode(`${item.quantity}x ${item.name}\n`));
+      await this.sendCommand(encoder.encode(`  RM ${item.total}\n`));
+    }
+
+    // Total
+    await this.sendCommand(encoder.encode('\n'));
+    await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x01])); // Bold ON
+    await this.sendCommand(encoder.encode(`TOTAL: RM ${order.total}\n`));
+    await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
+
+    // Thank you
+    await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
+    await this.sendCommand(encoder.encode('\nThank you!\n'));
+
+    // Feed and cut
+    await this.sendCommand(new Uint8Array([0x1B, 0x64, 0x03])); // Feed 3 lines
+    await this.sendCommand(new Uint8Array([0x1D, 0x56, 0x00])); // Cut paper
+
+    console.log('✅ Receipt printed');
+  }
+
+  /**
+   * Print kitchen stub (not used - kitchen uses Niimbot now)
    */
   async printKitchenStub(order: any): Promise<void> {
     // Initialize printer
@@ -317,14 +360,14 @@ export class ThermalPrinter {
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
 
     const encoder = new TextEncoder();
-    await this.sendCommand(encoder.encode('KITCHEN PRINTER\n'));
+    await this.sendCommand(encoder.encode('RECEIPT PRINTER\n'));
     await this.sendCommand(encoder.encode('TEST PRINT\n'));
     await this.sendCommand(encoder.encode(`${new Date().toLocaleString()}\n`));
 
     await this.sendCommand(new Uint8Array([0x1B, 0x64, 0x03])); // Feed
     await this.sendCommand(new Uint8Array([0x1D, 0x56, 0x00])); // Cut
 
-    console.log('✅ Test print complete');
+    console.log('✅ Receipt test print complete');
   }
 
   /**
@@ -343,25 +386,25 @@ export class ThermalPrinter {
  * Printer Manager
  */
 export class PrinterManager {
-  private receiptPrinter: NiimbotPrinter | null = null;
-  private kitchenPrinter: ThermalPrinter | null = null;
+  private receiptPrinter: ThermalPrinter | null = null;
+  private kitchenPrinter: NiimbotPrinter | null = null;
 
   /**
-   * Get receipt printer (Niimbot)
+   * Get receipt printer (Standard thermal - ESC/POS)
    */
-  getReceiptPrinter(): NiimbotPrinter {
+  getReceiptPrinter(): ThermalPrinter {
     if (!this.receiptPrinter) {
-      this.receiptPrinter = new NiimbotPrinter();
+      this.receiptPrinter = new ThermalPrinter();
     }
     return this.receiptPrinter;
   }
 
   /**
-   * Get kitchen printer (Standard thermal)
+   * Get kitchen printer (Niimbot - for order labels)
    */
-  getKitchenPrinter(): ThermalPrinter {
+  getKitchenPrinter(): NiimbotPrinter {
     if (!this.kitchenPrinter) {
-      this.kitchenPrinter = new ThermalPrinter();
+      this.kitchenPrinter = new NiimbotPrinter();
     }
     return this.kitchenPrinter;
   }
