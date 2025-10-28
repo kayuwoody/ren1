@@ -104,7 +104,12 @@ export default function RecipesPage() {
       setLoading(true);
       const res = await fetch(`/api/admin/recipes/${productId}`);
       const data = await res.json();
-      setRecipe(data.recipe);
+      // Ensure items is always an array
+      const recipe = data.recipe;
+      if (recipe && !Array.isArray(recipe.items)) {
+        recipe.items = [];
+      }
+      setRecipe(recipe);
     } catch (error) {
       console.error('Failed to fetch recipe:', error);
     } finally {
@@ -173,9 +178,11 @@ export default function RecipesPage() {
         totalOptionalCost: isOptional ? newItem.calculatedCost! : 0,
       });
     } else {
+      // Ensure items is an array before spreading
+      const currentItems = Array.isArray(recipe.items) ? recipe.items : [];
       setRecipe({
         ...recipe,
-        items: [...recipe.items, newItem],
+        items: [...currentItems, newItem],
         totalCost: isOptional ? recipe.totalCost : recipe.totalCost + newItem.calculatedCost!,
         totalOptionalCost: isOptional ? recipe.totalOptionalCost + newItem.calculatedCost! : recipe.totalOptionalCost,
       });
