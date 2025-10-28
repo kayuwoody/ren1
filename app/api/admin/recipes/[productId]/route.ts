@@ -12,6 +12,7 @@ import {
   clearProductRecipe,
   addRecipeItem,
   deleteRecipeItem,
+  getRecipeSummary,
 } from '@/lib/db/recipeService';
 import { getProduct } from '@/lib/db/productService';
 
@@ -30,7 +31,16 @@ export async function GET(
       );
     }
 
-    const recipe = getRecipeWithMaterials(productId);
+    const recipeSummary = getRecipeSummary(productId);
+
+    // Format recipe to match frontend expectations
+    const recipe = recipeSummary.items.length > 0 ? {
+      productId: product.id,
+      productName: product.name,
+      items: recipeSummary.items,
+      totalCost: recipeSummary.totalRequiredCost,
+      totalOptionalCost: recipeSummary.totalOptionalCost,
+    } : null;
 
     return NextResponse.json({ recipe });
   } catch (error: any) {
@@ -67,7 +77,17 @@ export async function PUT(
     }
 
     // Replace entire recipe
-    const recipe = setProductRecipe(productId, items);
+    setProductRecipe(productId, items);
+
+    // Get updated recipe with proper formatting
+    const recipeSummary = getRecipeSummary(productId);
+    const recipe = {
+      productId: product.id,
+      productName: product.name,
+      items: recipeSummary.items,
+      totalCost: recipeSummary.totalRequiredCost,
+      totalOptionalCost: recipeSummary.totalOptionalCost,
+    };
 
     return NextResponse.json({
       recipe,
