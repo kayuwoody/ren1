@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Printer, CheckCircle, XCircle, Bluetooth, Clock, AlertCircle, FileText, Usb } from 'lucide-react';
-import { printerManager, ThermalPrinter, USBNiimbotPrinter } from '@/lib/printerService';
+import { Printer, CheckCircle, XCircle, Bluetooth, Clock, AlertCircle, FileText } from 'lucide-react';
+import { printerManager, NiimbotPrinter, ThermalPrinter } from '@/lib/printerService';
 
 interface PrintLog {
   id: string;
-  type: 'receipt' | 'kitchen' | 'label';
+  type: 'receipt' | 'kitchen';
   orderId: string;
   timestamp: string;
   status: 'success' | 'failed';
@@ -16,18 +16,14 @@ interface PrintLog {
 export default function PrintersAdminPage() {
   const [receiptPrinter, setReceiptPrinter] = useState<any>(null);
   const [kitchenPrinter, setKitchenPrinter] = useState<any>(null);
-  const [labelPrinter, setLabelPrinter] = useState<USBDevice | null>(null);
   const [bluetoothSupported, setBluetoothSupported] = useState(true);
-  const [usbSupported, setUSBSupported] = useState(true);
   const [testResult, setTestResult] = useState<string>('');
   const [printLogs, setPrintLogs] = useState<PrintLog[]>([]);
   const [lastReceiptPrint, setLastReceiptPrint] = useState<string>('');
   const [lastKitchenPrint, setLastKitchenPrint] = useState<string>('');
-  const [lastLabelPrint, setLastLabelPrint] = useState<string>('');
 
   useEffect(() => {
     setBluetoothSupported(printerManager.isBluetoothSupported());
-    setUSBSupported(printerManager.isUSBSupported());
 
     // Load print logs from localStorage
     const logs = localStorage.getItem('printer_logs');
@@ -42,7 +38,6 @@ export default function PrintersAdminPage() {
     // Load last print times
     setLastReceiptPrint(localStorage.getItem('last_receipt_print') || '');
     setLastKitchenPrint(localStorage.getItem('last_kitchen_print') || '');
-    setLastLabelPrint(localStorage.getItem('last_label_print') || '');
   }, []);
 
   const addPrintLog = (log: Omit<PrintLog, 'id' | 'timestamp'>) => {
@@ -64,21 +59,19 @@ export default function PrintersAdminPage() {
     } else if (log.type === 'kitchen') {
       setLastKitchenPrint(time);
       localStorage.setItem('last_kitchen_print', time);
-    } else if (log.type === 'label') {
-      setLastLabelPrint(time);
-      localStorage.setItem('last_label_print', time);
     }
   };
 
   const handlePairReceiptPrinter = async () => {
     try {
       const printer = printerManager.getReceiptPrinter();
-      const device = await printer.pair();
+      const device = await printer.connect();
       setReceiptPrinter(device);
-      printerManager.savePrinterConfig('receipt', device.id);
-      alert(`Receipt printer paired: ${device.name}`);
-    } catch (err) {
-      alert('Failed to pair receipt printer');
+      printerManager.savePrinterConfig('receipt', device.name || 'Niimbot');
+      alert(`Receipt printer connected: ${device.name}`);
+    } catch (err: any) {
+      console.error('Receipt printer error:', err);
+      alert(`Failed to connect receipt printer: ${err.message}`);
     }
   };
 
@@ -94,80 +87,18 @@ export default function PrintersAdminPage() {
     }
   };
 
-  const handleDebugTestPrint = async () => {
-    setTestResult('Printing simple black rectangle test...');
-    try {
-      const printer = printerManager.getReceiptPrinter();
-      await printer.connect(receiptPrinter || undefined);
-
-      // Call the testPrint function that prints a simple rectangle
-      await printer.testPrint();
-      setTestResult('✅ Debug test printed! Check if you see a black rectangle.');
-
-      addPrintLog({
-        type: 'receipt',
-        orderId: 'DEBUG-TEST',
-        status: 'success',
-      });
-    } catch (err: any) {
-      setTestResult(`❌ Debug test failed: ${err.message}`);
-
-      addPrintLog({
-        type: 'receipt',
-        orderId: 'DEBUG-TEST',
-        status: 'failed',
-        error: err.message,
-      });
-    }
-  };
-
-  const handleInvertedTestPrint = async () => {
-    setTestResult('Printing INVERTED bit test (0=black)...');
-    try {
-      const printer = printerManager.getReceiptPrinter();
-      await printer.connect(receiptPrinter || undefined);
-
-      // Call the inverted test
-      await printer.testPrintInverted();
-      setTestResult('✅ Inverted test printed! Check if you see a black rectangle.');
-
-      addPrintLog({
-        type: 'receipt',
-        orderId: 'INVERTED-TEST',
-        status: 'success',
-      });
-    } catch (err: any) {
-      setTestResult(`❌ Inverted test failed: ${err.message}`);
-
-      addPrintLog({
-        type: 'receipt',
-        orderId: 'INVERTED-TEST',
-        status: 'failed',
-        error: err.message,
-      });
-    }
-  };
-
   const handleTestReceiptPrint = async () => {
-    setTestResult('Printing test receipt...');
+    setTestResult('Printing test label on Niimbot...');
     try {
       const printer = printerManager.getReceiptPrinter();
-      await printer.connect(receiptPrinter || undefined);
 
-      const testOrder = {
-        id: 'TEST',
-        date_created: new Date().toISOString(),
-        line_items: [
-          { name: 'Test Coffee', quantity: 1, total: '5.00' },
-          { name: 'Test Pastry', quantity: 2, total: '8.00' },
-        ],
-        total: '13.00'
-      };
+      if (!printer.isConnected()) {
+        throw new Error('Printer not connected. Please connect first.');
+      }
 
-      await printer.printReceipt(testOrder);
-      setTestResult('✅ Receipt printed successfully!');
+      await printer.testPrint();
+      setTestResult('✅ Test label printed successfully!');
 
-      // Add to log
       addPrintLog({
         type: 'receipt',
         orderId: 'TEST',
@@ -176,7 +107,6 @@ export default function PrintersAdminPage() {
     } catch (err: any) {
       setTestResult(`❌ Failed: ${err.message}`);
 
-      // Add error to log
       addPrintLog({
         type: 'receipt',
         orderId: 'TEST',
@@ -190,22 +120,16 @@ export default function PrintersAdminPage() {
     setTestResult('Printing test kitchen stub...');
     try {
       const printer = printerManager.getKitchenPrinter();
-      await printer.connect(kitchenPrinter || undefined);
 
-      const testOrder = {
-        id: 'TEST',
-        date_created: new Date().toISOString(),
-        line_items: [
-          { name: 'Espresso', quantity: 2 },
-          { name: 'Cappuccino', quantity: 1 },
-          { name: 'Croissant', quantity: 3 },
-        ],
-      };
+      if (!kitchenPrinter) {
+        throw new Error('Kitchen printer not paired. Please pair first.');
+      }
 
-      await printer.printKitchenStub(testOrder);
-      setTestResult('✅ Kitchen stub printed successfully!');
+      await printer.connect(kitchenPrinter);
 
-      // Add to log
+      await printer.testPrint();
+      setTestResult('✅ Kitchen test printed successfully!');
+
       addPrintLog({
         type: 'kitchen',
         orderId: 'TEST',
@@ -214,48 +138,8 @@ export default function PrintersAdminPage() {
     } catch (err: any) {
       setTestResult(`❌ Failed: ${err.message}`);
 
-      // Add error to log
       addPrintLog({
         type: 'kitchen',
-        orderId: 'TEST',
-        status: 'failed',
-        error: err.message,
-      });
-    }
-  };
-
-  const handlePairLabelPrinter = async () => {
-    try {
-      const printer = printerManager.getLabelPrinter();
-      const device = await printer.pair();
-      setLabelPrinter(device);
-      printerManager.savePrinterConfig('label', device.serialNumber || 'USB-Niimbot');
-      alert(`Label printer paired: ${device.productName || 'Niimbot'}`);
-    } catch (err: any) {
-      alert(`Failed to pair label printer: ${err.message}`);
-    }
-  };
-
-  const handleTestLabelPrint = async () => {
-    setTestResult('Printing test label...');
-    try {
-      const printer = printerManager.getLabelPrinter();
-      await printer.connect(labelPrinter || undefined);
-
-      const testText = `ORDER #TEST\n${new Date().toLocaleTimeString()}`;
-      await printer.printLabel(testText);
-      setTestResult('✅ Label printed successfully!');
-
-      addPrintLog({
-        type: 'label',
-        orderId: 'TEST',
-        status: 'success',
-      });
-    } catch (err: any) {
-      setTestResult(`❌ Failed: ${err.message}`);
-
-      addPrintLog({
-        type: 'label',
         orderId: 'TEST',
         status: 'failed',
         error: err.message,
@@ -346,32 +230,18 @@ export default function PrintersAdminPage() {
               </button>
 
               {receiptPrinter && (
-                <>
-                  <button
-                    onClick={handleDebugTestPrint}
-                    className="bg-orange-600 text-white px-3 py-2 rounded-lg hover:bg-orange-700 transition text-sm"
-                  >
-                    Test: 1=Black
-                  </button>
-                  <button
-                    onClick={handleInvertedTestPrint}
-                    className="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition text-sm"
-                  >
-                    Test: 0=Black
-                  </button>
-                  <button
-                    onClick={handleTestReceiptPrint}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
-                  >
-                    Test Print
-                  </button>
-                </>
+                <button
+                  onClick={handleTestReceiptPrint}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+                >
+                  Test Print
+                </button>
               )}
             </div>
           </div>
 
           <p className="text-xs text-gray-500">
-            Used for customer receipts at POS. Prints full receipt with items, prices, and totals.
+            Niimbot label printer for customer receipts and order labels. Bluetooth connection using niimbluelib.
           </p>
         </div>
       </div>
@@ -441,79 +311,6 @@ export default function PrintersAdminPage() {
         </div>
       </div>
 
-      {/* Label Printer (USB Niimbot) */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Usb className="w-6 h-6 text-orange-600" />
-          <h2 className="text-xl font-semibold">Label Printer (USB Niimbot)</h2>
-        </div>
-
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-600">Status:</p>
-              <p className="font-semibold">
-                {labelPrinter ? (
-                  <span className="text-green-600 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    {labelPrinter.productName || 'Niimbot Connected'}
-                  </span>
-                ) : (
-                  <span className="text-gray-400 flex items-center gap-2">
-                    <XCircle className="w-4 h-4" />
-                    Not connected
-                  </span>
-                )}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm text-gray-600 flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                Last Print:
-              </p>
-              <p className="text-sm font-medium text-gray-800">
-                {formatTimestamp(lastLabelPrint)}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex gap-2">
-              <button
-                onClick={handlePairLabelPrinter}
-                disabled={!usbSupported}
-                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition flex items-center gap-2 disabled:opacity-50"
-              >
-                <Usb className="w-4 h-4" />
-                {labelPrinter ? 'Re-connect' : 'Connect USB'}
-              </button>
-
-              {labelPrinter && (
-                <button
-                  onClick={handleTestLabelPrint}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
-                >
-                  Test Print
-                </button>
-              )}
-            </div>
-          </div>
-
-          <p className="text-xs text-gray-500">
-            USB connected Niimbot label printer for order labels and receipts. Connect via USB cable (50x30mm labels recommended).
-          </p>
-
-          {!usbSupported && (
-            <div className="bg-amber-50 border border-amber-200 rounded p-3">
-              <p className="text-sm text-amber-800">
-                ⚠️ WebUSB is not supported in this browser. Please use Chrome, Edge, or Opera.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Test Results */}
       {testResult && (
         <div className={`rounded-lg p-4 ${
@@ -545,16 +342,12 @@ export default function PrintersAdminPage() {
                   <div className="flex items-center gap-3">
                     <Printer
                       className={`w-4 h-4 ${
-                        log.type === 'receipt' ? 'text-blue-600' :
-                        log.type === 'kitchen' ? 'text-purple-600' :
-                        'text-orange-600'
+                        log.type === 'receipt' ? 'text-blue-600' : 'text-purple-600'
                       }`}
                     />
                     <div>
                       <p className="text-sm font-medium">
-                        {log.type === 'receipt' ? 'Receipt' :
-                         log.type === 'kitchen' ? 'Kitchen' :
-                         'Label'} -{' '}
+                        {log.type === 'receipt' ? 'Receipt' : 'Kitchen'} -{' '}
                         Order #{log.orderId}
                       </p>
                       {log.error && (
