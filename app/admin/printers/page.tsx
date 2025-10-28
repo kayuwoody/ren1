@@ -307,7 +307,7 @@ export default function PrintersAdminPage() {
           </div>
 
           <p className="text-xs text-gray-500">
-            Standard thermal printer for kitchen order stubs (ESC/POS). Auto-prints when orders are placed. Prints order stubs with items and quantities.
+            Standard Bluetooth thermal printer for kitchen order stubs (ESC/POS). Auto-prints when orders are placed. Prints order stubs with items and quantities.
           </p>
         </div>
       </div>
@@ -410,7 +410,7 @@ export default function PrintersAdminPage() {
           <li>Repeat for both receipt and kitchen printers</li>
         </ol>
         <p className="text-xs text-blue-700 mt-3">
-          Note: Supports ESC/POS printers and Niimbot label printers (B1, B21, etc.)
+          Note: Currently supports standard ESC/POS thermal printers only. Niimbot label printer support coming soon.
         </p>
       </div>
     </div>
