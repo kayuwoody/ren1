@@ -30,18 +30,37 @@ export class NiimbotPrinter {
       console.log('🔵 Connecting to Niimbot printer...');
       const result = await this.client.connect();
 
+      console.log('📡 Connection result:', result);
+
       if (result.result !== 1) {
-        throw new Error(`Connection failed with code: ${result.result}`);
+        // Try to provide more helpful error messages
+        let errorMsg = `Connection failed with code: ${result.result}`;
+        if (result.result === 3) {
+          errorMsg += ' - Printer handshake failed. This could mean:\n' +
+            '• The printer model is not recognized by the library\n' +
+            '• The printer is already paired to another device\n' +
+            '• The printer needs to be reset/power cycled\n' +
+            '• Wrong Bluetooth service/characteristic\n\n' +
+            'Try: Turn printer off and on, then try again.';
+        }
+        throw new Error(errorMsg);
       }
 
       this.connected = true;
       console.log('✅ Connected to Niimbot:', result.deviceName);
 
-      // Fetch printer info
-      const info = await this.client.fetchPrinterInfo();
-      console.log('📋 Printer info:', info);
+      // Try to fetch printer info
+      try {
+        const info = await this.client.fetchPrinterInfo();
+        console.log('📋 Printer info:', info);
+        console.log('📝 Print task type:', this.client.getPrintTaskType());
+        console.log('🔧 Model metadata:', this.client.getModelMetadata());
+      } catch (infoErr) {
+        console.warn('⚠️ Could not fetch printer info:', infoErr);
+        // Continue anyway - connection might still work
+      }
 
-      return { name: result.deviceName };
+      return { name: result.deviceName || 'Niimbot' };
     } catch (err) {
       console.error('❌ Niimbot connection failed:', err);
       this.connected = false;
