@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Package, Search, Filter, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Package, Search, Filter, Clock, CheckCircle, AlertCircle, User } from 'lucide-react';
+
+interface Customer {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+}
 
 interface Order {
   id: number;
@@ -13,23 +21,33 @@ interface Order {
   line_items: any[];
   meta_data?: any[];
   customer_id: number;
+  billing?: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+  };
 }
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
   const [completionFilter, setCompletionFilter] = useState('all'); // all, manual, auto, webhook
 
   useEffect(() => {
     fetchOrders();
+    fetchCustomers();
   }, []);
 
   useEffect(() => {
     filterOrders();
-  }, [orders, statusFilter, searchTerm, completionFilter]);
+  }, [orders, statusFilter, searchTerm, completionFilter, selectedCustomer]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -47,8 +65,25 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const fetchCustomers = async () => {
+    try {
+      const res = await fetch('/api/admin/customers');
+      if (res.ok) {
+        const data = await res.json();
+        setCustomers(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch customers:', err);
+    }
+  };
+
   const filterOrders = () => {
     let filtered = [...orders];
+
+    // Customer filter
+    if (selectedCustomer) {
+      filtered = filtered.filter(order => order.customer_id === selectedCustomer.id);
+    }
 
     // Status filter
     if (statusFilter !== 'all') {
@@ -120,6 +155,13 @@ export default function AdminOrdersPage() {
     completed: orders.filter(o => o.status === 'completed').length,
   };
 
+  const filteredCustomers = customers.filter(c =>
+    c.first_name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    c.last_name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    c.email.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    c.phone?.includes(customerSearch)
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -137,7 +179,75 @@ export default function AdminOrdersPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+      <div className="flex h-[calc(100vh-80px)]">
+        {/* Customer Sidebar */}
+        <div className="w-80 bg-white border-r flex flex-col">
+          <div className="p-4 border-b">
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search customers..."
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+            {selectedCustomer && (
+              <button
+                onClick={() => setSelectedCustomer(null)}
+                className="w-full text-sm text-purple-600 hover:text-purple-800 font-medium"
+              >
+                Show All Customers
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {filteredCustomers.length === 0 ? (
+              <div className="p-4 text-center text-gray-500">
+                <p>No customers found</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {filteredCustomers.map((customer) => {
+                  const customerOrders = orders.filter(o => o.customer_id === customer.id);
+                  const isSelected = selectedCustomer?.id === customer.id;
+
+                  return (
+                    <button
+                      key={customer.id}
+                      onClick={() => setSelectedCustomer(customer)}
+                      className={`w-full text-left p-4 hover:bg-purple-50 transition ${
+                        isSelected ? 'bg-purple-50 border-l-4 border-purple-600' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <User className="w-5 h-5 text-purple-600" />
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {customer.first_name} {customer.last_name}
+                          </div>
+                          <div className="text-sm text-gray-600">{customer.email}</div>
+                          {customer.phone && (
+                            <div className="text-xs text-gray-500">{customer.phone}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg shadow p-4">
@@ -268,6 +378,8 @@ export default function AdminOrdersPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
           </div>
         </div>
       </div>
