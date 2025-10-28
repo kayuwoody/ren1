@@ -77,11 +77,15 @@ export function upsertProduct(
     existing = db.prepare('SELECT * FROM Product WHERE wcId = ?').get(product.wcId) as Product | undefined;
   }
 
-  if (!existing && product.sku) {
+  // Only check by SKU if it's not empty (avoid matching multiple products with empty SKUs)
+  if (!existing && product.sku && product.sku.trim() !== '') {
     existing = db.prepare('SELECT * FROM Product WHERE sku = ?').get(product.sku) as Product | undefined;
   }
 
   const id = existing?.id || product.id || uuidv4();
+
+  // Generate a unique SKU if empty (to avoid UNIQUE constraint failures)
+  const sku = (product.sku && product.sku.trim() !== '') ? product.sku : `product-${product.wcId || id}`;
 
   if (existing) {
     // Update existing product
@@ -95,7 +99,7 @@ export function upsertProduct(
     stmt.run(
       product.wcId || null,
       product.name,
-      product.sku,
+      sku,
       product.category,
       product.basePrice,
       product.unitCost,
@@ -116,7 +120,7 @@ export function upsertProduct(
       id,
       product.wcId || null,
       product.name,
-      product.sku,
+      sku,
       product.category,
       product.basePrice,
       product.unitCost,

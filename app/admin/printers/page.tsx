@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Printer, CheckCircle, XCircle, Bluetooth, Clock, AlertCircle, FileText } from 'lucide-react';
-import { printerManager, NiimbotPrinter, ThermalPrinter } from '@/lib/printerService';
+import { printerManager, ThermalPrinter } from '@/lib/printerService';
 
 interface PrintLog {
   id: string;
@@ -78,13 +78,13 @@ export default function PrintersAdminPage() {
   const handlePairKitchenPrinter = async () => {
     try {
       const printer = printerManager.getKitchenPrinter();
-      const device = await printer.connect();
+      const device = await printer.pair();
       setKitchenPrinter(device);
-      printerManager.savePrinterConfig('kitchen', device.name || 'Niimbot');
-      alert(`Kitchen printer connected: ${device.name}`);
+      printerManager.savePrinterConfig('kitchen', device.id);
+      alert(`Kitchen printer paired: ${device.name}`);
     } catch (err: any) {
       console.error('Kitchen printer error:', err);
-      alert(`Failed to connect kitchen printer: ${err.message}`);
+      alert(`Failed to pair kitchen printer: ${err.message}`);
     }
   };
 
@@ -98,7 +98,7 @@ export default function PrintersAdminPage() {
       }
 
       await printer.connect(receiptPrinter);
-      await printer.testPrint();
+      await printer.testPrint('RECEIPT PRINTER');
       setTestResult('✅ Receipt test printed successfully!');
 
       addPrintLog({
@@ -119,16 +119,17 @@ export default function PrintersAdminPage() {
   };
 
   const handleTestKitchenPrint = async () => {
-    setTestResult('Printing test kitchen label...');
+    setTestResult('Printing test kitchen stub...');
     try {
       const printer = printerManager.getKitchenPrinter();
 
-      if (!printer.isConnected()) {
-        throw new Error('Niimbot printer not connected. Please connect first.');
+      if (!kitchenPrinter) {
+        throw new Error('Kitchen printer not paired. Please pair first.');
       }
 
-      await printer.testPrint();
-      setTestResult('✅ Kitchen label printed successfully!');
+      await printer.connect(kitchenPrinter);
+      await printer.testPrint('KITCHEN PRINTER');
+      setTestResult('✅ Kitchen test printed successfully!');
 
       addPrintLog({
         type: 'kitchen',
@@ -250,7 +251,7 @@ export default function PrintersAdminPage() {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center gap-3 mb-4">
           <Printer className="w-6 h-6 text-purple-600" />
-          <h2 className="text-xl font-semibold">Kitchen Printer (Niimbot)</h2>
+          <h2 className="text-xl font-semibold">Kitchen Printer</h2>
         </div>
 
         <div className="space-y-4">
@@ -306,7 +307,7 @@ export default function PrintersAdminPage() {
           </div>
 
           <p className="text-xs text-gray-500">
-            Niimbot label printer for kitchen order stubs (niimbluelib). Auto-prints when orders are placed. Prints order labels with items and quantities.
+            Standard thermal printer for kitchen order stubs (ESC/POS). Auto-prints when orders are placed. Prints order stubs with items and quantities.
           </p>
         </div>
       </div>
