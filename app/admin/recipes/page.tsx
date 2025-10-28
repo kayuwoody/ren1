@@ -113,7 +113,7 @@ export default function RecipesPage() {
   }
 
   async function saveRecipe() {
-    if (!selectedProduct || !recipe) return;
+    if (!selectedProduct || !recipe || !recipe.items) return;
 
     setSaving(true);
     try {
@@ -185,7 +185,7 @@ export default function RecipesPage() {
   }
 
   function removeIngredient(index: number) {
-    if (!recipe) return;
+    if (!recipe || !recipe.items) return;
 
     const item = recipe.items[index];
     const newItems = recipe.items.filter((_, i) => i !== index);
@@ -199,7 +199,7 @@ export default function RecipesPage() {
   }
 
   function updateQuantity(index: number, newQuantity: number) {
-    if (!recipe) return;
+    if (!recipe || !recipe.items) return;
 
     const oldItem = recipe.items[index];
     const material = materials.find(m => m.id === oldItem.materialId);
@@ -427,7 +427,7 @@ export default function RecipesPage() {
                 <div className="p-6 border-t bg-gray-50">
                   <button
                     onClick={saveRecipe}
-                    disabled={saving || !recipe || recipe.items.length === 0}
+                    disabled={saving || !recipe || !recipe.items || recipe.items.length === 0}
                     className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {saving ? 'Saving...' : 'Save Recipe & Update COGS'}
