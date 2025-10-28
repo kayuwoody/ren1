@@ -146,7 +146,7 @@ export default function RecipesPage() {
   }
 
   function addIngredient(materialId: string, quantity: number, isOptional: boolean) {
-    if (!recipe) return;
+    if (!selectedProduct) return;
 
     const material = materials.find(m => m.id === materialId);
     if (!material) return;
@@ -163,12 +163,23 @@ export default function RecipesPage() {
       isOptional,
     };
 
-    setRecipe({
-      ...recipe,
-      items: [...recipe.items, newItem],
-      totalCost: isOptional ? recipe.totalCost : recipe.totalCost + newItem.calculatedCost!,
-      totalOptionalCost: isOptional ? recipe.totalOptionalCost + newItem.calculatedCost! : recipe.totalOptionalCost,
-    });
+    // Initialize recipe if it doesn't exist
+    if (!recipe) {
+      setRecipe({
+        productId: selectedProduct.id,
+        productName: selectedProduct.name,
+        items: [newItem],
+        totalCost: isOptional ? 0 : newItem.calculatedCost!,
+        totalOptionalCost: isOptional ? newItem.calculatedCost! : 0,
+      });
+    } else {
+      setRecipe({
+        ...recipe,
+        items: [...recipe.items, newItem],
+        totalCost: isOptional ? recipe.totalCost : recipe.totalCost + newItem.calculatedCost!,
+        totalOptionalCost: isOptional ? recipe.totalOptionalCost + newItem.calculatedCost! : recipe.totalOptionalCost,
+      });
+    }
 
     setShowAddIngredient(false);
   }

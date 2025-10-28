@@ -724,11 +724,251 @@ export class ThermalPrinter {
 }
 
 /**
- * Printer Manager - handles both receipt and kitchen printers
+ * USB Niimbot Printer - for label printing via WebUSB
+ */
+export class USBNiimbotPrinter {
+  private device: USBDevice | null = null;
+  private interface: USBInterface | null = null;
+  private endpoint: USBEndpoint | null = null;
+
+  /**
+   * Niimbot USB Protocol Commands
+   */
+  private niimbotCommands = {
+    CMD_GET_RFID: 0x1A,
+    CMD_GET_INFO: 0x40,
+    CMD_SET_LABEL_DENSITY: 0x21,
+    CMD_SET_LABEL_TYPE: 0x23,
+    CMD_START_PRINT: 0x01,
+    CMD_END_PRINT: 0xF3,
+    CMD_START_PAGE_PRINT: 0x03,
+    CMD_END_PAGE_PRINT: 0xE3,
+    CMD_SET_DIMENSION: 0x13,
+    CMD_SET_QUANTITY: 0x15,
+    CMD_PRINT_BITMAP_ROW: 0x85,
+  };
+
+  /**
+   * Request USB device pairing for Niimbot printer
+   */
+  async pair(): Promise<USBDevice> {
+    try {
+      // Niimbot USB vendor/product IDs (common models)
+      const device = await (navigator as any).usb.requestDevice({
+        filters: [
+          { vendorId: 0x0483 }, // Niimbot common vendor ID
+          { vendorId: 0x19A7 }, // Alternative Niimbot vendor ID
+        ]
+      });
+
+      this.device = device;
+      console.log('USB Niimbot paired:', device.productName || device.manufacturerName);
+      return device;
+    } catch (err) {
+      console.error('Failed to pair USB Niimbot:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Connect to USB device
+   */
+  async connect(device?: USBDevice): Promise<void> {
+    try {
+      if (device) {
+        this.device = device;
+      }
+
+      if (!this.device) {
+        throw new Error('No device paired. Call pair() first.');
+      }
+
+      await this.device.open();
+      console.log('USB device opened');
+
+      // Claim interface (usually interface 0)
+      if (this.device.configuration === null) {
+        await this.device.selectConfiguration(1);
+      }
+
+      const iface = this.device.configuration!.interfaces[0];
+      await this.device.claimInterface(iface.interfaceNumber);
+      this.interface = iface;
+
+      // Find OUT endpoint for sending data
+      const altInterface = iface.alternates[0];
+      this.endpoint = altInterface.endpoints.find(ep => ep.direction === 'out') || null;
+
+      console.log('USB Niimbot connected, endpoint:', this.endpoint?.endpointNumber);
+    } catch (err) {
+      console.error('USB connection failed:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Send command to USB printer
+   */
+  private async sendCommand(data: Uint8Array): Promise<void> {
+    if (!this.device || !this.endpoint) {
+      throw new Error('Device not connected');
+    }
+
+    try {
+      await this.device.transferOut(this.endpoint.endpointNumber, data);
+      await new Promise(resolve => setTimeout(resolve, 50)); // Small delay between commands
+    } catch (err) {
+      console.error('USB transfer failed:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Create Niimbot command packet
+   */
+  private createNiimbotPacket(cmd: number, data: number[] = []): Uint8Array {
+    const len = data.length;
+    const checksum = [cmd, len, ...data].reduce((a, b) => a ^ b, 0);
+    return new Uint8Array([0x55, 0x55, cmd, len, ...data, checksum, 0xAA, 0xAA]);
+  }
+
+  /**
+   * Convert text to bitmap for Niimbot label
+   */
+  private textToBitmap(text: string, width: number, height: number): { data: Uint8Array[], width: number, height: number } {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = 'black';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+
+    const lines = text.split('\n');
+    const lineHeight = 28;
+    const startY = (height - (lines.length * lineHeight)) / 2;
+
+    lines.forEach((line, i) => {
+      ctx.fillText(line, width / 2, startY + (i * lineHeight) + 20);
+    });
+
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const bytesPerLine = Math.ceil(width / 8);
+    const bitmapLines: Uint8Array[] = [];
+
+    for (let y = 0; y < height; y++) {
+      const line = new Uint8Array(bytesPerLine);
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        const brightness = (imageData.data[idx] + imageData.data[idx + 1] + imageData.data[idx + 2]) / 3;
+        if (brightness < 128) {
+          const byteIdx = Math.floor(x / 8);
+          const bitIdx = 7 - (x % 8);
+          line[byteIdx] |= (1 << bitIdx);
+        }
+      }
+      bitmapLines.push(line);
+    }
+
+    return { data: bitmapLines, width, height };
+  }
+
+  /**
+   * Print label using Niimbot protocol
+   */
+  async printLabel(text: string): Promise<void> {
+    try {
+      const width = 384;  // 50mm at 203 DPI
+      const height = 240; // 30mm at 203 DPI
+
+      const bitmap = this.textToBitmap(text, width, height);
+
+      // 1. Set print density
+      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_DENSITY, [3]));
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 2. Set label type
+      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_SET_LABEL_TYPE, [1]));
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 3. Start print job
+      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_START_PRINT, [0x01]));
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // 4. Start page
+      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_START_PAGE_PRINT, [0x01]));
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // 5. Set dimensions
+      const dimensionData = [
+        (height >> 8) & 0xFF,
+        height & 0xFF,
+        (width >> 8) & 0xFF,
+        width & 0xFF
+      ];
+      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_SET_DIMENSION, dimensionData));
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // 6. Set quantity
+      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_SET_QUANTITY, [0x00, 0x01]));
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 7. Send bitmap rows
+      for (let rowNum = 0; rowNum < bitmap.data.length; rowNum++) {
+        const rowData = bitmap.data[rowNum];
+        const packetData = [
+          (rowNum >> 8) & 0xFF,
+          rowNum & 0xFF,
+          ...Array.from(rowData)
+        ];
+        await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_PRINT_BITMAP_ROW, packetData));
+      }
+
+      // 8. End page
+      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_END_PAGE_PRINT, [0x01]));
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // 9. End print job
+      await this.sendCommand(this.createNiimbotPacket(this.niimbotCommands.CMD_END_PRINT, [0x01]));
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('✅ USB Niimbot: Print job complete!');
+    } catch (err) {
+      console.error('❌ USB Niimbot print failed:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Disconnect from USB device
+   */
+  async disconnect(): Promise<void> {
+    if (this.device) {
+      try {
+        if (this.interface) {
+          await this.device.releaseInterface(this.interface.interfaceNumber);
+        }
+        await this.device.close();
+      } catch (err) {
+        console.error('Disconnect error:', err);
+      }
+    }
+    this.device = null;
+    this.interface = null;
+    this.endpoint = null;
+  }
+}
+
+/**
+ * Printer Manager - handles receipt, kitchen, and label printers
  */
 export class PrinterManager {
   private receiptPrinter: ThermalPrinter | null = null;
   private kitchenPrinter: ThermalPrinter | null = null;
+  private labelPrinter: USBNiimbotPrinter | null = null;
 
   /**
    * Get or create receipt printer instance
@@ -751,16 +991,26 @@ export class PrinterManager {
   }
 
   /**
+   * Get or create label printer instance (USB Niimbot)
+   */
+  getLabelPrinter(): USBNiimbotPrinter {
+    if (!this.labelPrinter) {
+      this.labelPrinter = new USBNiimbotPrinter();
+    }
+    return this.labelPrinter;
+  }
+
+  /**
    * Save printer configuration to localStorage
    */
-  savePrinterConfig(type: 'receipt' | 'kitchen', deviceId: string): void {
+  savePrinterConfig(type: 'receipt' | 'kitchen' | 'label', deviceId: string): void {
     localStorage.setItem(`printer_${type}`, deviceId);
   }
 
   /**
    * Get saved printer configuration
    */
-  getPrinterConfig(type: 'receipt' | 'kitchen'): string | null {
+  getPrinterConfig(type: 'receipt' | 'kitchen' | 'label'): string | null {
     return localStorage.getItem(`printer_${type}`);
   }
 
@@ -769,6 +1019,13 @@ export class PrinterManager {
    */
   isBluetoothSupported(): boolean {
     return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+  }
+
+  /**
+   * Check if WebUSB is supported
+   */
+  isUSBSupported(): boolean {
+    return typeof navigator !== 'undefined' && 'usb' in navigator;
   }
 }
 
