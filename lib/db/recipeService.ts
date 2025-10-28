@@ -10,6 +10,9 @@ export interface ProductRecipeItem {
   productId: string;
   materialId: string;
   materialName?: string; // populated in queries
+  materialCategory?: string; // populated in queries
+  purchaseUnit?: string; // populated in queries
+  costPerUnit?: number; // populated in queries
   quantity: number;
   unit: string;
   calculatedCost: number;
@@ -69,7 +72,11 @@ export function addRecipeItem(item: {
  */
 export function getRecipeItem(id: string): ProductRecipeItem | undefined {
   const stmt = db.prepare(`
-    SELECT pr.*, m.name as materialName
+    SELECT pr.*,
+           m.name as materialName,
+           m.category as materialCategory,
+           m.purchaseUnit as purchaseUnit,
+           m.costPerUnit as costPerUnit
     FROM ProductRecipe pr
     JOIN Material m ON pr.materialId = m.id
     WHERE pr.id = ?
@@ -82,6 +89,9 @@ export function getRecipeItem(id: string): ProductRecipeItem | undefined {
     productId: row.productId,
     materialId: row.materialId,
     materialName: row.materialName,
+    materialCategory: row.materialCategory,
+    purchaseUnit: row.purchaseUnit,
+    costPerUnit: row.costPerUnit,
     quantity: row.quantity,
     unit: row.unit,
     calculatedCost: row.calculatedCost,
@@ -96,7 +106,11 @@ export function getRecipeItem(id: string): ProductRecipeItem | undefined {
  */
 export function getProductRecipe(productId: string): ProductRecipeItem[] {
   const stmt = db.prepare(`
-    SELECT pr.*, m.name as materialName
+    SELECT pr.*,
+           m.name as materialName,
+           m.category as materialCategory,
+           m.purchaseUnit as purchaseUnit,
+           m.costPerUnit as costPerUnit
     FROM ProductRecipe pr
     JOIN Material m ON pr.materialId = m.id
     WHERE pr.productId = ?
@@ -109,6 +123,9 @@ export function getProductRecipe(productId: string): ProductRecipeItem[] {
     productId: row.productId,
     materialId: row.materialId,
     materialName: row.materialName,
+    materialCategory: row.materialCategory,
+    purchaseUnit: row.purchaseUnit,
+    costPerUnit: row.costPerUnit,
     quantity: row.quantity,
     unit: row.unit,
     calculatedCost: row.calculatedCost,
