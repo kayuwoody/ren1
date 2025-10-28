@@ -155,6 +155,9 @@ export function deleteProduct(id: string): boolean {
  * Sync product from WooCommerce
  */
 export function syncProductFromWooCommerce(wcProduct: any): Product {
+  // Check if product already exists to preserve unitCost
+  const existing = getProductByWcId(wcProduct.id);
+
   return upsertProduct({
     id: undefined, // Will be auto-generated or matched by wcId
     wcId: wcProduct.id,
@@ -162,7 +165,7 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     sku: wcProduct.sku,
     category: wcProduct.categories?.[0]?.slug || 'uncategorized',
     basePrice: parseFloat(wcProduct.price) || 0,
-    unitCost: 0, // Will be set via recipes
+    unitCost: existing ? existing.unitCost : 0, // Preserve existing unitCost from recipes
     stockQuantity: wcProduct.stock_quantity || 0,
     imageUrl: wcProduct.images?.[0]?.src,
   });
