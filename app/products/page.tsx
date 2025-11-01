@@ -19,7 +19,7 @@ const ProductListPage: React.FC = () => {
     addToCart({
       productId: product.id,
       name: product.name,
-      price: parseFloat(product.price),
+      retailPrice: parseFloat(product.price),
       quantity: 1
     });
 
@@ -49,7 +49,7 @@ const ProductListPage: React.FC = () => {
     return <p className="p-4 text-red-500">⚠️ {error}</p>;
   }
 
-  const cartTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const cartTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
   const cartQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (

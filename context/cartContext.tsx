@@ -4,18 +4,42 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 export interface CartItem {
   productId: number;
   name: string;
-  price: number;
+  retailPrice: number;        // Original catalog price
+  discountPercent?: number;   // Discount as percentage (0-100)
+  discountAmount?: number;    // Discount as fixed amount
+  discountReason?: string;    // Why discount was applied
+  finalPrice: number;         // Actual selling price after discount
   quantity: number;
 }
 
 interface CartContextType {
   cartItems: CartItem[];
-  addToCart: (item: CartItem) => void;
+  addToCart: (item: Omit<CartItem, 'finalPrice'>) => void;
   removeFromCart: (productId: number) => void;
+  updateItemDiscount: (productId: number, discount: {
+    type: 'percent' | 'amount' | 'override',
+    value: number,
+    reason?: string
+  }) => void;
   clearCart: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
+
+// Calculate final price based on discount
+function calculateFinalPrice(item: Omit<CartItem, 'finalPrice'>): number {
+  const { retailPrice, discountPercent, discountAmount } = item;
+
+  if (discountAmount !== undefined && discountAmount > 0) {
+    return Math.max(0, retailPrice - discountAmount);
+  }
+
+  if (discountPercent !== undefined && discountPercent > 0) {
+    return retailPrice * (1 - discountPercent / 100);
+  }
+
+  return retailPrice;
+}
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -40,8 +64,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     console.log('💾 Saved cart to localStorage:', cartItems);
   }, [cartItems]);
 
-  const addToCart = (item: CartItem) => {
-    console.log('➕ Adding to cart:', item);
+  const addToCart = (item: Omit<CartItem, 'finalPrice'>) => {
+    const finalPrice = calculateFinalPrice(item);
+    const fullItem: CartItem = { ...item, finalPrice };
+
+    console.log('➕ Adding to cart:', fullItem);
     setCartItems(prev => {
       const existing = prev.find(ci => ci.productId === item.productId);
       if (existing) {
@@ -53,7 +80,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         );
       } else {
         // Add new item
-        return [...prev, item];
+        return [...prev, fullItem];
       }
     });
   };
@@ -63,6 +90,47 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     setCartItems(prev => prev.filter(ci => ci.productId !== productId));
   };
 
+  const updateItemDiscount = (
+    productId: number,
+    discount: { type: 'percent' | 'amount' | 'override', value: number, reason?: string }
+  ) => {
+    console.log('💰 Updating discount for', productId, discount);
+
+    setCartItems(prev => prev.map(item => {
+      if (item.productId !== productId) return item;
+
+      let updated: Omit<CartItem, 'finalPrice'>;
+
+      if (discount.type === 'percent') {
+        updated = {
+          ...item,
+          discountPercent: discount.value,
+          discountAmount: undefined,
+          discountReason: discount.reason
+        };
+      } else if (discount.type === 'amount') {
+        updated = {
+          ...item,
+          discountPercent: undefined,
+          discountAmount: discount.value,
+          discountReason: discount.reason
+        };
+      } else { // override
+        updated = {
+          ...item,
+          discountPercent: undefined,
+          discountAmount: item.retailPrice - discount.value,
+          discountReason: discount.reason || 'Price Override'
+        };
+      }
+
+      return {
+        ...updated,
+        finalPrice: calculateFinalPrice(updated)
+      };
+    }));
+  };
+
   const clearCart = () => {
     console.log('🗑️ Clearing cart');
     setCartItems([]);
@@ -70,7 +138,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, clearCart }}>
+    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateItemDiscount, clearCart }}>
       {children}
     </CartContext.Provider>
   );
