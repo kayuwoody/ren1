@@ -66,16 +66,56 @@ export function initDatabase() {
     );
   `);
 
-  // Add new columns to existing ProductRecipe table if they don't exist
+  // Migration: Update existing ProductRecipe table to support product links
+  // Check if we need to migrate (old schema has NOT NULL on materialId)
   try {
-    db.exec(`ALTER TABLE ProductRecipe ADD COLUMN itemType TEXT NOT NULL DEFAULT 'material'`);
+    // Try to get table info
+    const tableInfo = db.prepare("PRAGMA table_info(ProductRecipe)").all() as any[];
+    const hasItemType = tableInfo.some((col: any) => col.name === 'itemType');
+    const materialIdColumn = tableInfo.find((col: any) => col.name === 'materialId');
+
+    // If table exists but doesn't have new columns, or materialId is NOT NULL, migrate
+    if (tableInfo.length > 0 && (!hasItemType || (materialIdColumn && materialIdColumn.notnull === 1))) {
+      console.log('🔄 Migrating ProductRecipe table to support product links...');
+
+      // Rename old table
+      db.exec(`ALTER TABLE ProductRecipe RENAME TO ProductRecipe_old`);
+
+      // Create new table with correct schema
+      db.exec(`
+        CREATE TABLE ProductRecipe (
+          id TEXT PRIMARY KEY,
+          productId TEXT NOT NULL,
+          itemType TEXT NOT NULL DEFAULT 'material',
+          materialId TEXT,
+          linkedProductId TEXT,
+          quantity REAL NOT NULL,
+          unit TEXT NOT NULL,
+          calculatedCost REAL NOT NULL,
+          isOptional INTEGER NOT NULL DEFAULT 0,
+          sortOrder INTEGER NOT NULL DEFAULT 0,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (productId) REFERENCES Product(id) ON DELETE CASCADE,
+          FOREIGN KEY (materialId) REFERENCES Material(id),
+          FOREIGN KEY (linkedProductId) REFERENCES Product(id)
+        )
+      `);
+
+      // Copy data from old table
+      db.exec(`
+        INSERT INTO ProductRecipe (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, sortOrder, createdAt)
+        SELECT id, productId, 'material', materialId, NULL, quantity, unit, calculatedCost,
+               COALESCE(isOptional, 0), COALESCE(sortOrder, 0), createdAt
+        FROM ProductRecipe_old
+      `);
+
+      // Drop old table
+      db.exec(`DROP TABLE ProductRecipe_old`);
+
+      console.log('✅ ProductRecipe table migration complete');
+    }
   } catch (e) {
-    // Column already exists
-  }
-  try {
-    db.exec(`ALTER TABLE ProductRecipe ADD COLUMN linkedProductId TEXT`);
-  } catch (e) {
-    // Column already exists
+    // Table doesn't exist yet, or migration already done
   }
 
   // Material Price History (audit trail for cost changes)
