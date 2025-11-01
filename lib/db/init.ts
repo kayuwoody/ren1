@@ -51,7 +51,9 @@ export function initDatabase() {
     CREATE TABLE IF NOT EXISTS ProductRecipe (
       id TEXT PRIMARY KEY,
       productId TEXT NOT NULL,
-      materialId TEXT NOT NULL,
+      itemType TEXT NOT NULL DEFAULT 'material',
+      materialId TEXT,
+      linkedProductId TEXT,
       quantity REAL NOT NULL,
       unit TEXT NOT NULL,
       calculatedCost REAL NOT NULL,
@@ -59,9 +61,22 @@ export function initDatabase() {
       sortOrder INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (productId) REFERENCES Product(id) ON DELETE CASCADE,
-      FOREIGN KEY (materialId) REFERENCES Material(id)
+      FOREIGN KEY (materialId) REFERENCES Material(id),
+      FOREIGN KEY (linkedProductId) REFERENCES Product(id)
     );
   `);
+
+  // Add new columns to existing ProductRecipe table if they don't exist
+  try {
+    db.exec(`ALTER TABLE ProductRecipe ADD COLUMN itemType TEXT NOT NULL DEFAULT 'material'`);
+  } catch (e) {
+    // Column already exists
+  }
+  try {
+    db.exec(`ALTER TABLE ProductRecipe ADD COLUMN linkedProductId TEXT`);
+  } catch (e) {
+    // Column already exists
+  }
 
   // Material Price History (audit trail for cost changes)
   db.exec(`

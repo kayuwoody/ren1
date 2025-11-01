@@ -8,9 +8,13 @@ initDatabase();
 export interface ProductRecipeItem {
   id: string;
   productId: string;
-  materialId: string;
+  itemType: 'material' | 'product';
+  materialId?: string;
+  linkedProductId?: string;
   materialName?: string; // populated in queries
   materialCategory?: string; // populated in queries
+  linkedProductName?: string; // populated in queries for linked products
+  linkedProductSku?: string; // populated in queries for linked products
   purchaseUnit?: string; // populated in queries
   costPerUnit?: number; // populated in queries
   quantity: number;
@@ -26,7 +30,9 @@ export interface ProductRecipeItem {
  */
 export function addRecipeItem(item: {
   productId: string;
-  materialId: string;
+  itemType?: 'material' | 'product';
+  materialId?: string;
+  linkedProductId?: string;
   quantity: number;
   unit: string;
   isOptional?: boolean;
@@ -34,25 +40,45 @@ export function addRecipeItem(item: {
 }): ProductRecipeItem {
   const id = uuidv4();
   const now = new Date().toISOString();
+  const itemType = item.itemType || 'material';
 
-  // Get material to calculate cost
-  const material = getMaterial(item.materialId);
-  if (!material) {
-    throw new Error(`Material ${item.materialId} not found`);
+  let calculatedCost = 0;
+
+  if (itemType === 'material') {
+    if (!item.materialId) {
+      throw new Error('materialId is required for material items');
+    }
+    // Get material to calculate cost
+    const material = getMaterial(item.materialId);
+    if (!material) {
+      throw new Error(`Material ${item.materialId} not found`);
+    }
+    calculatedCost = item.quantity * material.costPerUnit;
+  } else if (itemType === 'product') {
+    if (!item.linkedProductId) {
+      throw new Error('linkedProductId is required for product items');
+    }
+    // Get linked product to calculate cost
+    const { getProduct } = require('./productService');
+    const linkedProduct = getProduct(item.linkedProductId);
+    if (!linkedProduct) {
+      throw new Error(`Linked product ${item.linkedProductId} not found`);
+    }
+    calculatedCost = item.quantity * linkedProduct.unitCost;
   }
-
-  const calculatedCost = item.quantity * material.costPerUnit;
 
   const stmt = db.prepare(`
     INSERT INTO ProductRecipe
-    (id, productId, materialId, quantity, unit, calculatedCost, isOptional, sortOrder, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, sortOrder, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
     id,
     item.productId,
-    item.materialId,
+    itemType,
+    item.materialId || null,
+    item.linkedProductId || null,
     item.quantity,
     item.unit,
     calculatedCost,
@@ -76,9 +102,13 @@ export function getRecipeItem(id: string): ProductRecipeItem | undefined {
            m.name as materialName,
            m.category as materialCategory,
            m.purchaseUnit as purchaseUnit,
-           m.costPerUnit as costPerUnit
+           m.costPerUnit as costPerUnit,
+           p.name as linkedProductName,
+           p.sku as linkedProductSku,
+           p.unitCost as linkedProductCost
     FROM ProductRecipe pr
-    JOIN Material m ON pr.materialId = m.id
+    LEFT JOIN Material m ON pr.materialId = m.id
+    LEFT JOIN Product p ON pr.linkedProductId = p.id
     WHERE pr.id = ?
   `);
   const row = stmt.get(id) as any;
@@ -87,11 +117,15 @@ export function getRecipeItem(id: string): ProductRecipeItem | undefined {
   return {
     id: row.id,
     productId: row.productId,
+    itemType: row.itemType || 'material',
     materialId: row.materialId,
+    linkedProductId: row.linkedProductId,
     materialName: row.materialName,
     materialCategory: row.materialCategory,
+    linkedProductName: row.linkedProductName,
+    linkedProductSku: row.linkedProductSku,
     purchaseUnit: row.purchaseUnit,
-    costPerUnit: row.costPerUnit,
+    costPerUnit: row.costPerUnit || row.linkedProductCost,
     quantity: row.quantity,
     unit: row.unit,
     calculatedCost: row.calculatedCost,
@@ -110,9 +144,13 @@ export function getProductRecipe(productId: string): ProductRecipeItem[] {
            m.name as materialName,
            m.category as materialCategory,
            m.purchaseUnit as purchaseUnit,
-           m.costPerUnit as costPerUnit
+           m.costPerUnit as costPerUnit,
+           p.name as linkedProductName,
+           p.sku as linkedProductSku,
+           p.unitCost as linkedProductCost
     FROM ProductRecipe pr
-    JOIN Material m ON pr.materialId = m.id
+    LEFT JOIN Material m ON pr.materialId = m.id
+    LEFT JOIN Product p ON pr.linkedProductId = p.id
     WHERE pr.productId = ?
     ORDER BY pr.sortOrder, pr.createdAt
   `);
@@ -121,11 +159,15 @@ export function getProductRecipe(productId: string): ProductRecipeItem[] {
   return rows.map(row => ({
     id: row.id,
     productId: row.productId,
+    itemType: row.itemType || 'material',
     materialId: row.materialId,
+    linkedProductId: row.linkedProductId,
     materialName: row.materialName,
     materialCategory: row.materialCategory,
+    linkedProductName: row.linkedProductName,
+    linkedProductSku: row.linkedProductSku,
     purchaseUnit: row.purchaseUnit,
-    costPerUnit: row.costPerUnit,
+    costPerUnit: row.costPerUnit || row.linkedProductCost,
     quantity: row.quantity,
     unit: row.unit,
     calculatedCost: row.calculatedCost,
@@ -152,12 +194,22 @@ export function updateRecipeItem(
   }
 
   const quantity = updates.quantity ?? existing.quantity;
-  const material = getMaterial(existing.materialId);
-  if (!material) {
-    throw new Error(`Material ${existing.materialId} not found`);
-  }
+  let calculatedCost = 0;
 
-  const calculatedCost = quantity * material.costPerUnit;
+  if (existing.itemType === 'material') {
+    const material = getMaterial(existing.materialId!);
+    if (!material) {
+      throw new Error(`Material ${existing.materialId} not found`);
+    }
+    calculatedCost = quantity * material.costPerUnit;
+  } else if (existing.itemType === 'product') {
+    const { getProduct } = require('./productService');
+    const linkedProduct = getProduct(existing.linkedProductId!);
+    if (!linkedProduct) {
+      throw new Error(`Linked product ${existing.linkedProductId} not found`);
+    }
+    calculatedCost = quantity * linkedProduct.unitCost;
+  }
 
   const stmt = db.prepare(`
     UPDATE ProductRecipe
@@ -218,7 +270,9 @@ export function deleteProductRecipe(productId: string): boolean {
 export function setProductRecipe(
   productId: string,
   items: Array<{
-    materialId: string;
+    itemType?: 'material' | 'product';
+    materialId?: string;
+    linkedProductId?: string;
     quantity: number;
     unit: string;
     isOptional?: boolean;
@@ -232,7 +286,9 @@ export function setProductRecipe(
   items.forEach((item, index) => {
     const recipeItem = addRecipeItem({
       productId,
+      itemType: item.itemType || 'material',
       materialId: item.materialId,
+      linkedProductId: item.linkedProductId,
       quantity: item.quantity,
       unit: item.unit,
       isOptional: item.isOptional,
