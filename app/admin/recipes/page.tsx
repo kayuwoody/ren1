@@ -21,9 +21,13 @@ interface Material {
 }
 
 interface RecipeItem {
-  materialId: string;
+  itemType?: 'material' | 'product';
+  materialId?: string;
+  linkedProductId?: string;
   materialName?: string;
   materialCategory?: string;
+  linkedProductName?: string;
+  linkedProductSku?: string;
   purchaseUnit?: string;
   costPerUnit?: number;
   quantity: number;
@@ -123,7 +127,9 @@ export default function RecipesPage() {
     setSaving(true);
     try {
       const items = recipe.items.map(item => ({
+        itemType: item.itemType || 'material',
         materialId: item.materialId,
+        linkedProductId: item.linkedProductId,
         quantity: item.quantity,
         unit: item.unit,
         isOptional: item.isOptional || false,
@@ -150,23 +156,43 @@ export default function RecipesPage() {
     }
   }
 
-  function addIngredient(materialId: string, quantity: number, isOptional: boolean) {
+  function addItem(itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean) {
     if (!selectedProduct) return;
 
-    const material = materials.find(m => m.id === materialId);
-    if (!material) return;
+    let newItem: RecipeItem;
 
-    const newItem: RecipeItem = {
-      materialId,
-      materialName: material.name,
-      materialCategory: material.category,
-      purchaseUnit: material.purchaseUnit,
-      costPerUnit: material.costPerUnit,
-      quantity,
-      unit: material.purchaseUnit,
-      calculatedCost: quantity * material.costPerUnit,
-      isOptional,
-    };
+    if (itemType === 'material') {
+      const material = materials.find(m => m.id === itemId);
+      if (!material) return;
+
+      newItem = {
+        itemType: 'material',
+        materialId: itemId,
+        materialName: material.name,
+        materialCategory: material.category,
+        purchaseUnit: material.purchaseUnit,
+        costPerUnit: material.costPerUnit,
+        quantity,
+        unit: material.purchaseUnit,
+        calculatedCost: quantity * material.costPerUnit,
+        isOptional,
+      };
+    } else {
+      const product = products.find(p => p.id === itemId);
+      if (!product) return;
+
+      newItem = {
+        itemType: 'product',
+        linkedProductId: itemId,
+        linkedProductName: product.name,
+        linkedProductSku: product.sku,
+        costPerUnit: product.unitCost,
+        quantity,
+        unit: 'unit',
+        calculatedCost: quantity * product.unitCost,
+        isOptional,
+      };
+    }
 
     // Initialize recipe if it doesn't exist
     if (!recipe) {
@@ -209,10 +235,19 @@ export default function RecipesPage() {
     if (!recipe || !recipe.items) return;
 
     const oldItem = recipe.items[index];
-    const material = materials.find(m => m.id === oldItem.materialId);
-    if (!material) return;
+    let costPerUnit = 0;
 
-    const newCost = newQuantity * material.costPerUnit;
+    if (oldItem.itemType === 'product') {
+      const product = products.find(p => p.id === oldItem.linkedProductId);
+      if (!product) return;
+      costPerUnit = product.unitCost;
+    } else {
+      const material = materials.find(m => m.id === oldItem.materialId);
+      if (!material) return;
+      costPerUnit = material.costPerUnit;
+    }
+
+    const newCost = newQuantity * costPerUnit;
     const oldCost = oldItem.calculatedCost || 0;
 
     const newItems = [...recipe.items];
@@ -363,7 +398,7 @@ export default function RecipesPage() {
                     className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
                   >
                     <Plus className="w-4 h-4" />
-                    Add Ingredient
+                    Add Item
                   </button>
                 </div>
 
@@ -375,8 +410,18 @@ export default function RecipesPage() {
                       {recipe.items.map((item, index) => (
                         <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                           <div className="flex-1">
-                            <div className="font-medium">{item.materialName}</div>
-                            <div className="text-sm text-gray-500 capitalize">{item.materialCategory}</div>
+                            <div className="font-medium">
+                              {item.itemType === 'product' ? item.linkedProductName : item.materialName}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {item.itemType === 'product' ? (
+                                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">
+                                  Product: {item.linkedProductSku}
+                                </span>
+                              ) : (
+                                <span className="capitalize">{item.materialCategory}</span>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <input
@@ -448,92 +493,179 @@ export default function RecipesPage() {
 
         {/* Add Ingredient Modal */}
         {showAddIngredient && (
-          <AddIngredientModal
+          <AddItemModal
             materials={materials}
+            products={products.filter(p => p.id !== selectedProduct?.id)}
             onClose={() => setShowAddIngredient(false)}
-            onAdd={addIngredient}
+            onAdd={addItem}
           />
         )}
     </div>
   );
 }
 
-// Add Ingredient Modal
-function AddIngredientModal({
+// Add Item Modal (Materials or Products)
+function AddItemModal({
   materials,
+  products,
   onClose,
   onAdd,
 }: {
   materials: Material[];
+  products: Product[];
   onClose: () => void;
-  onAdd: (materialId: string, quantity: number, isOptional: boolean) => void;
+  onAdd: (itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean) => void;
 }) {
+  const [itemType, setItemType] = useState<'material' | 'product'>('material');
   const [selectedMaterial, setSelectedMaterial] = useState('');
-  const [quantity, setQuantity] = useState<string>('');
+  const [selectedProduct, setSelectedProduct] = useState('');
+  const [quantity, setQuantity] = useState<string>('1');
   const [isOptional, setIsOptional] = useState(false);
   const [filter, setFilter] = useState('');
 
   const material = materials.find(m => m.id === selectedMaterial);
-  const cost = material && quantity ? parseFloat(quantity) * material.costPerUnit : 0;
+  const product = products.find(p => p.id === selectedProduct);
+
+  const cost = itemType === 'material'
+    ? (material && quantity ? parseFloat(quantity) * material.costPerUnit : 0)
+    : (product && quantity ? parseFloat(quantity) * product.unitCost : 0);
 
   const filteredMaterials = materials.filter(m =>
     m.name.toLowerCase().includes(filter.toLowerCase()) ||
     m.category.toLowerCase().includes(filter.toLowerCase())
   );
 
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(filter.toLowerCase()) ||
+    p.sku.toLowerCase().includes(filter.toLowerCase())
+  );
+
+  function handleTabChange(newType: 'material' | 'product') {
+    setItemType(newType);
+    setFilter('');
+    setSelectedMaterial('');
+    setSelectedProduct('');
+  }
+
   function handleAdd() {
-    if (!selectedMaterial || !quantity) {
-      alert('Please select a material and enter quantity');
+    const itemId = itemType === 'material' ? selectedMaterial : selectedProduct;
+
+    if (!itemId || !quantity) {
+      alert(`Please select a ${itemType} and enter quantity`);
       return;
     }
 
-    onAdd(selectedMaterial, parseFloat(quantity), isOptional);
+    onAdd(itemType, itemId, parseFloat(quantity), isOptional);
   }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b">
-          <h2 className="text-2xl font-bold">Add Ingredient</h2>
+          <h2 className="text-2xl font-bold">Add to Recipe</h2>
+        </div>
+
+        {/* Item Type Tabs */}
+        <div className="flex border-b">
+          <button
+            onClick={() => handleTabChange('material')}
+            className={`flex-1 px-6 py-3 font-medium transition ${
+              itemType === 'material'
+                ? 'bg-orange-50 text-orange-700 border-b-2 border-orange-600'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <span>Material / Ingredient</span>
+            <span className="ml-2 text-xs opacity-60">({materials.length})</span>
+          </button>
+          <button
+            onClick={() => handleTabChange('product')}
+            className={`flex-1 px-6 py-3 font-medium transition ${
+              itemType === 'product'
+                ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <span>Linked Product</span>
+            <span className="ml-2 text-xs opacity-60">({products.length})</span>
+          </button>
         </div>
 
         <div className="p-6 space-y-4">
+          {/* Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Search Materials
+              Search {itemType === 'material' ? 'Materials' : 'Products'}
             </label>
             <input
               type="text"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg"
-              placeholder="Search by name or category..."
+              placeholder={itemType === 'material' ? 'Search by name or category...' : 'Search by name or SKU...'}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Material *
-            </label>
-            <select
-              value={selectedMaterial}
-              onChange={(e) => setSelectedMaterial(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
-              required
-              size={8}
-            >
-              <option value="">-- Select a material --</option>
-              {filteredMaterials.map((mat) => (
-                <option key={mat.id} value={mat.id}>
-                  {mat.name} ({mat.category}) - RM {mat.costPerUnit.toFixed(4)}/{mat.purchaseUnit}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Material Selection */}
+          {itemType === 'material' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Material *
+              </label>
+              <select
+                value={selectedMaterial}
+                onChange={(e) => setSelectedMaterial(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+                required
+                size={8}
+              >
+                <option value="">-- Select a material --</option>
+                {filteredMaterials.map((mat) => (
+                  <option key={mat.id} value={mat.id}>
+                    {mat.name} ({mat.category}) - RM {mat.costPerUnit.toFixed(4)}/{mat.purchaseUnit}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
+          {/* Product Selection */}
+          {itemType === 'product' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Product *
+              </label>
+              {filteredProducts.length === 0 ? (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    {products.length === 0
+                      ? 'No products available. Please sync products from WooCommerce first.'
+                      : 'No products match your search.'}
+                  </p>
+                </div>
+              ) : (
+                <select
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  required
+                  size={8}
+                >
+                  <option value="">-- Select a product --</option>
+                  {filteredProducts.map((prod) => (
+                    <option key={prod.id} value={prod.id}>
+                      {prod.name} ({prod.sku}) - RM {prod.unitCost.toFixed(2)}/unit
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* Quantity */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Quantity * {material && `(${material.purchaseUnit})`}
+              Quantity * {itemType === 'material' && material ? `(${material.purchaseUnit})` : ''}
             </label>
             <input
               type="number"
@@ -541,11 +673,16 @@ function AddIngredientModal({
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg"
-              placeholder={material ? `e.g., 12 ${material.purchaseUnit}` : 'Enter quantity'}
+              placeholder={
+                itemType === 'material' && material
+                  ? `e.g., 12 ${material.purchaseUnit}`
+                  : 'Enter quantity'
+              }
               required
             />
           </div>
 
+          {/* Optional Checkbox */}
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -555,20 +692,28 @@ function AddIngredientModal({
               className="w-4 h-4"
             />
             <label htmlFor="optional" className="text-sm text-gray-700">
-              Optional ingredient (e.g., syrup, extra toppings)
+              Optional {itemType === 'material' ? 'ingredient' : 'add-on'} (e.g., syrup, extra toppings)
             </label>
           </div>
 
-          {material && quantity && (
+          {/* Cost Preview */}
+          {((itemType === 'material' && material && quantity) || (itemType === 'product' && product && quantity)) && (
             <div className="bg-blue-50 p-4 rounded-lg">
               <p className="text-sm text-gray-700 mb-1">Cost Calculation:</p>
-              <p className="text-lg font-semibold text-blue-900">
-                {quantity} {material.purchaseUnit} × RM {material.costPerUnit.toFixed(4)} = RM {cost.toFixed(4)}
-              </p>
+              {itemType === 'material' && material ? (
+                <p className="text-lg font-semibold text-blue-900">
+                  {quantity} {material.purchaseUnit} × RM {material.costPerUnit.toFixed(4)} = RM {cost.toFixed(4)}
+                </p>
+              ) : itemType === 'product' && product ? (
+                <p className="text-lg font-semibold text-blue-900">
+                  {quantity} unit × RM {product.unitCost.toFixed(2)} = RM {cost.toFixed(2)}
+                </p>
+              ) : null}
             </div>
           )}
         </div>
 
+        {/* Actions */}
         <div className="p-6 border-t flex items-center justify-end gap-3">
           <button
             onClick={onClose}
