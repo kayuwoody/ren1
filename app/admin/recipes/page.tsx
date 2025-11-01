@@ -519,7 +519,7 @@ function AddItemModal({
   const [itemType, setItemType] = useState<'material' | 'product'>('material');
   const [selectedMaterial, setSelectedMaterial] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
-  const [quantity, setQuantity] = useState<string>('');
+  const [quantity, setQuantity] = useState<string>('1');
   const [isOptional, setIsOptional] = useState(false);
   const [filter, setFilter] = useState('');
 
@@ -539,6 +539,13 @@ function AddItemModal({
     p.name.toLowerCase().includes(filter.toLowerCase()) ||
     p.sku.toLowerCase().includes(filter.toLowerCase())
   );
+
+  function handleTabChange(newType: 'material' | 'product') {
+    setItemType(newType);
+    setFilter('');
+    setSelectedMaterial('');
+    setSelectedProduct('');
+  }
 
   function handleAdd() {
     const itemId = itemType === 'material' ? selectedMaterial : selectedProduct;
@@ -561,24 +568,26 @@ function AddItemModal({
         {/* Item Type Tabs */}
         <div className="flex border-b">
           <button
-            onClick={() => setItemType('material')}
+            onClick={() => handleTabChange('material')}
             className={`flex-1 px-6 py-3 font-medium transition ${
               itemType === 'material'
                 ? 'bg-orange-50 text-orange-700 border-b-2 border-orange-600'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            Material / Ingredient
+            <span>Material / Ingredient</span>
+            <span className="ml-2 text-xs opacity-60">({materials.length})</span>
           </button>
           <button
-            onClick={() => setItemType('product')}
+            onClick={() => handleTabChange('product')}
             className={`flex-1 px-6 py-3 font-medium transition ${
               itemType === 'product'
                 ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            Linked Product
+            <span>Linked Product</span>
+            <span className="ml-2 text-xs opacity-60">({products.length})</span>
           </button>
         </div>
 
@@ -626,20 +635,30 @@ function AddItemModal({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Select Product *
               </label>
-              <select
-                value={selectedProduct}
-                onChange={(e) => setSelectedProduct(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
-                required
-                size={8}
-              >
-                <option value="">-- Select a product --</option>
-                {filteredProducts.map((prod) => (
-                  <option key={prod.id} value={prod.id}>
-                    {prod.name} ({prod.sku}) - RM {prod.unitCost.toFixed(2)}/unit
-                  </option>
-                ))}
-              </select>
+              {filteredProducts.length === 0 ? (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    {products.length === 0
+                      ? 'No products available. Please sync products from WooCommerce first.'
+                      : 'No products match your search.'}
+                  </p>
+                </div>
+              ) : (
+                <select
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  required
+                  size={8}
+                >
+                  <option value="">-- Select a product --</option>
+                  {filteredProducts.map((prod) => (
+                    <option key={prod.id} value={prod.id}>
+                      {prod.name} ({prod.sku}) - RM {prod.unitCost.toFixed(2)}/unit
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
 
