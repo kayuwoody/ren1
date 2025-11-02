@@ -111,6 +111,19 @@ export default function ReceiptPage() {
     minute: '2-digit'
   });
 
+  // Extract discount information from order metadata
+  const getItemMeta = (item: any, key: string) => {
+    return item.meta_data?.find((m: any) => m.key === key)?.value;
+  };
+
+  const getOrderMeta = (key: string) => {
+    return order.meta_data?.find((m: any) => m.key === key)?.value;
+  };
+
+  const retailTotal = parseFloat(getOrderMeta('_retail_total') || order.total);
+  const finalTotal = parseFloat(getOrderMeta('_final_total') || order.total);
+  const totalDiscount = parseFloat(getOrderMeta('_total_discount') || '0');
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-gray-50 p-4">
       <div className="max-w-md mx-auto">
@@ -205,32 +218,85 @@ export default function ReceiptPage() {
                 </tr>
               </thead>
               <tbody>
-                {order.line_items?.map((item: any) => (
-                  <tr key={item.id} className="border-b">
-                    <td className="py-2">{item.name}</td>
-                    <td className="text-center">{item.quantity}</td>
-                    <td className="text-right">RM {parseFloat(item.price).toFixed(2)}</td>
-                    <td className="text-right font-semibold">RM {item.total}</td>
-                  </tr>
-                ))}
+                {order.line_items?.map((item: any) => {
+                  const retailPrice = parseFloat(getItemMeta(item, '_retail_price') || item.price);
+                  const finalPrice = parseFloat(getItemMeta(item, '_final_price') || item.price);
+                  const discountReason = getItemMeta(item, '_discount_reason');
+                  const hasDiscount = retailPrice > finalPrice;
+                  const itemRetailTotal = retailPrice * item.quantity;
+                  const itemFinalTotal = finalPrice * item.quantity;
+
+                  return (
+                    <tr key={item.id} className="border-b">
+                      <td className="py-3">
+                        <div>
+                          <div className="font-medium">{item.name}</div>
+                          {discountReason && (
+                            <div className="text-xs text-green-600 mt-1">• {discountReason}</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-center">{item.quantity}</td>
+                      <td className="text-right">
+                        {hasDiscount ? (
+                          <div>
+                            <div className="text-xs text-gray-400 line-through">RM {retailPrice.toFixed(2)}</div>
+                            <div className="text-green-600 font-medium">RM {finalPrice.toFixed(2)}</div>
+                          </div>
+                        ) : (
+                          <div>RM {finalPrice.toFixed(2)}</div>
+                        )}
+                      </td>
+                      <td className="text-right font-semibold">
+                        {hasDiscount ? (
+                          <div>
+                            <div className="text-xs text-gray-400 line-through">RM {itemRetailTotal.toFixed(2)}</div>
+                            <div className="text-green-600">RM {itemFinalTotal.toFixed(2)}</div>
+                          </div>
+                        ) : (
+                          <div>RM {itemFinalTotal.toFixed(2)}</div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Totals */}
           <div className="border-t pt-4 space-y-2">
+            {totalDiscount > 0 && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Retail Total:</span>
+                  <span className="line-through text-gray-500">RM {retailTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm bg-green-50 px-2 py-1 rounded">
+                  <span className="text-green-700 font-semibold">Discount:</span>
+                  <span className="text-green-700 font-semibold">-RM {totalDiscount.toFixed(2)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Subtotal:</span>
-              <span>RM {order.total}</span>
+              <span>RM {finalTotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Tax:</span>
               <span>RM 0.00</span>
             </div>
             <div className="flex justify-between text-lg font-bold border-t pt-2 mt-2">
-              <span>Total:</span>
-              <span>RM {order.total}</span>
+              <span>Total Paid:</span>
+              <span className="text-green-700">RM {finalTotal.toFixed(2)}</span>
             </div>
+            {totalDiscount > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
+                <p className="text-center text-amber-900 font-semibold text-sm">
+                  🎉 You saved RM {totalDiscount.toFixed(2)}!
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Payment Status */}
