@@ -8,6 +8,7 @@ export type WooLineItem = {
   product_id: number;
   quantity: number;
   variation_id?: number;
+  meta_data?: WooMeta[];  // Line item metadata (e.g., discount info)
 };
 export type WooOrder = any; // replace with full Woo order type if desired
 
@@ -39,12 +40,18 @@ function buildCreatePayload(p: NewOrderPayload) {
     line_items,
   };
 
+  // Always include metadata if present
+  let finalMetaData = [...meta_data];
+
   if (userId) {
     payload.customer_id = userId;
   } else if (guestId) {
-    payload.meta_data = [...meta_data, { key: 'guestId', value: guestId }];
-  } else if (meta_data.length) {
-    payload.meta_data = meta_data;
+    finalMetaData.push({ key: 'guestId', value: guestId });
+  }
+
+  // Always add meta_data if we have any
+  if (finalMetaData.length > 0) {
+    payload.meta_data = finalMetaData;
   }
 
   if (status) payload.status = status;

@@ -45,16 +45,28 @@ export default function PaymentPage() {
       const userId = userIdStr ? Number(userIdStr) : undefined;
       const guestId = userId ? undefined : getGuestId();
 
-      // Build line items payload
+      // Build line items payload with discount data captured at point of sale
       const lineItems = cartItems.map((i: any) => ({
         product_id: i.productId,
         quantity: i.quantity,
+        meta_data: [
+          { key: '_retail_price', value: i.retailPrice.toString() },
+          { key: '_final_price', value: i.finalPrice.toString() },
+          { key: '_discount_percent', value: i.discountPercent ? i.discountPercent.toString() : '' },
+          { key: '_discount_amount', value: i.discountAmount ? i.discountAmount.toString() : '' },
+          { key: '_discount_reason', value: i.discountReason || '' },
+        ],
       }));
 
-      // Create order
+      // Create order with discount metadata
       const payload: any = {
         line_items: lineItems,
         ...(userId ? { userId } : { guestId }),
+        meta_data: [
+          { key: '_retail_total', value: retailTotal.toString() },
+          { key: '_final_total', value: finalTotal.toString() },
+          { key: '_total_discount', value: totalDiscount.toString() },
+        ],
       };
 
       const createRes = await fetch("/api/create-order", {
