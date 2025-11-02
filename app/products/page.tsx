@@ -1,6 +1,8 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { useCart } from "@/context/cartContext";
+import { Shield } from "lucide-react";
+import Link from "next/link";
 
 interface Product {
   id: number;
@@ -13,13 +15,20 @@ const ProductListPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [isStaffMode, setIsStaffMode] = useState(false);
   const { addToCart, cartItems } = useCart();
+
+  // Check if staff is logged in
+  useEffect(() => {
+    const authToken = sessionStorage.getItem('admin_auth');
+    setIsStaffMode(authToken === 'authenticated');
+  }, []);
 
   const handleAddToCart = (product: Product) => {
     addToCart({
       productId: product.id,
       name: product.name,
-      price: parseFloat(product.price),
+      retailPrice: parseFloat(product.price),
       quantity: 1
     });
 
@@ -49,11 +58,32 @@ const ProductListPage: React.FC = () => {
     return <p className="p-4 text-red-500">⚠️ {error}</p>;
   }
 
-  const cartTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const cartTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
   const cartQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div className="max-w-4xl mx-auto p-4 pb-24">
+      {/* Staff Mode Banner */}
+      {isStaffMode && (
+        <div className="mb-6 bg-blue-600 text-white rounded-lg p-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="w-6 h-6" />
+              <div>
+                <p className="font-semibold">Staff Mode Active</p>
+                <p className="text-sm text-blue-100">Discounts can be applied at checkout</p>
+              </div>
+            </div>
+            <Link
+              href="/admin/pos"
+              className="px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition font-medium text-sm"
+            >
+              Back to POS
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Toast notification */}
       {toast && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-bounce">
