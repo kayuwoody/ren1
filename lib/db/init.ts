@@ -198,6 +198,38 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_order_item_sold_at ON OrderItem(soldAt);
   `);
 
+  // Inventory Consumption tracking (material usage per sale)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS InventoryConsumption (
+      id TEXT PRIMARY KEY,
+      orderId TEXT NOT NULL,
+      orderItemId TEXT,
+      productId TEXT NOT NULL,
+      productName TEXT NOT NULL,
+      quantitySold REAL NOT NULL,
+      itemType TEXT NOT NULL DEFAULT 'material',
+      materialId TEXT,
+      linkedProductId TEXT,
+      materialName TEXT,
+      linkedProductName TEXT,
+      quantityConsumed REAL NOT NULL,
+      unit TEXT NOT NULL,
+      costPerUnit REAL NOT NULL,
+      totalCost REAL NOT NULL,
+      consumedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (materialId) REFERENCES Material(id),
+      FOREIGN KEY (linkedProductId) REFERENCES Product(id)
+    );
+  `);
+
+  // Indexes for inventory consumption
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_consumption_order ON InventoryConsumption(orderId);
+    CREATE INDEX IF NOT EXISTS idx_consumption_product ON InventoryConsumption(productId);
+    CREATE INDEX IF NOT EXISTS idx_consumption_material ON InventoryConsumption(materialId);
+    CREATE INDEX IF NOT EXISTS idx_consumption_date ON InventoryConsumption(consumedAt);
+  `);
+
   console.log('✅ Database schema initialized');
 }
 

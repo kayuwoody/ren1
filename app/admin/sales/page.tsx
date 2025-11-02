@@ -9,8 +9,11 @@ interface SalesReport {
   totalOrders: number;
   averageOrderValue: number;
   totalDiscounts: number;
-  revenueByDay: { date: string; revenue: number; orders: number; discounts: number }[];
-  topProducts: { name: string; quantity: number; revenue: number }[];
+  totalCOGS: number;
+  totalProfit: number;
+  overallMargin: number;
+  revenueByDay: { date: string; revenue: number; orders: number; discounts: number; cogs: number; profit: number; margin: number }[];
+  topProducts: { name: string; quantity: number; revenue: number; cogs: number; profit: number; margin: number }[];
   ordersByStatus: { status: string; count: number }[];
 }
 
@@ -188,7 +191,7 @@ export default function SalesReportPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Row 1: Revenue & Orders */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-3">
@@ -206,12 +209,60 @@ export default function SalesReportPage() {
 
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-3">
+              <div className="p-3 bg-red-100 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Total COGS</p>
+                <p className="text-2xl font-bold text-red-600">
+                  RM {report.totalCOGS.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-emerald-100 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Gross Profit</p>
+                <p className="text-2xl font-bold text-emerald-600">
+                  RM {report.totalProfit.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3">
               <div className="p-3 bg-blue-100 rounded-lg">
-                <ShoppingCart className="w-6 h-6 text-blue-600" />
+                <Percent className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Profit Margin</p>
+                <p className={`text-2xl font-bold ${
+                  report.overallMargin >= 60 ? 'text-green-600' :
+                  report.overallMargin >= 40 ? 'text-yellow-600' : 'text-red-600'
+                }`}>
+                  {report.overallMargin.toFixed(1)}%
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Cards - Row 2: Secondary Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <ShoppingCart className="w-6 h-6 text-purple-600" />
               </div>
               <div>
                 <p className="text-sm text-gray-500">Total Orders</p>
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-purple-600">
                   {report.totalOrders}
                 </p>
               </div>
@@ -220,12 +271,12 @@ export default function SalesReportPage() {
 
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <TrendingUp className="w-6 h-6 text-purple-600" />
+              <div className="p-3 bg-indigo-100 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-indigo-600" />
               </div>
               <div>
                 <p className="text-sm text-gray-500">Avg Order Value</p>
-                <p className="text-2xl font-bold text-purple-600">
+                <p className="text-2xl font-bold text-indigo-600">
                   RM {report.averageOrderValue.toFixed(2)}
                 </p>
               </div>
@@ -265,8 +316,10 @@ export default function SalesReportPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Orders</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Revenue</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">COGS</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Profit</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Margin</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Discounts</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Net Revenue</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -277,11 +330,22 @@ export default function SalesReportPage() {
                     <td className="px-6 py-4 text-sm text-right font-semibold">
                       RM {day.revenue.toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 text-sm text-right text-orange-600">
-                      -RM {day.discounts.toFixed(2)}
+                    <td className="px-6 py-4 text-sm text-right text-red-600">
+                      RM {day.cogs.toFixed(2)}
                     </td>
                     <td className="px-6 py-4 text-sm text-right font-bold text-green-600">
-                      RM {(day.revenue).toFixed(2)}
+                      RM {day.profit.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-right">
+                      <span className={`font-semibold ${
+                        day.margin >= 60 ? 'text-green-600' :
+                        day.margin >= 40 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {day.margin.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-right text-orange-600">
+                      -RM {day.discounts.toFixed(2)}
                     </td>
                   </tr>
                 ))}
@@ -300,8 +364,11 @@ export default function SalesReportPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Quantity Sold</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Revenue</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Qty Sold</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Revenue</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">COGS</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Profit</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Margin</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -309,8 +376,22 @@ export default function SalesReportPage() {
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium">{product.name}</td>
                     <td className="px-6 py-4 text-sm text-right">{product.quantity}</td>
-                    <td className="px-6 py-4 text-sm text-right font-semibold text-green-600">
+                    <td className="px-6 py-4 text-sm text-right font-semibold">
                       RM {product.revenue.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-right text-red-600">
+                      RM {product.cogs.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-right font-bold text-green-600">
+                      RM {product.profit.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-right">
+                      <span className={`font-semibold ${
+                        product.margin >= 60 ? 'text-green-600' :
+                        product.margin >= 40 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {product.margin.toFixed(1)}%
+                      </span>
                     </td>
                   </tr>
                 ))}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { wcApi } from '@/lib/wooClient';
+import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 
 export async function GET(req: Request) {
   try {
@@ -85,8 +86,9 @@ export async function GET(req: Request) {
     // Calculate statistics
     let totalRevenue = 0;
     let totalDiscounts = 0;
-    const revenueByDay: Record<string, { revenue: number; orders: number; discounts: number }> = {};
-    const productStats: Record<string, { quantity: number; revenue: number }> = {};
+    let totalCOGS = 0;
+    const revenueByDay: Record<string, { revenue: number; orders: number; discounts: number; cogs: number; profit: number }> = {};
+    const productStats: Record<string, { quantity: number; revenue: number; cogs: number; profit: number }> = {};
     const ordersByStatus: Record<string, number> = {};
 
     console.log('💰 Processing orders for revenue calculation...');
@@ -100,22 +102,34 @@ export async function GET(req: Request) {
         order.meta_data?.find((m: any) => m.key === '_total_discount')?.value || '0'
       );
 
+      // Get COGS from inventory consumption records
+      let orderCOGS = 0;
+      try {
+        const consumptions = getOrderConsumptions(String(order.id));
+        orderCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
+      } catch (err) {
+        console.warn(`⚠️  Could not fetch COGS for order ${order.id}`);
+      }
+
       // Debug logging for discount tracking
       if (discount > 0) {
-        console.log(`Order #${order.id}: Discount = RM ${discount.toFixed(2)}, Final Total = RM ${finalTotal.toFixed(2)}`);
+        console.log(`Order #${order.id}: Discount = RM ${discount.toFixed(2)}, Final Total = RM ${finalTotal.toFixed(2)}, COGS = RM ${orderCOGS.toFixed(2)}`);
       }
 
       totalRevenue += finalTotal;
       totalDiscounts += discount;
+      totalCOGS += orderCOGS;
 
       // Group by day
       const orderDate = new Date(order.date_created).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
-        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0 };
+        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, cogs: 0, profit: 0 };
       }
       revenueByDay[orderDate].revenue += finalTotal;
       revenueByDay[orderDate].orders += 1;
       revenueByDay[orderDate].discounts += discount;
+      revenueByDay[orderDate].cogs += orderCOGS;
+      revenueByDay[orderDate].profit += (finalTotal - orderCOGS);
 
       // Count by status
       ordersByStatus[order.status] = (ordersByStatus[order.status] || 0) + 1;
@@ -127,11 +141,23 @@ export async function GET(req: Request) {
         );
         const itemRevenue = finalPrice * item.quantity;
 
+        // Get COGS for this specific product from consumptions
+        let itemCOGS = 0;
+        try {
+          const consumptions = getOrderConsumptions(String(order.id));
+          const productConsumptions = consumptions.filter(c => c.productId === String(item.product_id));
+          itemCOGS = productConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
+        } catch (err) {
+          // COGS not available
+        }
+
         if (!productStats[item.name]) {
-          productStats[item.name] = { quantity: 0, revenue: 0 };
+          productStats[item.name] = { quantity: 0, revenue: 0, cogs: 0, profit: 0 };
         }
         productStats[item.name].quantity += item.quantity;
         productStats[item.name].revenue += itemRevenue;
+        productStats[item.name].cogs += itemCOGS;
+        productStats[item.name].profit += (itemRevenue - itemCOGS);
       });
     });
 
@@ -142,6 +168,9 @@ export async function GET(req: Request) {
         revenue: data.revenue,
         orders: data.orders,
         discounts: data.discounts,
+        cogs: data.cogs,
+        profit: data.profit,
+        margin: data.revenue > 0 ? (data.profit / data.revenue) * 100 : 0,
       }))
       .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -151,6 +180,9 @@ export async function GET(req: Request) {
         name,
         quantity: data.quantity,
         revenue: data.revenue,
+        cogs: data.cogs,
+        profit: data.profit,
+        margin: data.revenue > 0 ? (data.profit / data.revenue) * 100 : 0,
       }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10); // Top 10 products
@@ -161,9 +193,15 @@ export async function GET(req: Request) {
       count,
     }));
 
+    const totalProfit = totalRevenue - totalCOGS;
+    const overallMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+
     console.log('📊 Sales Report Summary:', {
       totalOrders: orders.length,
       totalRevenue: totalRevenue.toFixed(2),
+      totalCOGS: totalCOGS.toFixed(2),
+      totalProfit: totalProfit.toFixed(2),
+      overallMargin: overallMargin.toFixed(1) + '%',
       totalDiscounts: totalDiscounts.toFixed(2),
       avgOrderValue: (orders.length > 0 ? totalRevenue / orders.length : 0).toFixed(2),
     });
@@ -173,6 +211,9 @@ export async function GET(req: Request) {
       totalOrders: orders.length,
       averageOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0,
       totalDiscounts,
+      totalCOGS,
+      totalProfit,
+      overallMargin,
       revenueByDay: revenueByDayArray,
       topProducts,
       ordersByStatus: ordersByStatusArray,
