@@ -79,7 +79,7 @@ export default function CheckoutPage() {
   }
 
   function applyQuickDiscount(productId: number, percent: number) {
-    updateItemDiscount(productId, "percent", percent, `${percent}% off`);
+    updateItemDiscount(productId, { type: "percent", value: percent, reason: `${percent}% off` });
   }
 
   function applyCustomDiscount() {
@@ -108,15 +108,13 @@ export default function CheckoutPage() {
 
     updateItemDiscount(
       discountModal.productId,
-      discountType,
-      value,
-      discountReason || undefined
+      { type: discountType, value: value, reason: discountReason || undefined }
     );
     closeDiscountModal();
   }
 
   function removeDiscount(productId: number) {
-    updateItemDiscount(productId, "percent", 0, undefined);
+    updateItemDiscount(productId, { type: "percent", value: 0, reason: undefined });
   }
 
   return (
