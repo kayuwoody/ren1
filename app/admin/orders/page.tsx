@@ -356,8 +356,24 @@ export default function AdminOrdersPage() {
                       <td className="px-6 py-4 text-sm">
                         {order.line_items.length} item{order.line_items.length > 1 ? 's' : ''}
                       </td>
-                      <td className="px-6 py-4 font-semibold">
-                        RM {order.total}
+                      <td className="px-6 py-4">
+                        {(() => {
+                          const finalTotal = order.meta_data?.find((m: any) => m.key === '_final_total')?.value;
+                          const retailTotal = order.meta_data?.find((m: any) => m.key === '_retail_total')?.value;
+                          const totalDiscount = order.meta_data?.find((m: any) => m.key === '_total_discount')?.value;
+                          const hasDiscount = totalDiscount && parseFloat(totalDiscount) > 0;
+
+                          return (
+                            <div className="text-right">
+                              {hasDiscount && (
+                                <div className="text-xs text-gray-400 line-through">RM {parseFloat(retailTotal).toFixed(2)}</div>
+                              )}
+                              <div className={`font-semibold ${hasDiscount ? 'text-green-600' : ''}`}>
+                                RM {finalTotal ? parseFloat(finalTotal).toFixed(2) : order.total}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-4">
                         {getStatusBadge(order.status)}
