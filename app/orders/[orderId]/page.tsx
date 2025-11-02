@@ -23,6 +23,10 @@ export default function OrderDetailPage() {
   const getMeta = (key: string): string | undefined =>
     order?.meta_data?.find((m: WooMeta) => m.key === key)?.value;
 
+  // Helper to read line item meta
+  const getItemMeta = (item: any, key: string): string | undefined =>
+    item.meta_data?.find((m: any) => m.key === key)?.value;
+
   // 1) Fetch & poll
   useEffect(() => {
     let active = true;
@@ -274,17 +278,74 @@ export default function OrderDetailPage() {
 
       <div>
         <h2 className="text-lg font-semibold mb-2">Items Ordered:</h2>
-        <ul className="space-y-2">
-          {order.line_items.map((item: any) => (
-            <li key={item.id} className="flex justify-between text-sm">
-              <span>{item.name} × {item.quantity}</span>
-              <span>RM {item.total}</span>
-            </li>
-          ))}
+        <ul className="space-y-3">
+          {order.line_items.map((item: any) => {
+            const retailPrice = parseFloat(getItemMeta(item, '_retail_price') || item.price);
+            const finalPrice = parseFloat(getItemMeta(item, '_final_price') || item.price);
+            const discountReason = getItemMeta(item, '_discount_reason');
+            const hasDiscount = retailPrice > finalPrice;
+            const itemFinalTotal = finalPrice * item.quantity;
+            const itemRetailTotal = retailPrice * item.quantity;
+
+            return (
+              <li key={item.id} className="border-b pb-2">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="font-medium">{item.name} × {item.quantity}</div>
+                    {discountReason && (
+                      <div className="text-xs text-green-600 mt-1">• {discountReason}</div>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    {hasDiscount && (
+                      <div className="text-xs text-gray-400 line-through">
+                        RM {itemRetailTotal.toFixed(2)}
+                      </div>
+                    )}
+                    <div className={`font-semibold ${hasDiscount ? 'text-green-600' : ''}`}>
+                      RM {itemFinalTotal.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
-        <p className="mt-4 text-right font-bold text-lg">
-          Total: RM {order.total}
-        </p>
+
+        {/* Show discount breakdown if applicable */}
+        <div className="mt-4 space-y-1">
+          {(() => {
+            const retailTotal = parseFloat(getMeta('_retail_total') || order.total);
+            const finalTotal = parseFloat(getMeta('_final_total') || order.total);
+            const totalDiscount = parseFloat(getMeta('_total_discount') || '0');
+
+            if (totalDiscount > 0) {
+              return (
+                <>
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Retail Total:</span>
+                    <span className="line-through">RM {retailTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-green-600 font-semibold">
+                    <span>Discount:</span>
+                    <span>-RM {totalDiscount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                    <span>Total:</span>
+                    <span className="text-green-700">RM {finalTotal.toFixed(2)}</span>
+                  </div>
+                </>
+              );
+            } else {
+              return (
+                <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                  <span>Total:</span>
+                  <span>RM {order.total}</span>
+                </div>
+              );
+            }
+          })()}
+        </div>
       </div>
 
       {/* Receipt and Orders Buttons */}

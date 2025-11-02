@@ -114,10 +114,14 @@ export default function OrdersPage() {
       clearCart();
 
       for (const item of order.line_items) {
+        // Use retail price from metadata if available, otherwise fall back to item price
+        const retailPrice = item.meta_data?.find((m: any) => m.key === '_retail_price')?.value;
+        const price = retailPrice ? parseFloat(retailPrice) : parseFloat(item.price);
+
         addToCart({
           productId: item.product_id,
           name: item.name,
-          price: parseFloat(item.price),
+          price: price,
           quantity: item.quantity,
         });
       }
@@ -231,7 +235,23 @@ export default function OrdersPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold">RM {order.total ?? '—'}</p>
+                      {(() => {
+                        const finalTotal = order.meta_data?.find((m: any) => m.key === '_final_total')?.value;
+                        const retailTotal = order.meta_data?.find((m: any) => m.key === '_retail_total')?.value;
+                        const totalDiscount = order.meta_data?.find((m: any) => m.key === '_total_discount')?.value;
+                        const hasDiscount = totalDiscount && parseFloat(totalDiscount) > 0;
+
+                        return (
+                          <>
+                            {hasDiscount && (
+                              <p className="text-xs text-gray-400 line-through">RM {parseFloat(retailTotal).toFixed(2)}</p>
+                            )}
+                            <p className={`font-bold ${hasDiscount ? 'text-green-600' : ''}`}>
+                              RM {finalTotal ? parseFloat(finalTotal).toFixed(2) : (order.total ?? '—')}
+                            </p>
+                          </>
+                        );
+                      })()}
                       {order.line_items?.length ? (
                         <p className="text-xs text-gray-500">
                           {order.line_items.length} item
