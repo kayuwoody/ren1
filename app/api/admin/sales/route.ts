@@ -88,6 +88,8 @@ export async function GET(req: Request) {
     const productStats: Record<string, { quantity: number; revenue: number }> = {};
     const ordersByStatus: Record<string, number> = {};
 
+    console.log('💰 Processing orders for revenue calculation...');
+
     orders.forEach((order) => {
       // Get final total and discount from metadata
       const finalTotal = parseFloat(
@@ -96,6 +98,11 @@ export async function GET(req: Request) {
       const discount = parseFloat(
         order.meta_data?.find((m: any) => m.key === '_total_discount')?.value || '0'
       );
+
+      // Debug logging for discount tracking
+      if (discount > 0) {
+        console.log(`Order #${order.id}: Discount = RM ${discount.toFixed(2)}, Final Total = RM ${finalTotal.toFixed(2)}`);
+      }
 
       totalRevenue += finalTotal;
       totalDiscounts += discount;
@@ -152,6 +159,13 @@ export async function GET(req: Request) {
       status,
       count,
     }));
+
+    console.log('📊 Sales Report Summary:', {
+      totalOrders: orders.length,
+      totalRevenue: totalRevenue.toFixed(2),
+      totalDiscounts: totalDiscounts.toFixed(2),
+      avgOrderValue: (orders.length > 0 ? totalRevenue / orders.length : 0).toFixed(2),
+    });
 
     const report = {
       totalRevenue,
