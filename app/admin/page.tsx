@@ -267,6 +267,17 @@ export default function AdminDashboard() {
           </Link>
 
           <Link
+            href="/admin/sales"
+            className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <DollarSign className="w-6 h-6 text-white" />
+              <h2 className="text-xl font-semibold">Sales Reports</h2>
+            </div>
+            <p className="text-blue-50">View revenue, analytics, and performance</p>
+          </Link>
+
+          <Link
             href="/admin/costs"
             className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
           >
