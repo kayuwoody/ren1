@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useCart } from "@/context/cartContext";
-import { Settings, Coffee, ShoppingCart, Clock, ChevronDown } from "lucide-react";
+import { Settings, Coffee, ShoppingCart, Clock, ChevronDown, Shield } from "lucide-react";
 
 /**
  * HeaderNav - Mobile-First Persistent Navigation
@@ -23,7 +23,14 @@ export default function HeaderNav() {
   const { cartItems } = useCart();
   const [activeOrders, setActiveOrders] = useState<OrderStatus[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isStaffMode, setIsStaffMode] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Check if staff is logged in
+  useEffect(() => {
+    const authToken = sessionStorage.getItem('admin_auth');
+    setIsStaffMode(authToken === 'authenticated');
+  }, []);
 
   // Fetch status for all active orders
   useEffect(() => {
@@ -214,6 +221,17 @@ export default function HeaderNav() {
           <Settings className="w-6 h-6 text-gray-700" />
           <span className="text-xs text-gray-600 mt-1">Settings</span>
         </Link>
+
+        {/* Admin Icon - Only visible when staff is logged in */}
+        {isStaffMode && (
+          <Link
+            href="/admin"
+            className="flex flex-col items-center justify-center p-2 hover:bg-purple-100 rounded-lg transition min-w-[60px]"
+          >
+            <Shield className="w-6 h-6 text-purple-700" />
+            <span className="text-xs text-purple-700 mt-1 font-semibold">Admin</span>
+          </Link>
+        )}
 
         {/* Menu Icon - Always visible, highlighted as primary */}
         <Link
