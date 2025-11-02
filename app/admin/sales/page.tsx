@@ -9,8 +9,11 @@ interface SalesReport {
   totalOrders: number;
   averageOrderValue: number;
   totalDiscounts: number;
-  revenueByDay: { date: string; revenue: number; orders: number; discounts: number }[];
-  topProducts: { name: string; quantity: number; revenue: number }[];
+  totalCOGS: number;
+  totalProfit: number;
+  overallMargin: number;
+  revenueByDay: { date: string; revenue: number; orders: number; discounts: number; cogs: number; profit: number; margin: number }[];
+  topProducts: { name: string; quantity: number; revenue: number; cogs: number; profit: number; margin: number }[];
   ordersByStatus: { status: string; count: number }[];
 }
 

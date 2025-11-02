@@ -103,6 +103,36 @@ export default function PaymentPage() {
       const updatedOrder = await updateRes.json();
       console.log("✅ Order marked as processing:", updatedOrder.id);
 
+      // Record inventory consumption and deduct materials from stock
+      try {
+        console.log("📦 Recording inventory consumption...");
+        const consumptionItems = order.line_items.map((item: any, index: number) => ({
+          productId: String(item.product_id),
+          productName: item.name,
+          quantity: item.quantity,
+          orderItemId: item.id,
+        }));
+
+        const consumptionRes = await fetch("/api/orders/consumption", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: String(order.id),
+            lineItems: consumptionItems,
+          }),
+        });
+
+        if (consumptionRes.ok) {
+          const consumptionData = await consumptionRes.json();
+          console.log(`✅ Inventory consumption recorded: RM ${consumptionData.totalCOGS.toFixed(2)} COGS`);
+        } else {
+          console.warn("⚠️  Failed to record inventory consumption (non-critical)");
+        }
+      } catch (consumptionErr) {
+        console.warn("⚠️  Inventory consumption error (non-critical):", consumptionErr);
+        // Don't block the flow if consumption tracking fails
+      }
+
       // Auto-print kitchen stub (if printer is configured)
       try {
         const hasKitchenPrinter = printerManager.getPrinterConfig('kitchen');
