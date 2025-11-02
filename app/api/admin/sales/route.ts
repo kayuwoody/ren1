@@ -12,26 +12,40 @@ export async function GET(req: Request) {
     let startDate = new Date();
     let endDate = new Date();
 
+    // Set endDate to end of day (23:59:59.999) to include today's orders
+    endDate.setHours(23, 59, 59, 999);
+
     if (startDateParam && endDateParam) {
       startDate = new Date(startDateParam);
+      startDate.setHours(0, 0, 0, 0); // Start of day
       endDate = new Date(endDateParam);
+      endDate.setHours(23, 59, 59, 999); // End of day
     } else {
       // Calculate based on range
       switch (range) {
         case '7days':
           startDate.setDate(startDate.getDate() - 7);
+          startDate.setHours(0, 0, 0, 0);
           break;
         case '30days':
           startDate.setDate(startDate.getDate() - 30);
+          startDate.setHours(0, 0, 0, 0);
           break;
         case '90days':
           startDate.setDate(startDate.getDate() - 90);
+          startDate.setHours(0, 0, 0, 0);
           break;
         case 'all':
-          startDate = new Date('2020-01-01'); // Far back enough
+          startDate = new Date('2020-01-01');
           break;
       }
     }
+
+    console.log('📊 Sales report date range:', {
+      start: startDate.toISOString(),
+      end: endDate.toISOString(),
+      range
+    });
 
     // Fetch all orders (we'll need to paginate if there are many)
     const allOrders: any[] = [];
@@ -55,10 +69,17 @@ export async function GET(req: Request) {
       }
     }
 
-    // Filter only completed and processing orders
+    console.log(`📦 Fetched ${allOrders.length} total orders from WooCommerce`);
+
+    // Filter only orders that count as sales (exclude pending payment)
     const orders = allOrders.filter(
       (order) => order.status === 'completed' || order.status === 'processing' || order.status === 'ready-for-pickup'
     );
+
+    console.log(`✅ Filtered to ${orders.length} orders with sales status`);
+    if (orders.length > 0) {
+      console.log('Sample order statuses:', orders.slice(0, 5).map(o => ({ id: o.id, status: o.status, date: o.date_created })));
+    }
 
     // Calculate statistics
     let totalRevenue = 0;
