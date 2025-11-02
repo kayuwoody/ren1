@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
-import { Percent, DollarSign, Edit2, X, Tag } from "lucide-react";
+import { Percent, DollarSign, Edit2, X, Tag, Shield, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { cartItems, removeFromCart, updateItemDiscount } = useCart();
   const [error, setError] = useState("");
+  const [isStaffMode, setIsStaffMode] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
     isOpen: boolean;
     productId: number | null;
@@ -23,6 +25,12 @@ export default function CheckoutPage() {
   const [discountType, setDiscountType] = useState<"percent" | "amount" | "override">("percent");
   const [discountValue, setDiscountValue] = useState("");
   const [discountReason, setDiscountReason] = useState("");
+
+  // Check if staff is logged in
+  useEffect(() => {
+    const authToken = sessionStorage.getItem('admin_auth');
+    setIsStaffMode(authToken === 'authenticated');
+  }, []);
 
   // Calculate totals
   const retailTotal = cartItems.reduce(
@@ -113,6 +121,28 @@ export default function CheckoutPage() {
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-6 pb-24">
+      {/* Staff Mode Banner */}
+      {isStaffMode && (
+        <div className="bg-blue-600 text-white rounded-lg p-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="w-6 h-6" />
+              <div>
+                <p className="font-semibold">Staff Mode Active</p>
+                <p className="text-sm text-blue-100">Apply discounts using the controls below</p>
+              </div>
+            </div>
+            <Link
+              href="/admin/pos"
+              className="px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition font-medium text-sm flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to POS
+            </Link>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-2xl font-bold">Checkout</h1>
 
       {cartItems.length === 0 ? (
@@ -175,43 +205,45 @@ export default function CheckoutPage() {
                     )}
                   </div>
 
-                  {/* Discount controls */}
-                  <div className="flex flex-wrap gap-2">
-                    {/* Quick discount buttons */}
-                    <button
-                      onClick={() => applyQuickDiscount(item.productId, 10)}
-                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
-                    >
-                      10% off
-                    </button>
-                    <button
-                      onClick={() => applyQuickDiscount(item.productId, 20)}
-                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
-                    >
-                      20% off
-                    </button>
-                    <button
-                      onClick={() => applyQuickDiscount(item.productId, 50)}
-                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
-                    >
-                      50% off
-                    </button>
-                    <button
-                      onClick={() => openDiscountModal(item)}
-                      className="px-3 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium hover:bg-purple-200 flex items-center gap-1"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                      Custom
-                    </button>
-                    {hasDiscount && (
+                  {/* Discount controls - Staff only */}
+                  {isStaffMode && (
+                    <div className="flex flex-wrap gap-2">
+                      {/* Quick discount buttons */}
                       <button
-                        onClick={() => removeDiscount(item.productId)}
-                        className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-medium hover:bg-red-200"
+                        onClick={() => applyQuickDiscount(item.productId, 10)}
+                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
                       >
-                        Remove discount
+                        10% off
                       </button>
-                    )}
-                  </div>
+                      <button
+                        onClick={() => applyQuickDiscount(item.productId, 20)}
+                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
+                      >
+                        20% off
+                      </button>
+                      <button
+                        onClick={() => applyQuickDiscount(item.productId, 50)}
+                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
+                      >
+                        50% off
+                      </button>
+                      <button
+                        onClick={() => openDiscountModal(item)}
+                        className="px-3 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium hover:bg-purple-200 flex items-center gap-1"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                        Custom
+                      </button>
+                      {hasDiscount && (
+                        <button
+                          onClick={() => removeDiscount(item.productId)}
+                          className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-medium hover:bg-red-200"
+                        >
+                          Remove discount
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

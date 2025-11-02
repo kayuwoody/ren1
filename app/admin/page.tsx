@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt } from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -211,6 +211,17 @@ export default function AdminDashboard() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <Link
+            href="/admin/pos"
+            className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <Receipt className="w-6 h-6 text-white" />
+              <h2 className="text-xl font-semibold">Point of Sale</h2>
+            </div>
+            <p className="text-green-50">Process orders with staff discounts</p>
+          </Link>
+
           <Link
             href="/admin/lockers"
             className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
