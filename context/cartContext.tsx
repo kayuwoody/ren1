@@ -50,8 +50,38 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setCartItems(parsed);
-        console.log('🛒 Loaded cart from localStorage:', parsed);
+
+        // Migrate old cart items that don't have retailPrice/finalPrice
+        const migratedItems = parsed.map((item: any) => {
+          // If item has old 'price' field but not 'retailPrice', migrate it
+          if (item.price !== undefined && item.retailPrice === undefined) {
+            console.log('🔄 Migrating old cart item:', item.name);
+            return {
+              productId: item.productId,
+              name: item.name,
+              retailPrice: parseFloat(item.price),
+              finalPrice: parseFloat(item.price),
+              quantity: item.quantity,
+              discountPercent: undefined,
+              discountAmount: undefined,
+              discountReason: undefined
+            };
+          }
+
+          // If item has retailPrice but finalPrice is missing, calculate it
+          if (item.retailPrice !== undefined && item.finalPrice === undefined) {
+            console.log('🔄 Recalculating finalPrice for:', item.name);
+            return {
+              ...item,
+              finalPrice: calculateFinalPrice(item)
+            };
+          }
+
+          return item;
+        });
+
+        setCartItems(migratedItems);
+        console.log('🛒 Loaded cart from localStorage:', migratedItems);
       } catch (err) {
         console.error('Failed to parse saved cart:', err);
       }
