@@ -12,11 +12,19 @@ export default function PaymentPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Calculate total
-  const total = cartItems.reduce(
-    (sum: number, i: any) => sum + (i.price ?? 0) * (i.quantity ?? 0),
+  // Debug: Log cart items to see what data we have
+  console.log("💳 Payment page cart items:", cartItems);
+
+  // Calculate totals
+  const retailTotal = cartItems.reduce(
+    (sum, item) => sum + item.retailPrice * item.quantity,
     0
   );
+  const finalTotal = cartItems.reduce(
+    (sum, item) => sum + item.finalPrice * item.quantity,
+    0
+  );
+  const totalDiscount = retailTotal - finalTotal;
 
   async function handleSimulatePayment() {
     setLoading(true);
@@ -151,23 +159,53 @@ export default function PaymentPage() {
       {/* Order summary */}
       <div className="bg-white border rounded-lg p-4 space-y-3">
         <h2 className="font-semibold text-lg">Order Summary</h2>
-        <ul className="space-y-2">
-          {cartItems.map((item: any) => (
-            <li key={item.productId} className="flex justify-between text-sm border-b pb-2">
-              <div>
-                <p className="font-medium">{item.name}</p>
-                <p className="text-gray-600">Qty: {item.quantity}</p>
-              </div>
-              <span className="font-semibold">
-                RM {((item.price ?? 0) * (item.quantity ?? 0)).toFixed(2)}
-              </span>
-            </li>
-          ))}
+        <ul className="space-y-3">
+          {cartItems.map((item) => {
+            const hasDiscount = item.finalPrice < item.retailPrice;
+            const itemRetailTotal = item.retailPrice * item.quantity;
+            const itemFinalTotal = item.finalPrice * item.quantity;
+
+            return (
+              <li key={item.productId} className="border-b pb-3">
+                <div className="flex justify-between mb-1">
+                  <div className="flex-1">
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-xs text-gray-600">Qty: {item.quantity}</p>
+                    {item.discountReason && (
+                      <p className="text-xs text-green-600 mt-1">• {item.discountReason}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    {hasDiscount && (
+                      <p className="text-xs text-gray-400 line-through">
+                        RM {itemRetailTotal.toFixed(2)}
+                      </p>
+                    )}
+                    <p className={`font-semibold ${hasDiscount ? 'text-green-700' : ''}`}>
+                      RM {itemFinalTotal.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
-        <div className="pt-2 border-t">
-          <div className="flex justify-between text-lg font-bold">
+        <div className="pt-2 border-t space-y-1">
+          {totalDiscount > 0 && (
+            <>
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>Retail Total:</span>
+                <span className="line-through">RM {retailTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm text-green-600 font-semibold">
+                <span>Total Discount:</span>
+                <span>-RM {totalDiscount.toFixed(2)}</span>
+              </div>
+            </>
+          )}
+          <div className="flex justify-between text-xl font-bold pt-2">
             <span>Total:</span>
-            <span>RM {total.toFixed(2)}</span>
+            <span className="text-green-700">RM {finalTotal.toFixed(2)}</span>
           </div>
         </div>
       </div>
