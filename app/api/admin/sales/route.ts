@@ -145,8 +145,11 @@ export async function GET(req: Request) {
         let itemCOGS = 0;
         try {
           const consumptions = getOrderConsumptions(String(order.id));
-          const productConsumptions = consumptions.filter(c => c.productId === String(item.product_id));
-          itemCOGS = productConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
+          // Filter by order item ID if available, otherwise we can't distinguish between multiple items of same product
+          const itemConsumptions = item.id
+            ? consumptions.filter(c => c.orderItemId === String(item.id))
+            : consumptions;
+          itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
         } catch (err) {
           // COGS not available
         }
