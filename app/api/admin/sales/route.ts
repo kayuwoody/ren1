@@ -12,28 +12,29 @@ export async function GET(req: Request) {
     let startDate = new Date();
     let endDate = new Date();
 
-    // Set endDate to end of day (23:59:59.999) to include today's orders
-    endDate.setHours(23, 59, 59, 999);
+    // IMPORTANT: Use UTC methods to avoid timezone issues
+    // Set endDate to end of day in UTC (23:59:59.999 UTC)
+    endDate.setUTCHours(23, 59, 59, 999);
 
     if (startDateParam && endDateParam) {
       startDate = new Date(startDateParam);
-      startDate.setHours(0, 0, 0, 0); // Start of day
+      startDate.setUTCHours(0, 0, 0, 0); // Start of day in UTC
       endDate = new Date(endDateParam);
-      endDate.setHours(23, 59, 59, 999); // End of day
+      endDate.setUTCHours(23, 59, 59, 999); // End of day in UTC
     } else {
       // Calculate based on range
       switch (range) {
         case '7days':
           startDate.setDate(startDate.getDate() - 7);
-          startDate.setHours(0, 0, 0, 0);
+          startDate.setUTCHours(0, 0, 0, 0);
           break;
         case '30days':
           startDate.setDate(startDate.getDate() - 30);
-          startDate.setHours(0, 0, 0, 0);
+          startDate.setUTCHours(0, 0, 0, 0);
           break;
         case '90days':
           startDate.setDate(startDate.getDate() - 90);
-          startDate.setHours(0, 0, 0, 0);
+          startDate.setUTCHours(0, 0, 0, 0);
           break;
         case 'all':
           startDate = new Date('2020-01-01');
