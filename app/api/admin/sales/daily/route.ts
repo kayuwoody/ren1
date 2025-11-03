@@ -149,9 +149,14 @@ export async function GET(req: Request) {
         const itemProfit = itemRevenue - itemCOGS;
         const itemMargin = itemRevenue > 0 ? (itemProfit / itemRevenue) * 100 : 0;
 
+        // Check if this is a bundled product and use display name
+        const isBundle = item.meta_data?.find((m: any) => m.key === '_is_bundle')?.value === 'true';
+        const bundleDisplayName = item.meta_data?.find((m: any) => m.key === '_bundle_display_name')?.value;
+        const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+
         return {
           id: item.id,
-          name: item.name,
+          name: displayName,
           quantity: item.quantity,
           retailPrice,
           finalPrice,
@@ -160,6 +165,8 @@ export async function GET(req: Request) {
           itemCOGS,
           itemProfit,
           itemMargin,
+          isBundle,
+          baseProductName: item.meta_data?.find((m: any) => m.key === '_bundle_base_product_name')?.value,
         };
       }) || [];
 
