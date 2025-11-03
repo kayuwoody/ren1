@@ -2,7 +2,7 @@ import { db, initDatabase } from './init';
 import { v4 as uuidv4 } from 'uuid';
 import { getProductRecipe } from './recipeService';
 import { getMaterial, updateMaterialStock } from './materialService';
-import { getProduct } from './productService';
+import { getProduct, getProductByWcId } from './productService';
 
 // Ensure database is initialized
 initDatabase();
@@ -33,12 +33,22 @@ export interface InventoryConsumption {
  */
 export function recordProductSale(
   orderId: string,
-  productId: string,
+  wcProductId: string | number,
   productName: string,
   quantitySold: number,
   orderItemId?: string
 ): InventoryConsumption[] {
   const consumptions: InventoryConsumption[] = [];
+
+  // Find product by WooCommerce ID
+  const product = getProductByWcId(Number(wcProductId));
+
+  if (!product) {
+    console.warn(`⚠️  Product with WC ID ${wcProductId} not found in local database - no materials consumed`);
+    return [];
+  }
+
+  const productId = product.id;
 
   // Get the product's recipe
   const recipe = getProductRecipe(productId);
@@ -275,7 +285,7 @@ export function getConsumptionSummary(
 /**
  * Calculate COGS for a product sale
  */
-export function calculateProductCOGS(productId: string, quantity: number): {
+export function calculateProductCOGS(wcProductId: string | number, quantity: number): {
   totalCOGS: number;
   breakdown: Array<{
     itemType: 'material' | 'product';
@@ -287,7 +297,15 @@ export function calculateProductCOGS(productId: string, quantity: number): {
     totalCost: number;
   }>;
 } {
-  const recipe = getProductRecipe(productId);
+  // Find product by WooCommerce ID
+  const product = getProductByWcId(Number(wcProductId));
+
+  if (!product) {
+    console.warn(`⚠️  Product with WC ID ${wcProductId} not found - COGS calculation skipped`);
+    return { totalCOGS: 0, breakdown: [] };
+  }
+
+  const recipe = getProductRecipe(product.id);
 
   const breakdown = recipe
     .filter(item => !item.isOptional)
