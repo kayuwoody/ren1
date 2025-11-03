@@ -118,13 +118,26 @@ export async function GET(req: Request) {
         let itemCOGS = 0;
         try {
           const consumptions = getOrderConsumptions(String(order.id));
+
+          console.log(`  🔍 Item "${item.name}" (ID: ${item.id}): Total consumptions for order = ${consumptions.length}`);
+
+          // Debug: show all orderItemIds in consumption records
+          const orderItemIds = consumptions.map(c => c.orderItemId).filter(Boolean);
+          if (orderItemIds.length > 0) {
+            console.log(`     OrderItemIds in consumptions: [${orderItemIds.join(', ')}]`);
+          } else {
+            console.log(`     ⚠️  No orderItemIds found in any consumption records!`);
+          }
+
           const itemConsumptions = item.id
             ? consumptions.filter(c => c.orderItemId === String(item.id))
             : [];
           itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
 
           if (itemConsumptions.length > 0) {
-            console.log(`  Item "${item.name}": ${itemConsumptions.length} consumptions, COGS = RM ${itemCOGS.toFixed(2)}`);
+            console.log(`     ✅ Matched ${itemConsumptions.length} consumptions, COGS = RM ${itemCOGS.toFixed(2)}`);
+          } else {
+            console.log(`     ❌ No consumptions matched item.id="${item.id}"`);
           }
         } catch (err) {
           console.warn(`  Item "${item.name}": Error fetching COGS`, err);

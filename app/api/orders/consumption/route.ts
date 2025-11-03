@@ -23,6 +23,14 @@ export async function POST(req: Request) {
     for (const item of lineItems) {
       const { productId, productName, quantity, orderItemId } = item;
 
+      console.log(`📦 Processing line item:`, {
+        productId,
+        productName,
+        quantity,
+        orderItemId: orderItemId || '(null)',
+        orderItemIdType: typeof orderItemId,
+      });
+
       if (!productId || !quantity) {
         console.warn(`⚠️  Skipping invalid line item:`, item);
         continue;
