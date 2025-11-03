@@ -30,39 +30,56 @@ export interface InventoryConsumption {
 /**
  * Record inventory consumption when a product is sold
  * This automatically deducts materials from stock based on the product's recipe
+ * Recursively processes linked products to deduct all materials in the chain
  */
 export function recordProductSale(
   orderId: string,
   wcProductId: string | number,
   productName: string,
   quantitySold: number,
-  orderItemId?: string
+  orderItemId?: string,
+  depth: number = 0,
+  parentChain: string = ''
 ): InventoryConsumption[] {
   const consumptions: InventoryConsumption[] = [];
+  const indent = '  '.repeat(depth);
 
-  console.log(`📦 Processing sale: WC Product ID ${wcProductId}, Name: "${productName}", Qty: ${quantitySold}`);
+  // Prevent infinite recursion (max 5 levels deep)
+  if (depth > 5) {
+    console.error(`${indent}❌ Max recursion depth reached for ${productName}`);
+    return [];
+  }
+
+  const chain = parentChain ? `${parentChain} → ${productName}` : productName;
+  console.log(`${indent}📦 Processing${depth > 0 ? ' (linked)' : ''}: WC ID ${wcProductId}, "${productName}", Qty: ${quantitySold}`);
 
   // Find product by WooCommerce ID
   const product = getProductByWcId(Number(wcProductId));
 
   if (!product) {
-    console.warn(`⚠️  Product with WC ID ${wcProductId} not found in local database - no materials consumed`);
-    console.warn(`   💡 Tip: Go to /admin/recipes and click "Sync from WooCommerce" to import products`);
+    console.warn(`${indent}⚠️  Product with WC ID ${wcProductId} not found in local database`);
+    if (depth === 0) {
+      console.warn(`${indent}   💡 Tip: Go to /admin/recipes and click "Sync from WooCommerce" to import products`);
+    }
     return [];
   }
 
-  console.log(`   ✓ Found local product: ID=${product.id}, SKU=${product.sku}`);
+  console.log(`${indent}   ✓ Found: ID=${product.id}, SKU=${product.sku}`);
 
   const productId = product.id;
 
   // Get the product's recipe
   const recipe = getProductRecipe(productId);
 
-  console.log(`   📋 Recipe has ${recipe.length} items`);
+  console.log(`${indent}   📋 Recipe: ${recipe.length} items`);
 
   if (recipe.length === 0) {
-    console.log(`⚠️  Product ${productName} has no recipe - no materials consumed`);
-    console.log(`   💡 Tip: Go to /admin/recipes and build a recipe for "${productName}"`);
+    if (depth === 0) {
+      console.log(`${indent}⚠️  No recipe for ${productName} - no materials consumed`);
+      console.log(`${indent}   💡 Tip: Go to /admin/recipes and build a recipe for "${productName}"`);
+    } else {
+      console.warn(`${indent}⚠️  Linked product "${productName}" has no recipe!`);
+    }
     return [];
   }
 
@@ -130,13 +147,38 @@ export function recordProductSale(
 
     consumptions.push(consumption);
 
-    // Deduct from material stock (only for materials, not linked products)
+    // Handle material vs linked product
     if (recipeItem.itemType === 'material' && recipeItem.materialId) {
+      // Direct material - deduct from stock
+      console.log(`${indent}   ✓ Material: ${recipeItem.materialName} -${quantityConsumed}${recipeItem.unit}`);
       deductMaterialStock(recipeItem.materialId, quantityConsumed);
+    } else if (recipeItem.itemType === 'product' && recipeItem.linkedProductId) {
+      // Linked product - recursively process its recipe
+      console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
+
+      // Get the linked product to find its WC ID
+      const linkedProduct = getProduct(recipeItem.linkedProductId);
+      if (linkedProduct && linkedProduct.wcId) {
+        // Recursively process the linked product's materials
+        const linkedConsumptions = recordProductSale(
+          orderId,
+          linkedProduct.wcId,
+          linkedProduct.name,
+          quantityConsumed,
+          orderItemId,
+          depth + 1,
+          chain
+        );
+        consumptions.push(...linkedConsumptions);
+      } else {
+        console.warn(`${indent}      ⚠️  Could not find linked product for recursive processing`);
+      }
     }
   });
 
-  console.log(`📦 Recorded ${consumptions.length} material consumptions for ${productName} x${quantitySold}`);
+  if (depth === 0) {
+    console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
+  }
 
   return consumptions;
 }
