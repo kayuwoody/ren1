@@ -58,6 +58,7 @@ export function initDatabase() {
       unit TEXT NOT NULL,
       calculatedCost REAL NOT NULL,
       isOptional INTEGER NOT NULL DEFAULT 0,
+      selectionGroup TEXT,
       sortOrder INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (productId) REFERENCES Product(id) ON DELETE CASCADE,
@@ -93,6 +94,7 @@ export function initDatabase() {
           unit TEXT NOT NULL,
           calculatedCost REAL NOT NULL,
           isOptional INTEGER NOT NULL DEFAULT 0,
+          selectionGroup TEXT,
           sortOrder INTEGER NOT NULL DEFAULT 0,
           createdAt TEXT NOT NULL DEFAULT (datetime('now')),
           FOREIGN KEY (productId) REFERENCES Product(id) ON DELETE CASCADE,
@@ -103,9 +105,9 @@ export function initDatabase() {
 
       // Copy data from old table
       db.exec(`
-        INSERT INTO ProductRecipe (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, sortOrder, createdAt)
+        INSERT INTO ProductRecipe (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, selectionGroup, sortOrder, createdAt)
         SELECT id, productId, 'material', materialId, NULL, quantity, unit, calculatedCost,
-               COALESCE(isOptional, 0), COALESCE(sortOrder, 0), createdAt
+               COALESCE(isOptional, 0), NULL, COALESCE(sortOrder, 0), createdAt
         FROM ProductRecipe_old
       `);
 
@@ -116,6 +118,20 @@ export function initDatabase() {
     }
   } catch (e) {
     // Table doesn't exist yet, or migration already done
+  }
+
+  // Migration: Add selectionGroup column if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(ProductRecipe)").all() as any[];
+    const hasSelectionGroup = tableInfo.some((col: any) => col.name === 'selectionGroup');
+
+    if (tableInfo.length > 0 && !hasSelectionGroup) {
+      console.log('🔄 Adding selectionGroup column to ProductRecipe table...');
+      db.exec(`ALTER TABLE ProductRecipe ADD COLUMN selectionGroup TEXT`);
+      console.log('✅ selectionGroup column added');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
   }
 
   // Material Price History (audit trail for cost changes)
