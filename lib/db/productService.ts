@@ -11,6 +11,7 @@ export interface Product {
   sku: string;
   category: string;
   basePrice: number;
+  supplierCost: number;
   unitCost: number;
   stockQuantity: number;
   imageUrl?: string;

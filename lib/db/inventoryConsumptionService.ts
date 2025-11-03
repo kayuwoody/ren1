@@ -70,8 +70,8 @@ export function recordProductSale(
   const now = new Date().toISOString();
 
   // Record base product cost if it exists (e.g., buying finished goods from supplier)
-  if (product.unitCost > 0) {
-    console.log(`${indent}   💰 Base Cost: RM ${product.unitCost} × ${quantitySold} = RM ${(product.unitCost * quantitySold).toFixed(2)}`);
+  if (product.supplierCost > 0) {
+    console.log(`${indent}   💰 Base Supplier Cost: RM ${product.supplierCost} × ${quantitySold} = RM ${(product.supplierCost * quantitySold).toFixed(2)}`);
 
     const consumptionId = uuidv4();
     const baseCostConsumption: InventoryConsumption = {
@@ -85,12 +85,12 @@ export function recordProductSale(
       itemType: 'material', // Use 'material' type for consistency
       materialId: undefined,
       linkedProductId: undefined,
-      materialName: `${productName} (Base Cost)`,
+      materialName: `${productName} (Base Supplier Cost)`,
       linkedProductName: undefined,
       quantityConsumed: quantitySold,
       unit: 'unit',
-      costPerUnit: product.unitCost,
-      totalCost: product.unitCost * quantitySold,
+      costPerUnit: product.supplierCost,
+      totalCost: product.supplierCost * quantitySold,
       consumedAt: now,
     };
 
@@ -113,11 +113,11 @@ export function recordProductSale(
       'material',
       null,
       null,
-      `${productName} (Base Cost)`,
+      `${productName} (Base Supplier Cost)`,
       null,
       quantitySold,
       'unit',
-      product.unitCost,
+      product.supplierCost,
       baseCostConsumption.totalCost,
       now
     );
@@ -132,10 +132,10 @@ export function recordProductSale(
 
   if (recipe.length === 0) {
     // If no recipe but has base cost, that's fine (e.g., bought muffin with no additional materials)
-    if (product.unitCost === 0) {
+    if (product.supplierCost === 0) {
       if (depth === 0) {
-        console.log(`${indent}⚠️  No recipe and no base cost for ${productName} - no COGS tracked`);
-        console.log(`${indent}   💡 Tip: Either add a recipe or set unitCost in product settings`);
+        console.log(`${indent}⚠️  No recipe and no supplier cost for ${productName} - no COGS tracked`);
+        console.log(`${indent}   💡 Tip: Either add a recipe or set supplierCost in product settings`);
       } else {
         console.warn(`${indent}⚠️  Linked product "${productName}" has no recipe!`);
       }
@@ -428,15 +428,15 @@ export function calculateProductCOGS(wcProductId: string | number, quantity: num
   }> = [];
 
   // Add base product cost if it exists (e.g., buying muffins from supplier)
-  if (product.unitCost > 0) {
+  if (product.supplierCost > 0) {
     breakdown.push({
       itemType: 'base',
       itemId: product.id,
-      itemName: `${product.name} (Base Cost)`,
+      itemName: `${product.name} (Base Supplier Cost)`,
       quantityUsed: quantity,
       unit: 'unit',
-      costPerUnit: product.unitCost,
-      totalCost: product.unitCost * quantity,
+      costPerUnit: product.supplierCost,
+      totalCost: product.supplierCost * quantity,
     });
   }
 

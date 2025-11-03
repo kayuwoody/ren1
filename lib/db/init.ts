@@ -19,6 +19,7 @@ export function initDatabase() {
       sku TEXT NOT NULL UNIQUE,
       category TEXT NOT NULL DEFAULT 'uncategorized',
       basePrice REAL NOT NULL DEFAULT 0,
+      supplierCost REAL NOT NULL DEFAULT 0,
       unitCost REAL NOT NULL DEFAULT 0,
       stockQuantity REAL NOT NULL DEFAULT 0,
       imageUrl TEXT,
@@ -129,6 +130,21 @@ export function initDatabase() {
       console.log('🔄 Adding selectionGroup column to ProductRecipe table...');
       db.exec(`ALTER TABLE ProductRecipe ADD COLUMN selectionGroup TEXT`);
       console.log('✅ selectionGroup column added');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
+  // Migration: Add supplierCost column to Product table if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const hasSupplierCost = tableInfo.some((col: any) => col.name === 'supplierCost');
+
+    if (tableInfo.length > 0 && !hasSupplierCost) {
+      console.log('🔄 Adding supplierCost column to Product table...');
+      db.exec(`ALTER TABLE Product ADD COLUMN supplierCost REAL NOT NULL DEFAULT 0`);
+      console.log('✅ supplierCost column added');
+      console.log('📝 Note: supplierCost is for base acquisition cost, unitCost is for calculated COGS');
     }
   } catch (e) {
     // Column already exists or table doesn't exist

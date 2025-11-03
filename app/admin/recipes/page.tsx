@@ -174,7 +174,7 @@ export default function RecipesPage() {
       const res = await fetch(`/api/admin/products/${selectedProduct.id}/cost`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unitCost: cost }),
+        body: JSON.stringify({ supplierCost: cost }),
       });
 
       if (!res.ok) {
@@ -182,14 +182,14 @@ export default function RecipesPage() {
       }
 
       // Update local state
-      setSelectedProduct({ ...selectedProduct, unitCost: cost });
+      setSelectedProduct({ ...selectedProduct, supplierCost: cost });
       setProducts(products.map(p =>
-        p.id === selectedProduct.id ? { ...p, unitCost: cost } : p
+        p.id === selectedProduct.id ? { ...p, supplierCost: cost } : p
       ));
 
       setEditingCost(false);
       setNewUnitCost('');
-      alert(`Base cost updated to RM ${cost.toFixed(2)}`);
+      alert(`Supplier cost updated to RM ${cost.toFixed(2)}`);
     } catch (error) {
       console.error('Failed to update cost:', error);
       alert('Failed to update cost. Please try again.');
@@ -308,8 +308,8 @@ export default function RecipesPage() {
     });
   }
 
-  // Total COGS = Base Cost + Recipe Cost
-  const totalCOGS = selectedProduct ? selectedProduct.unitCost + (recipe?.totalCost || 0) : 0;
+  // Total COGS = Supplier Cost + Recipe Cost
+  const totalCOGS = selectedProduct ? selectedProduct.supplierCost + (recipe?.totalCost || 0) : 0;
   const grossProfit = selectedProduct ? selectedProduct.currentPrice - totalCOGS : 0;
   const grossMargin = selectedProduct && selectedProduct.currentPrice > 0
     ? (grossProfit / selectedProduct.currentPrice) * 100
@@ -408,18 +408,18 @@ export default function RecipesPage() {
                     <p className="text-lg font-semibold">RM {selectedProduct.currentPrice.toFixed(2)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Base Cost</p>
+                    <p className="text-sm text-gray-500">Supplier Cost</p>
                     <div className="flex items-center gap-2">
                       <p className="text-lg font-semibold text-blue-600">
-                        RM {selectedProduct.unitCost.toFixed(2)}
+                        RM {selectedProduct.supplierCost.toFixed(2)}
                       </p>
                       <button
                         onClick={() => {
-                          setNewUnitCost(selectedProduct.unitCost.toString());
+                          setNewUnitCost(selectedProduct.supplierCost.toString());
                           setEditingCost(true);
                         }}
                         className="text-blue-600 hover:text-blue-800"
-                        title="Edit base cost"
+                        title="Edit supplier cost"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -484,9 +484,16 @@ export default function RecipesPage() {
                             </div>
                             <div className="text-sm text-gray-500">
                               {item.itemType === 'product' ? (
-                                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">
-                                  Product: {item.linkedProductSku}
-                                </span>
+                                <>
+                                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">
+                                    Product: {item.linkedProductSku}
+                                  </span>
+                                  {item.selectionGroup && (
+                                    <span className="ml-2 bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">
+                                      Group: {item.selectionGroup}
+                                    </span>
+                                  )}
+                                </>
                               ) : (
                                 <span className="capitalize">{item.materialCategory}</span>
                               )}
@@ -570,20 +577,22 @@ export default function RecipesPage() {
           />
         )}
 
-        {/* Edit Base Cost Modal */}
+        {/* Edit Supplier Cost Modal */}
         {editingCost && selectedProduct && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-md w-full p-6">
-              <h3 className="text-xl font-semibold mb-4">Edit Base Cost</h3>
+              <h3 className="text-xl font-semibold mb-4">Edit Supplier Cost</h3>
               <p className="text-sm text-gray-600 mb-4">
-                Set the base unit cost for <strong>{selectedProduct.name}</strong>.
+                Set the base supplier/acquisition cost for <strong>{selectedProduct.name}</strong>.
                 <br />
-                This is what you pay to acquire/make one unit (e.g., supplier cost for muffins).
+                This is what you pay to acquire one unit from your supplier.
+                <br />
+                <strong>Note:</strong> Total COGS will be calculated as: Supplier Cost + Recipe Materials
               </p>
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Unit Cost (RM)
+                  Supplier Cost (RM)
                 </label>
                 <input
                   type="number"
@@ -596,16 +605,16 @@ export default function RecipesPage() {
                   autoFocus
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Current: RM {selectedProduct.unitCost.toFixed(2)}
+                  Current: RM {selectedProduct.supplierCost.toFixed(2)}
                 </p>
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
                 <p className="text-sm text-blue-800">
                   <strong>Examples:</strong>
-                  <br />• Latte (made in-house): RM 0.00
+                  <br />• Latte (made from recipe only): RM 0.00
                   <br />• Muffin (bought from supplier): RM 2.50
-                  <br />• Bottled Water (retail): RM 1.20
+                  <br />• Bottled Water (wholesale cost): RM 1.20
                 </p>
               </div>
 

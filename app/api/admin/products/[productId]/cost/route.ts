@@ -3,7 +3,8 @@ import { db } from '@/lib/db/init';
 
 /**
  * PATCH /api/admin/products/[productId]/cost
- * Update a product's base unit cost
+ * Update a product's base supplier cost (acquisition cost)
+ * Note: unitCost (calculated COGS) is computed separately from supplierCost + recipe costs
  */
 export async function PATCH(
   req: Request,
@@ -11,23 +12,23 @@ export async function PATCH(
 ) {
   try {
     const { productId } = params;
-    const { unitCost } = await req.json();
+    const { supplierCost } = await req.json();
 
-    if (typeof unitCost !== 'number' || unitCost < 0) {
+    if (typeof supplierCost !== 'number' || supplierCost < 0) {
       return NextResponse.json(
-        { error: 'Invalid unitCost. Must be a non-negative number.' },
+        { error: 'Invalid supplierCost. Must be a non-negative number.' },
         { status: 400 }
       );
     }
 
-    // Update product unitCost
+    // Update product supplierCost
     const stmt = db.prepare(`
       UPDATE Product
-      SET unitCost = ?, updatedAt = datetime('now')
+      SET supplierCost = ?, updatedAt = datetime('now')
       WHERE id = ?
     `);
 
-    const result = stmt.run(unitCost, productId);
+    const result = stmt.run(supplierCost, productId);
 
     if (result.changes === 0) {
       return NextResponse.json(
@@ -39,7 +40,7 @@ export async function PATCH(
     // Get updated product
     const product = db.prepare('SELECT * FROM Product WHERE id = ?').get(productId);
 
-    console.log(`✅ Updated product ${productId} unitCost to RM ${unitCost.toFixed(2)}`);
+    console.log(`✅ Updated product ${productId} supplierCost to RM ${supplierCost.toFixed(2)}`);
 
     return NextResponse.json({
       success: true,
