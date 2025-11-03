@@ -40,21 +40,29 @@ export function recordProductSale(
 ): InventoryConsumption[] {
   const consumptions: InventoryConsumption[] = [];
 
+  console.log(`📦 Processing sale: WC Product ID ${wcProductId}, Name: "${productName}", Qty: ${quantitySold}`);
+
   // Find product by WooCommerce ID
   const product = getProductByWcId(Number(wcProductId));
 
   if (!product) {
     console.warn(`⚠️  Product with WC ID ${wcProductId} not found in local database - no materials consumed`);
+    console.warn(`   💡 Tip: Go to /admin/recipes and click "Sync from WooCommerce" to import products`);
     return [];
   }
+
+  console.log(`   ✓ Found local product: ID=${product.id}, SKU=${product.sku}`);
 
   const productId = product.id;
 
   // Get the product's recipe
   const recipe = getProductRecipe(productId);
 
+  console.log(`   📋 Recipe has ${recipe.length} items`);
+
   if (recipe.length === 0) {
     console.log(`⚠️  Product ${productName} has no recipe - no materials consumed`);
+    console.log(`   💡 Tip: Go to /admin/recipes and build a recipe for "${productName}"`);
     return [];
   }
 
