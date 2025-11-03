@@ -34,6 +34,7 @@ interface RecipeItem {
   unit: string;
   calculatedCost?: number;
   isOptional?: boolean;
+  selectionGroup?: string;
 }
 
 interface Recipe {
@@ -135,6 +136,7 @@ export default function RecipesPage() {
         quantity: item.quantity,
         unit: item.unit,
         isOptional: item.isOptional || false,
+        selectionGroup: item.selectionGroup,
       }));
 
       const res = await fetch(`/api/admin/recipes/${selectedProduct.id}`, {
@@ -196,7 +198,7 @@ export default function RecipesPage() {
     }
   }
 
-  function addItem(itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean) {
+  function addItem(itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean, selectionGroup?: string) {
     if (!selectedProduct) return;
 
     let newItem: RecipeItem;
@@ -231,6 +233,7 @@ export default function RecipesPage() {
         unit: 'unit',
         calculatedCost: quantity * product.unitCost,
         isOptional,
+        selectionGroup: selectionGroup || undefined,
       };
     }
 
@@ -580,13 +583,14 @@ function AddItemModal({
   materials: Material[];
   products: Product[];
   onClose: () => void;
-  onAdd: (itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean) => void;
+  onAdd: (itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean, selectionGroup?: string) => void;
 }) {
   const [itemType, setItemType] = useState<'material' | 'product'>('material');
   const [selectedMaterial, setSelectedMaterial] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState<string>('1');
   const [isOptional, setIsOptional] = useState(false);
+  const [selectionGroup, setSelectionGroup] = useState('');
   const [filter, setFilter] = useState('');
 
   const material = materials.find(m => m.id === selectedMaterial);
@@ -621,7 +625,7 @@ function AddItemModal({
       return;
     }
 
-    onAdd(itemType, itemId, parseFloat(quantity), isOptional);
+    onAdd(itemType, itemId, parseFloat(quantity), isOptional, selectionGroup || undefined);
   }
 
   return (
@@ -761,6 +765,26 @@ function AddItemModal({
               Optional {itemType === 'material' ? 'ingredient' : 'add-on'} (e.g., syrup, extra toppings)
             </label>
           </div>
+
+          {/* Selection Group (for mandatory linked products only) */}
+          {itemType === 'product' && !isOptional && (
+            <div className="border-t pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Selection Group (Optional)
+              </label>
+              <input
+                type="text"
+                value={selectionGroup}
+                onChange={(e) => setSelectionGroup(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+                placeholder="e.g., temperature"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                <strong>For XOR choices:</strong> Items in the same group are mutually exclusive (choose one).
+                <br />Example: "Hot" and "Iced" both have selectionGroup="temperature" → customer must pick one.
+              </p>
+            </div>
+          )}
 
           {/* Cost Preview */}
           {((itemType === 'material' && material && quantity) || (itemType === 'product' && product && quantity)) && (
