@@ -67,6 +67,63 @@ export function recordProductSale(
   console.log(`${indent}   ✓ Found: ID=${product.id}, SKU=${product.sku}`);
 
   const productId = product.id;
+  const now = new Date().toISOString();
+
+  // Record base product cost if it exists (e.g., buying finished goods from supplier)
+  if (product.unitCost > 0) {
+    console.log(`${indent}   💰 Base Cost: RM ${product.unitCost} × ${quantitySold} = RM ${(product.unitCost * quantitySold).toFixed(2)}`);
+
+    const consumptionId = uuidv4();
+    const baseCostConsumption: InventoryConsumption = {
+      id: consumptionId,
+      orderId,
+      orderItemId,
+      productId,
+      productName,
+      productSku: product.sku,
+      quantitySold,
+      itemType: 'material', // Use 'material' type for consistency
+      materialId: undefined,
+      linkedProductId: undefined,
+      materialName: `${productName} (Base Cost)`,
+      linkedProductName: undefined,
+      quantityConsumed: quantitySold,
+      unit: 'unit',
+      costPerUnit: product.unitCost,
+      totalCost: product.unitCost * quantitySold,
+      consumedAt: now,
+    };
+
+    // Insert into database
+    const stmt = db.prepare(`
+      INSERT INTO InventoryConsumption
+      (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
+       materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
+       unit, costPerUnit, totalCost, consumedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      consumptionId,
+      orderId,
+      orderItemId || null,
+      productId,
+      productName,
+      quantitySold,
+      'material',
+      null,
+      null,
+      `${productName} (Base Cost)`,
+      null,
+      quantitySold,
+      'unit',
+      product.unitCost,
+      baseCostConsumption.totalCost,
+      now
+    );
+
+    consumptions.push(baseCostConsumption);
+  }
 
   // Get the product's recipe
   const recipe = getProductRecipe(productId);
@@ -74,16 +131,17 @@ export function recordProductSale(
   console.log(`${indent}   📋 Recipe: ${recipe.length} items`);
 
   if (recipe.length === 0) {
-    if (depth === 0) {
-      console.log(`${indent}⚠️  No recipe for ${productName} - no materials consumed`);
-      console.log(`${indent}   💡 Tip: Go to /admin/recipes and build a recipe for "${productName}"`);
-    } else {
-      console.warn(`${indent}⚠️  Linked product "${productName}" has no recipe!`);
+    // If no recipe but has base cost, that's fine (e.g., bought muffin with no additional materials)
+    if (product.unitCost === 0) {
+      if (depth === 0) {
+        console.log(`${indent}⚠️  No recipe and no base cost for ${productName} - no COGS tracked`);
+        console.log(`${indent}   💡 Tip: Either add a recipe or set unitCost in product settings`);
+      } else {
+        console.warn(`${indent}⚠️  Linked product "${productName}" has no recipe!`);
+      }
     }
-    return [];
+    return consumptions; // Return base cost consumption if any
   }
-
-  const now = new Date().toISOString();
 
   // Process each recipe item
   recipe.forEach(recipeItem => {
@@ -340,7 +398,7 @@ export function getConsumptionSummary(
 export function calculateProductCOGS(wcProductId: string | number, quantity: number): {
   totalCOGS: number;
   breakdown: Array<{
-    itemType: 'material' | 'product';
+    itemType: 'material' | 'product' | 'base';
     itemId: string;
     itemName: string;
     quantityUsed: number;
@@ -359,17 +417,43 @@ export function calculateProductCOGS(wcProductId: string | number, quantity: num
 
   const recipe = getProductRecipe(product.id);
 
-  const breakdown = recipe
+  const breakdown: Array<{
+    itemType: 'material' | 'product' | 'base';
+    itemId: string;
+    itemName: string;
+    quantityUsed: number;
+    unit: string;
+    costPerUnit: number;
+    totalCost: number;
+  }> = [];
+
+  // Add base product cost if it exists (e.g., buying muffins from supplier)
+  if (product.unitCost > 0) {
+    breakdown.push({
+      itemType: 'base',
+      itemId: product.id,
+      itemName: `${product.name} (Base Cost)`,
+      quantityUsed: quantity,
+      unit: 'unit',
+      costPerUnit: product.unitCost,
+      totalCost: product.unitCost * quantity,
+    });
+  }
+
+  // Add recipe materials/linked products
+  recipe
     .filter(item => !item.isOptional)
-    .map(item => ({
-      itemType: item.itemType,
-      itemId: (item.itemType === 'material' ? item.materialId : item.linkedProductId) || '',
-      itemName: (item.itemType === 'material' ? item.materialName : item.linkedProductName) || '',
-      quantityUsed: item.quantity * quantity,
-      unit: item.unit,
-      costPerUnit: item.costPerUnit || 0,
-      totalCost: item.calculatedCost * quantity,
-    }));
+    .forEach(item => {
+      breakdown.push({
+        itemType: item.itemType,
+        itemId: (item.itemType === 'material' ? item.materialId : item.linkedProductId) || '',
+        itemName: (item.itemType === 'material' ? item.materialName : item.linkedProductName) || '',
+        quantityUsed: item.quantity * quantity,
+        unit: item.unit,
+        costPerUnit: item.costPerUnit || 0,
+        totalCost: item.calculatedCost * quantity,
+      });
+    });
 
   const totalCOGS = breakdown.reduce((sum, item) => sum + item.totalCost, 0);
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, ChefHat, Calculator, Search, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ChefHat, Calculator, Search, RefreshCw, Edit2 } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -34,6 +34,7 @@ interface RecipeItem {
   unit: string;
   calculatedCost?: number;
   isOptional?: boolean;
+  selectionGroup?: string;
 }
 
 interface Recipe {
@@ -55,6 +56,8 @@ export default function RecipesPage() {
   const [syncing, setSyncing] = useState(false);
   const [showAddIngredient, setShowAddIngredient] = useState(false);
   const [productSearch, setProductSearch] = useState('');
+  const [editingCost, setEditingCost] = useState(false);
+  const [newUnitCost, setNewUnitCost] = useState('');
 
   useEffect(() => {
     fetchProducts();
@@ -133,6 +136,7 @@ export default function RecipesPage() {
         quantity: item.quantity,
         unit: item.unit,
         isOptional: item.isOptional || false,
+        selectionGroup: item.selectionGroup,
       }));
 
       const res = await fetch(`/api/admin/recipes/${selectedProduct.id}`, {
@@ -156,7 +160,45 @@ export default function RecipesPage() {
     }
   }
 
-  function addItem(itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean) {
+  async function updateUnitCost() {
+    if (!selectedProduct) return;
+
+    const cost = parseFloat(newUnitCost);
+    if (isNaN(cost) || cost < 0) {
+      alert('Please enter a valid cost (0 or greater)');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/products/${selectedProduct.id}/cost`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unitCost: cost }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update cost');
+      }
+
+      // Update local state
+      setSelectedProduct({ ...selectedProduct, unitCost: cost });
+      setProducts(products.map(p =>
+        p.id === selectedProduct.id ? { ...p, unitCost: cost } : p
+      ));
+
+      setEditingCost(false);
+      setNewUnitCost('');
+      alert(`Base cost updated to RM ${cost.toFixed(2)}`);
+    } catch (error) {
+      console.error('Failed to update cost:', error);
+      alert('Failed to update cost. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function addItem(itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean, selectionGroup?: string) {
     if (!selectedProduct) return;
 
     let newItem: RecipeItem;
@@ -191,6 +233,7 @@ export default function RecipesPage() {
         unit: 'unit',
         calculatedCost: quantity * product.unitCost,
         isOptional,
+        selectionGroup: selectionGroup || undefined,
       };
     }
 
@@ -265,7 +308,9 @@ export default function RecipesPage() {
     });
   }
 
-  const grossProfit = selectedProduct ? selectedProduct.currentPrice - (recipe?.totalCost || 0) : 0;
+  // Total COGS = Base Cost + Recipe Cost
+  const totalCOGS = selectedProduct ? selectedProduct.unitCost + (recipe?.totalCost || 0) : 0;
+  const grossProfit = selectedProduct ? selectedProduct.currentPrice - totalCOGS : 0;
   const grossMargin = selectedProduct && selectedProduct.currentPrice > 0
     ? (grossProfit / selectedProduct.currentPrice) * 100
     : 0;
@@ -357,15 +402,39 @@ export default function RecipesPage() {
               {/* Product Info */}
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-semibold mb-4">{selectedProduct.name}</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   <div>
                     <p className="text-sm text-gray-500">Selling Price</p>
                     <p className="text-lg font-semibold">RM {selectedProduct.currentPrice.toFixed(2)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Current COGS</p>
+                    <p className="text-sm text-gray-500">Base Cost</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-lg font-semibold text-blue-600">
+                        RM {selectedProduct.unitCost.toFixed(2)}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setNewUnitCost(selectedProduct.unitCost.toString());
+                          setEditingCost(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-800"
+                        title="Edit base cost"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Recipe COGS</p>
                     <p className="text-lg font-semibold text-orange-600">
                       RM {(recipe?.totalCost || 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Total COGS</p>
+                    <p className="text-lg font-semibold text-red-600">
+                      RM {totalCOGS.toFixed(2)}
                     </p>
                   </div>
                   <div>
@@ -500,6 +569,68 @@ export default function RecipesPage() {
             onAdd={addItem}
           />
         )}
+
+        {/* Edit Base Cost Modal */}
+        {editingCost && selectedProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-xl font-semibold mb-4">Edit Base Cost</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Set the base unit cost for <strong>{selectedProduct.name}</strong>.
+                <br />
+                This is what you pay to acquire/make one unit (e.g., supplier cost for muffins).
+              </p>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Unit Cost (RM)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newUnitCost}
+                  onChange={(e) => setNewUnitCost(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0.00"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Current: RM {selectedProduct.unitCost.toFixed(2)}
+                </p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Examples:</strong>
+                  <br />• Latte (made in-house): RM 0.00
+                  <br />• Muffin (bought from supplier): RM 2.50
+                  <br />• Bottled Water (retail): RM 1.20
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setEditingCost(false);
+                    setNewUnitCost('');
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateUnitCost}
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 }
@@ -514,13 +645,14 @@ function AddItemModal({
   materials: Material[];
   products: Product[];
   onClose: () => void;
-  onAdd: (itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean) => void;
+  onAdd: (itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean, selectionGroup?: string) => void;
 }) {
   const [itemType, setItemType] = useState<'material' | 'product'>('material');
   const [selectedMaterial, setSelectedMaterial] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState<string>('1');
   const [isOptional, setIsOptional] = useState(false);
+  const [selectionGroup, setSelectionGroup] = useState('');
   const [filter, setFilter] = useState('');
 
   const material = materials.find(m => m.id === selectedMaterial);
@@ -555,7 +687,7 @@ function AddItemModal({
       return;
     }
 
-    onAdd(itemType, itemId, parseFloat(quantity), isOptional);
+    onAdd(itemType, itemId, parseFloat(quantity), isOptional, selectionGroup || undefined);
   }
 
   return (
@@ -695,6 +827,26 @@ function AddItemModal({
               Optional {itemType === 'material' ? 'ingredient' : 'add-on'} (e.g., syrup, extra toppings)
             </label>
           </div>
+
+          {/* Selection Group (for mandatory linked products only) */}
+          {itemType === 'product' && !isOptional && (
+            <div className="border-t pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Selection Group (Optional)
+              </label>
+              <input
+                type="text"
+                value={selectionGroup}
+                onChange={(e) => setSelectionGroup(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+                placeholder="e.g., temperature"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                <strong>For XOR choices:</strong> Items in the same group are mutually exclusive (choose one).
+                <br />Example: "Hot" and "Iced" both have selectionGroup="temperature" → customer must pick one.
+              </p>
+            </div>
+          )}
 
           {/* Cost Preview */}
           {((itemType === 'material' && material && quantity) || (itemType === 'product' && product && quantity)) && (

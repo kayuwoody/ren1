@@ -45,18 +45,34 @@ export default function PaymentPage() {
       const userId = userIdStr ? Number(userIdStr) : undefined;
       const guestId = userId ? undefined : getGuestId();
 
-      // Build line items payload with discount data captured at point of sale
-      const lineItems = cartItems.map((i: any) => ({
-        product_id: i.productId,
-        quantity: i.quantity,
-        meta_data: [
+      // Build line items payload with discount data and bundle info captured at point of sale
+      const lineItems = cartItems.map((i: any) => {
+        const metaData = [
           { key: '_retail_price', value: i.retailPrice.toString() },
           { key: '_final_price', value: i.finalPrice.toString() },
           { key: '_discount_percent', value: i.discountPercent ? i.discountPercent.toString() : '' },
           { key: '_discount_amount', value: i.discountAmount ? i.discountAmount.toString() : '' },
           { key: '_discount_reason', value: i.discountReason || '' },
-        ],
-      }));
+        ];
+
+        // Add bundle metadata if this is a bundled product
+        if (i.bundle) {
+          metaData.push(
+            { key: '_is_bundle', value: 'true' },
+            { key: '_bundle_base_product_id', value: i.bundle.baseProductId.toString() },
+            { key: '_bundle_base_product_name', value: i.bundle.baseProductName },
+            { key: '_bundle_display_name', value: i.name },
+            { key: '_bundle_mandatory', value: JSON.stringify(i.bundle.selectedMandatory) },
+            { key: '_bundle_optional', value: JSON.stringify(i.bundle.selectedOptional) }
+          );
+        }
+
+        return {
+          product_id: i.productId,
+          quantity: i.quantity,
+          meta_data: metaData,
+        };
+      });
 
       // Create order with discount metadata
       const payload: any = {

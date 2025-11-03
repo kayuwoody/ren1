@@ -147,20 +147,25 @@ export async function GET(req: Request) {
           const consumptions = getOrderConsumptions(String(order.id));
           // Filter by order item ID if available, otherwise we can't distinguish between multiple items of same product
           const itemConsumptions = item.id
-            ? consumptions.filter(c => c.orderItemId === String(item.id))
+            ? consumptions.filter(c => Number(c.orderItemId) === Number(item.id))
             : consumptions;
           itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
         } catch (err) {
           // COGS not available
         }
 
-        if (!productStats[item.name]) {
-          productStats[item.name] = { quantity: 0, revenue: 0, cogs: 0, profit: 0 };
+        // Use bundle display name if available for proper tracking of combinations
+        const isBundle = item.meta_data?.find((m: any) => m.key === '_is_bundle')?.value === 'true';
+        const bundleDisplayName = item.meta_data?.find((m: any) => m.key === '_bundle_display_name')?.value;
+        const productName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+
+        if (!productStats[productName]) {
+          productStats[productName] = { quantity: 0, revenue: 0, cogs: 0, profit: 0 };
         }
-        productStats[item.name].quantity += item.quantity;
-        productStats[item.name].revenue += itemRevenue;
-        productStats[item.name].cogs += itemCOGS;
-        productStats[item.name].profit += (itemRevenue - itemCOGS);
+        productStats[productName].quantity += item.quantity;
+        productStats[productName].revenue += itemRevenue;
+        productStats[productName].cogs += itemCOGS;
+        productStats[productName].profit += (itemRevenue - itemCOGS);
       });
     });
 

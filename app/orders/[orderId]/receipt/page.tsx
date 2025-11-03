@@ -226,11 +226,22 @@ export default function ReceiptPage() {
                   const itemRetailTotal = retailPrice * item.quantity;
                   const itemFinalTotal = finalPrice * item.quantity;
 
+                  // Check if this is a bundled product
+                  const isBundle = getItemMeta(item, '_is_bundle') === 'true';
+                  const bundleDisplayName = getItemMeta(item, '_bundle_display_name');
+                  const bundleBaseName = getItemMeta(item, '_bundle_base_product_name');
+
+                  // Display name: use bundle name if available, otherwise product name
+                  const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+
                   return (
                     <tr key={item.id} className="border-b">
                       <td className="py-3">
                         <div>
-                          <div className="font-medium">{item.name}</div>
+                          <div className="font-medium">{displayName}</div>
+                          {isBundle && bundleBaseName && (
+                            <div className="text-xs text-gray-500 mt-0.5">Base: {bundleBaseName}</div>
+                          )}
                           {discountReason && (
                             <div className="text-xs text-green-600 mt-1">• {discountReason}</div>
                           )}

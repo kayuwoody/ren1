@@ -3,13 +3,19 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 
 export interface CartItem {
   productId: number;
-  name: string;
+  name: string;               // Display name (e.g., "Hot Latte" for bundles)
   retailPrice: number;        // Original catalog price
   discountPercent?: number;   // Discount as percentage (0-100)
   discountAmount?: number;    // Discount as fixed amount
   discountReason?: string;    // Why discount was applied
   finalPrice: number;         // Actual selling price after discount
   quantity: number;
+  bundle?: {                  // Optional: for products with mandatory/optional components
+    baseProductId: number;
+    baseProductName: string;
+    selectedMandatory: Record<string, string>; // groupName -> selectedItemId
+    selectedOptional: string[]; // array of item IDs
+  };
 }
 
 interface CartContextType {
