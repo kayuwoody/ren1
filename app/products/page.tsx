@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useCart } from "@/context/cartContext";
 import { Shield } from "lucide-react";
 import Link from "next/link";
+import ProductSelectionModal from "@/components/ProductSelectionModal";
 
 interface Product {
   id: number;
@@ -11,11 +12,19 @@ interface Product {
   images: { src: string }[];
 }
 
+interface RecipeData {
+  product: any;
+  recipe: any;
+  needsModal: boolean;
+}
+
 const ProductListPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [isStaffMode, setIsStaffMode] = useState(false);
+  const [modalData, setModalData] = useState<RecipeData | null>(null);
+  const [loadingRecipe, setLoadingRecipe] = useState(false);
   const { addToCart, cartItems } = useCart();
 
   // Check if staff is logged in
@@ -24,16 +33,62 @@ const ProductListPage: React.FC = () => {
     setIsStaffMode(authToken === 'authenticated');
   }, []);
 
-  const handleAddToCart = (product: Product) => {
+  const handleAddToCart = async (product: Product) => {
+    setLoadingRecipe(true);
+
+    try {
+      // Fetch recipe configuration
+      const response = await fetch(`/api/products/${product.id}/recipe`);
+      const data = await response.json();
+
+      if (data.success && data.needsModal) {
+        // Product has mandatory selections or optional add-ons - show modal
+        setModalData(data);
+      } else {
+        // Simple product - add directly to cart
+        addToCart({
+          productId: product.id,
+          name: product.name,
+          retailPrice: parseFloat(product.price),
+          quantity: 1
+        });
+
+        setToast(`Added ${product.name} to cart`);
+        setTimeout(() => setToast(null), 2000);
+      }
+    } catch (error) {
+      console.error('Error fetching recipe:', error);
+      // Fallback: add as simple product
+      addToCart({
+        productId: product.id,
+        name: product.name,
+        retailPrice: parseFloat(product.price),
+        quantity: 1
+      });
+
+      setToast(`Added ${product.name} to cart`);
+      setTimeout(() => setToast(null), 2000);
+    } finally {
+      setLoadingRecipe(false);
+    }
+  };
+
+  const handleModalAddToCart = (bundle: any) => {
+    // Add bundle to cart
     addToCart({
-      productId: product.id,
-      name: product.name,
-      retailPrice: parseFloat(product.price),
-      quantity: 1
+      productId: bundle.baseProduct.id,
+      name: bundle.displayName,
+      retailPrice: bundle.totalPrice,
+      quantity: 1,
+      bundle: {
+        baseProductId: bundle.baseProduct.id,
+        baseProductName: bundle.baseProduct.name,
+        selectedMandatory: bundle.selectedMandatory,
+        selectedOptional: bundle.selectedOptional,
+      },
     });
 
-    // Show toast notification
-    setToast(`Added ${product.name} to cart`);
+    setToast(`Added ${bundle.displayName} to cart`);
     setTimeout(() => setToast(null), 2000);
   };
 
@@ -138,6 +193,17 @@ const ProductListPage: React.FC = () => {
             </a>
           </div>
         </div>
+      )}
+
+      {/* Product Selection Modal */}
+      {modalData && (
+        <ProductSelectionModal
+          isOpen={true}
+          onClose={() => setModalData(null)}
+          product={modalData.product}
+          recipe={modalData.recipe}
+          onAddToCart={handleModalAddToCart}
+        />
       )}
     </div>
   );
