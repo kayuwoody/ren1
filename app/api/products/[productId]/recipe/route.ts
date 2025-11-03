@@ -32,6 +32,12 @@ export async function GET(
     // Get recipe
     const recipe = getProductRecipe(product.id);
 
+    console.log(`\n🔍 Product: ${product.name} (${product.id})`);
+    console.log(`📋 Recipe items found: ${recipe.length}`);
+    recipe.forEach((item, idx) => {
+      console.log(`  ${idx + 1}. ${item.itemType}: ${item.linkedProductName || item.materialName} | Optional: ${item.isOptional} | SelectionGroup: ${item.selectionGroup || 'none'}`);
+    });
+
     // Group items by type and selection group
     const mandatoryGroups: Record<string, typeof recipe> = {};
     const mandatoryIndividual: typeof recipe = [];
@@ -55,6 +61,15 @@ export async function GET(
     // Determine if modal is needed
     const needsModal =
       Object.keys(mandatoryGroups).length > 0 || optional.length > 0;
+
+    console.log(`\n📊 Grouping results:`);
+    console.log(`  Mandatory groups: ${Object.keys(mandatoryGroups).length}`);
+    Object.entries(mandatoryGroups).forEach(([groupName, items]) => {
+      console.log(`    - ${groupName}: ${items.length} items`);
+    });
+    console.log(`  Mandatory individual: ${mandatoryIndividual.length}`);
+    console.log(`  Optional: ${optional.length}`);
+    console.log(`  ✅ needsModal: ${needsModal}\n`);
 
     return NextResponse.json({
       success: true,
