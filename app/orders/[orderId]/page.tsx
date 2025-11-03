@@ -287,11 +287,20 @@ export default function OrderDetailPage() {
             const itemFinalTotal = finalPrice * item.quantity;
             const itemRetailTotal = retailPrice * item.quantity;
 
+            // Check if this is a bundled product
+            const isBundle = getItemMeta(item, '_is_bundle') === 'true';
+            const bundleDisplayName = getItemMeta(item, '_bundle_display_name');
+            const bundleBaseName = getItemMeta(item, '_bundle_base_product_name');
+            const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+
             return (
               <li key={item.id} className="border-b pb-2">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <div className="font-medium">{item.name} × {item.quantity}</div>
+                    <div className="font-medium">{displayName} × {item.quantity}</div>
+                    {isBundle && bundleBaseName && (
+                      <div className="text-xs text-gray-500">Base: {bundleBaseName}</div>
+                    )}
                     {discountReason && (
                       <div className="text-xs text-green-600 mt-1">• {discountReason}</div>
                     )}
