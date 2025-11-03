@@ -132,7 +132,7 @@ export async function GET(req: Request) {
           }
 
           const itemConsumptions = item.id
-            ? consumptions.filter(c => String(c.orderItemId) === String(item.id))
+            ? consumptions.filter(c => Number(c.orderItemId) === Number(item.id))
             : [];
           itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
 
