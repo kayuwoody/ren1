@@ -3,6 +3,7 @@ import { wcApi } from '@/lib/wooClient';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 
 export async function GET(req: Request) {
+  console.log('🔧 [DEBUG] Daily sales API loaded - Code version: 2025-11-03-v2');
   try {
     const { searchParams } = new URL(req.url);
     const dateParam = searchParams.get('date'); // Format: YYYY-MM-DD
@@ -105,6 +106,7 @@ export async function GET(req: Request) {
       const margin = finalTotal > 0 ? (profit / finalTotal) * 100 : 0;
 
       // Process line items
+      console.log(`Order ${order.id}: Processing ${order.line_items?.length || 0} line items`);
       const items = order.line_items?.map((item: any) => {
         const retailPrice = parseFloat(
           item.meta_data?.find((m: any) => m.key === '_retail_price')?.value || item.price
