@@ -82,11 +82,19 @@ export async function GET(req: Request) {
 
       // Get COGS from consumption records
       let orderCOGS = 0;
+      let consumptionCount = 0;
       try {
         const consumptions = getOrderConsumptions(String(order.id));
+        consumptionCount = consumptions.length;
         orderCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
+
+        if (consumptions.length > 0) {
+          console.log(`Order ${order.id}: Found ${consumptions.length} consumptions, COGS = RM ${orderCOGS.toFixed(2)}`);
+        } else {
+          console.log(`Order ${order.id}: No consumption records found (COGS = RM 0.00)`);
+        }
       } catch (err) {
-        // COGS not available
+        console.error(`Order ${order.id}: Error fetching COGS:`, err);
       }
 
       const profit = finalTotal - orderCOGS;
@@ -110,8 +118,12 @@ export async function GET(req: Request) {
             ? consumptions.filter(c => c.orderItemId === String(item.id))
             : [];
           itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
+
+          if (itemConsumptions.length > 0) {
+            console.log(`  Item "${item.name}": ${itemConsumptions.length} consumptions, COGS = RM ${itemCOGS.toFixed(2)}`);
+          }
         } catch (err) {
-          // COGS not available
+          console.warn(`  Item "${item.name}": Error fetching COGS`, err);
         }
 
         const itemRevenue = finalPrice * item.quantity;
@@ -145,6 +157,10 @@ export async function GET(req: Request) {
         orderCOGS,
         profit,
         margin,
+        _debug: {
+          consumptionCount,
+          hasCOGS: orderCOGS > 0,
+        },
       };
     });
 
