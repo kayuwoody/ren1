@@ -569,6 +569,68 @@ export default function RecipesPage() {
             onAdd={addItem}
           />
         )}
+
+        {/* Edit Base Cost Modal */}
+        {editingCost && selectedProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-xl font-semibold mb-4">Edit Base Cost</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Set the base unit cost for <strong>{selectedProduct.name}</strong>.
+                <br />
+                This is what you pay to acquire/make one unit (e.g., supplier cost for muffins).
+              </p>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Unit Cost (RM)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newUnitCost}
+                  onChange={(e) => setNewUnitCost(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0.00"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Current: RM {selectedProduct.unitCost.toFixed(2)}
+                </p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Examples:</strong>
+                  <br />• Latte (made in-house): RM 0.00
+                  <br />• Muffin (bought from supplier): RM 2.50
+                  <br />• Bottled Water (retail): RM 1.20
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setEditingCost(false);
+                    setNewUnitCost('');
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateUnitCost}
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 }
@@ -819,68 +881,6 @@ function AddItemModal({
           </button>
         </div>
       </div>
-
-      {/* Edit Base Cost Modal */}
-      {editingCost && selectedProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-semibold mb-4">Edit Base Cost</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Set the base unit cost for <strong>{selectedProduct.name}</strong>.
-              <br />
-              This is what you pay to acquire/make one unit (e.g., supplier cost for muffins).
-            </p>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Unit Cost (RM)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={newUnitCost}
-                onChange={(e) => setNewUnitCost(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0.00"
-                autoFocus
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Current: RM {selectedProduct.unitCost.toFixed(2)}
-              </p>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-blue-800">
-                <strong>Examples:</strong>
-                <br />• Latte (made in-house): RM 0.00
-                <br />• Muffin (bought from supplier): RM 2.50
-                <br />• Bottled Water (retail): RM 1.20
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => {
-                  setEditingCost(false);
-                  setNewUnitCost('');
-                }}
-                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={updateUnitCost}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
