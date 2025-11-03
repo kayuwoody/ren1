@@ -145,6 +145,8 @@ export function recordProductSale(
       now
     );
 
+    console.log(`${indent}      💾 Stored consumption: orderItemId=${orderItemId || 'null'}, material=${recipeItem.materialName}`);
+
     consumptions.push(consumption);
 
     // Handle material vs linked product
