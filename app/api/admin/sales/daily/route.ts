@@ -7,34 +7,38 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const dateParam = searchParams.get('date'); // Format: YYYY-MM-DD
 
-    // Default to today in UTC+8 (Malaysia time)
-    let targetDate: Date;
+    // Parse date as UTC+8 (Malaysia time)
+    let year: number, month: number, day: number;
+
     if (dateParam) {
-      targetDate = new Date(dateParam);
+      // Parse the date string as YYYY-MM-DD
+      const parts = dateParam.split('-');
+      year = parseInt(parts[0]);
+      month = parseInt(parts[1]) - 1; // Month is 0-indexed
+      day = parseInt(parts[2]);
     } else {
-      // Get current time in UTC+8
+      // Get current date in UTC+8
       const now = new Date();
-      const utc8Offset = 8 * 60; // 8 hours in minutes
-      const utc8Time = new Date(now.getTime() + (utc8Offset * 60 * 1000));
-      targetDate = utc8Time;
+      const utc8Time = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+      year = utc8Time.getUTCFullYear();
+      month = utc8Time.getUTCMonth();
+      day = utc8Time.getUTCDate();
     }
 
-    // Set to start of day (00:00:00) in UTC+8
-    const startOfDay = new Date(targetDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    // Create start and end times in UTC, representing midnight to 23:59:59 in UTC+8
+    // UTC+8 midnight = 16:00 previous day UTC
+    // UTC+8 23:59:59 = 15:59:59 same day UTC
+    const startUTC = new Date(Date.UTC(year, month, day, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
+    const endUTC = new Date(Date.UTC(year, month, day, 23, 59, 59, 999) - (8 * 60 * 60 * 1000));
 
-    // Set to end of day (23:59:59.999) in UTC+8
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Convert to UTC for API query
-    const startUTC = new Date(startOfDay.getTime() - (8 * 60 * 60 * 1000));
-    const endUTC = new Date(endOfDay.getTime() - (8 * 60 * 60 * 1000));
+    const displayDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     console.log('📅 Daily sales report:', {
-      targetDate: targetDate.toISOString().split('T')[0],
+      targetDate: displayDate,
       startUTC: startUTC.toISOString(),
       endUTC: endUTC.toISOString(),
+      startLocal: new Date(startUTC.getTime() + (8 * 60 * 60 * 1000)).toISOString(),
+      endLocal: new Date(endUTC.getTime() + (8 * 60 * 60 * 1000)).toISOString(),
     });
 
     // Fetch orders for the day
@@ -66,7 +70,7 @@ export async function GET(req: Request) {
       (order) => order.status === 'completed' || order.status === 'processing' || order.status === 'ready-for-pickup'
     );
 
-    console.log(`📦 Found ${orders.length} orders for ${targetDate.toISOString().split('T')[0]}`);
+    console.log(`📦 Found ${orders.length} orders for ${displayDate}`);
 
     // Process each order
     const detailedOrders = orders.map((order) => {
@@ -82,11 +86,19 @@ export async function GET(req: Request) {
 
       // Get COGS from consumption records
       let orderCOGS = 0;
+      let consumptionCount = 0;
       try {
         const consumptions = getOrderConsumptions(String(order.id));
+        consumptionCount = consumptions.length;
         orderCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
+
+        if (consumptions.length > 0) {
+          console.log(`Order ${order.id}: Found ${consumptions.length} consumptions, COGS = RM ${orderCOGS.toFixed(2)}`);
+        } else {
+          console.log(`Order ${order.id}: No consumption records found (COGS = RM 0.00)`);
+        }
       } catch (err) {
-        // COGS not available
+        console.error(`Order ${order.id}: Error fetching COGS:`, err);
       }
 
       const profit = finalTotal - orderCOGS;
@@ -110,8 +122,12 @@ export async function GET(req: Request) {
             ? consumptions.filter(c => c.orderItemId === String(item.id))
             : [];
           itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
+
+          if (itemConsumptions.length > 0) {
+            console.log(`  Item "${item.name}": ${itemConsumptions.length} consumptions, COGS = RM ${itemCOGS.toFixed(2)}`);
+          }
         } catch (err) {
-          // COGS not available
+          console.warn(`  Item "${item.name}": Error fetching COGS`, err);
         }
 
         const itemRevenue = finalPrice * item.quantity;
@@ -145,6 +161,10 @@ export async function GET(req: Request) {
         orderCOGS,
         profit,
         margin,
+        _debug: {
+          consumptionCount,
+          hasCOGS: orderCOGS > 0,
+        },
       };
     });
 
@@ -163,7 +183,7 @@ export async function GET(req: Request) {
       : 0;
 
     return NextResponse.json({
-      date: targetDate.toISOString().split('T')[0],
+      date: displayDate,
       summary,
       orders: detailedOrders,
     });
