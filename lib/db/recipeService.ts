@@ -175,6 +175,7 @@ export function getProductRecipe(productId: string): ProductRecipeItem[] {
     unit: row.unit,
     calculatedCost: row.calculatedCost,
     isOptional: row.isOptional === 1,
+    selectionGroup: row.selectionGroup,
     sortOrder: row.sortOrder,
     createdAt: row.createdAt,
   }));

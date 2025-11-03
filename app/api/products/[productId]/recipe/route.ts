@@ -1,0 +1,114 @@
+import { NextResponse } from 'next/server';
+import { getProduct, getProductByWcId } from '@/lib/db/productService';
+import { getProductRecipe } from '@/lib/db/recipeService';
+
+/**
+ * GET /api/products/[productId]/recipe
+ *
+ * Fetch a product's recipe configuration including:
+ * - Mandatory items (must be selected)
+ * - Optional items (can be added)
+ * - Selection groups (XOR choices - e.g., Hot vs Iced)
+ *
+ * Used by product selection UI to determine if a modal is needed
+ */
+export async function GET(
+  req: Request,
+  { params }: { params: { productId: string } }
+) {
+  try {
+    const { productId } = params;
+
+    // Find product by WooCommerce ID
+    const product = getProductByWcId(Number(productId));
+
+    if (!product) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      );
+    }
+
+    // Get recipe
+    const recipe = getProductRecipe(product.id);
+
+    // Group items by type and selection group
+    const mandatoryGroups: Record<string, typeof recipe> = {};
+    const mandatoryIndividual: typeof recipe = [];
+    const optional: typeof recipe = [];
+
+    recipe.forEach((item) => {
+      if (item.isOptional) {
+        optional.push(item);
+      } else if (item.selectionGroup) {
+        // Mandatory item with selection group (XOR choice)
+        if (!mandatoryGroups[item.selectionGroup]) {
+          mandatoryGroups[item.selectionGroup] = [];
+        }
+        mandatoryGroups[item.selectionGroup].push(item);
+      } else {
+        // Mandatory item without selection group (always included)
+        mandatoryIndividual.push(item);
+      }
+    });
+
+    // Determine if modal is needed
+    const needsModal =
+      Object.keys(mandatoryGroups).length > 0 || optional.length > 0;
+
+    return NextResponse.json({
+      success: true,
+      product: {
+        id: product.wcId,
+        localId: product.id,
+        name: product.name,
+        sku: product.sku,
+        basePrice: product.basePrice,
+        unitCost: product.unitCost,
+      },
+      recipe: {
+        mandatoryGroups: Object.entries(mandatoryGroups).map(
+          ([groupName, items]) => ({
+            groupName,
+            items: items.map((item) => ({
+              id: item.linkedProductId || item.materialId,
+              type: item.itemType,
+              name: item.linkedProductName || item.materialName,
+              sku: item.linkedProductSku,
+              quantity: item.quantity,
+              unit: item.unit,
+              cost: item.calculatedCost,
+              priceAdjustment: 0, // Will be fetched from WooCommerce if needed
+            })),
+          })
+        ),
+        mandatoryIndividual: mandatoryIndividual.map((item) => ({
+          id: item.linkedProductId || item.materialId,
+          type: item.itemType,
+          name: item.linkedProductName || item.materialName,
+          sku: item.linkedProductSku,
+          quantity: item.quantity,
+          unit: item.unit,
+          cost: item.calculatedCost,
+        })),
+        optional: optional.map((item) => ({
+          id: item.linkedProductId || item.materialId,
+          type: item.itemType,
+          name: item.linkedProductName || item.materialName,
+          sku: item.linkedProductSku,
+          quantity: item.quantity,
+          unit: item.unit,
+          cost: item.calculatedCost,
+          priceAdjustment: 0, // Will be fetched from WooCommerce if needed
+        })),
+      },
+      needsModal,
+    });
+  } catch (error: any) {
+    console.error('Error fetching product recipe:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to fetch product recipe' },
+      { status: 500 }
+    );
+  }
+}
