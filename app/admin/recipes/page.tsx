@@ -9,6 +9,7 @@ interface Product {
   name: string;
   sku: string;
   currentPrice: number;
+  supplierCost: number;
   unitCost: number;
 }
 
@@ -115,6 +116,12 @@ export default function RecipesPage() {
       const recipe = data.recipe;
       if (recipe && !Array.isArray(recipe.items)) {
         recipe.items = [];
+      }
+      console.log('📋 Fetched recipe:', recipe);
+      if (recipe?.items) {
+        recipe.items.forEach((item: any, idx: number) => {
+          console.log(`  ${idx + 1}. ${item.itemType}: ${item.linkedProductName || item.materialName} | selectionGroup: ${item.selectionGroup || 'none'}`);
+        });
       }
       setRecipe(recipe);
     } catch (error) {
