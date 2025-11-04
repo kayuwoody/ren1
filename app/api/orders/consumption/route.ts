@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
     // Process each line item
     for (const item of lineItems) {
-      const { productId, productName, quantity, orderItemId } = item;
+      const { productId, productName, quantity, orderItemId, meta_data } = item;
 
       console.log(`📦 Processing line item:`, {
         productId,
@@ -36,6 +36,26 @@ export async function POST(req: Request) {
         continue;
       }
 
+      // Extract bundle metadata if present
+      let bundleSelection: { selectedMandatory: Record<string, string>, selectedOptional: string[] } | undefined;
+      if (meta_data) {
+        const isBundle = meta_data.find((m: any) => m.key === '_is_bundle')?.value === 'true';
+        if (isBundle) {
+          const mandatoryJson = meta_data.find((m: any) => m.key === '_bundle_mandatory')?.value;
+          const optionalJson = meta_data.find((m: any) => m.key === '_bundle_optional')?.value;
+
+          try {
+            bundleSelection = {
+              selectedMandatory: mandatoryJson ? JSON.parse(mandatoryJson) : {},
+              selectedOptional: optionalJson ? JSON.parse(optionalJson) : [],
+            };
+            console.log(`   🎁 Bundle selection:`, bundleSelection);
+          } catch (e) {
+            console.warn(`   ⚠️  Failed to parse bundle metadata`);
+          }
+        }
+      }
+
       // Calculate COGS for this item
       const cogsData = calculateProductCOGS(productId, quantity);
       totalCOGS += cogsData.totalCOGS;
@@ -46,7 +66,8 @@ export async function POST(req: Request) {
         productId,
         productName,
         quantity,
-        orderItemId
+        orderItemId,
+        bundleSelection
       );
 
       results.push({

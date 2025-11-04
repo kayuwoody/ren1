@@ -47,6 +47,27 @@ function calculateFinalPrice(item: Omit<CartItem, 'finalPrice'>): number {
   return retailPrice;
 }
 
+// Check if two cart items are the same (considering bundle variations)
+function isSameCartItem(item1: CartItem, item2: Omit<CartItem, 'finalPrice'>): boolean {
+  // Must have same productId
+  if (item1.productId !== item2.productId) return false;
+
+  // If neither has bundle, they're the same
+  if (!item1.bundle && !item2.bundle) return true;
+
+  // If only one has bundle, they're different
+  if (!item1.bundle || !item2.bundle) return false;
+
+  // Compare bundle configurations
+  const mandatory1 = JSON.stringify(item1.bundle.selectedMandatory);
+  const mandatory2 = JSON.stringify(item2.bundle.selectedMandatory);
+
+  const optional1 = JSON.stringify(item1.bundle.selectedOptional.sort());
+  const optional2 = JSON.stringify(item2.bundle.selectedOptional.sort());
+
+  return mandatory1 === mandatory2 && optional1 === optional2;
+}
+
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
@@ -106,16 +127,19 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
     console.log('➕ Adding to cart:', fullItem);
     setCartItems(prev => {
-      const existing = prev.find(ci => ci.productId === item.productId);
+      // Check if same item exists (considering bundle variations)
+      const existing = prev.find(ci => isSameCartItem(ci, item));
       if (existing) {
-        // Update quantity if item already exists
+        // Update quantity if identical item already exists
+        console.log('   Found matching item, increasing quantity');
         return prev.map(ci =>
-          ci.productId === item.productId
+          isSameCartItem(ci, item)
             ? { ...ci, quantity: ci.quantity + item.quantity }
             : ci
         );
       } else {
         // Add new item
+        console.log('   New item, adding to cart');
         return [...prev, fullItem];
       }
     });
