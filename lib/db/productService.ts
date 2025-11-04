@@ -161,16 +161,29 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
   // Check if product already exists to preserve local cost fields
   const existing = getProductByWcId(wcProduct.id);
 
-  return upsertProduct({
+  const supplierCost = existing?.supplierCost ?? 0;
+  const unitCost = existing?.unitCost ?? 0;
+
+  if (existing && (supplierCost > 0 || unitCost > 0)) {
+    console.log(`🔄 Syncing ${wcProduct.name} - Preserving: supplierCost=RM${supplierCost}, unitCost=RM${unitCost}`);
+  }
+
+  const result = upsertProduct({
     id: undefined, // Will be auto-generated or matched by wcId
     wcId: wcProduct.id,
     name: wcProduct.name,
     sku: wcProduct.sku,
     category: wcProduct.categories?.[0]?.slug || 'uncategorized',
     basePrice: parseFloat(wcProduct.price) || 0,
-    supplierCost: existing ? existing.supplierCost : 0, // Preserve existing supplierCost (local field)
-    unitCost: existing ? existing.unitCost : 0, // Preserve existing unitCost from recipes
+    supplierCost, // Preserve existing supplierCost (local field)
+    unitCost, // Preserve existing unitCost from recipes
     stockQuantity: wcProduct.stock_quantity || 0,
     imageUrl: wcProduct.images?.[0]?.src,
   });
+
+  if (existing && (supplierCost > 0 || unitCost > 0)) {
+    console.log(`   ✅ After sync - supplierCost=RM${result.supplierCost}, unitCost=RM${result.unitCost}`);
+  }
+
+  return result;
 }
