@@ -173,67 +173,66 @@ export function recordProductSale(
     // Calculate total consumed (recipe quantity × units sold)
     const quantityConsumed = recipeItem.quantity * quantitySold;
 
-    // Record the consumption
-    const consumptionId = uuidv4();
-    const consumption: InventoryConsumption = {
-      id: consumptionId,
-      orderId,
-      orderItemId,
-      productId,
-      productName,
-      productSku: '',
-      quantitySold,
-      itemType: recipeItem.itemType,
-      materialId: recipeItem.materialId,
-      linkedProductId: recipeItem.linkedProductId,
-      materialName: recipeItem.materialName,
-      linkedProductName: recipeItem.linkedProductName,
-      quantityConsumed,
-      unit: recipeItem.unit,
-      costPerUnit: recipeItem.costPerUnit || 0,
-      totalCost: recipeItem.costPerUnit ? quantityConsumed * recipeItem.costPerUnit : 0,
-      consumedAt: now,
-    };
-
-    // Insert into database
-    const stmt = db.prepare(`
-      INSERT INTO InventoryConsumption
-      (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
-       materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-       unit, costPerUnit, totalCost, consumedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      consumptionId,
-      orderId,
-      orderItemId || null,
-      productId,
-      productName,
-      quantitySold,
-      recipeItem.itemType,
-      recipeItem.materialId || null,
-      recipeItem.linkedProductId || null,
-      recipeItem.materialName || null,
-      recipeItem.linkedProductName || null,
-      quantityConsumed,
-      recipeItem.unit,
-      recipeItem.costPerUnit || 0,
-      consumption.totalCost,
-      now
-    );
-
-    console.log(`${indent}      💾 Stored consumption: orderItemId=${orderItemId || 'null'}, material=${recipeItem.materialName}`);
-
-    consumptions.push(consumption);
-
     // Handle material vs linked product
     if (recipeItem.itemType === 'material' && recipeItem.materialId) {
-      // Direct material - deduct from stock
+      // Direct material - record consumption and deduct from stock
       console.log(`${indent}   ✓ Material: ${recipeItem.materialName} -${quantityConsumed}${recipeItem.unit}`);
+
+      const consumptionId = uuidv4();
+      const consumption: InventoryConsumption = {
+        id: consumptionId,
+        orderId,
+        orderItemId,
+        productId,
+        productName,
+        productSku: '',
+        quantitySold,
+        itemType: recipeItem.itemType,
+        materialId: recipeItem.materialId,
+        linkedProductId: undefined,
+        materialName: recipeItem.materialName,
+        linkedProductName: undefined,
+        quantityConsumed,
+        unit: recipeItem.unit,
+        costPerUnit: recipeItem.costPerUnit || 0,
+        totalCost: recipeItem.costPerUnit ? quantityConsumed * recipeItem.costPerUnit : 0,
+        consumedAt: now,
+      };
+
+      // Insert into database
+      const stmt = db.prepare(`
+        INSERT INTO InventoryConsumption
+        (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
+         materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
+         unit, costPerUnit, totalCost, consumedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        consumptionId,
+        orderId,
+        orderItemId || null,
+        productId,
+        productName,
+        quantitySold,
+        'material',
+        recipeItem.materialId,
+        null,
+        recipeItem.materialName,
+        null,
+        quantityConsumed,
+        recipeItem.unit,
+        recipeItem.costPerUnit || 0,
+        consumption.totalCost,
+        now
+      );
+
+      console.log(`${indent}      💾 Stored consumption: orderItemId=${orderItemId || 'null'}, material=${recipeItem.materialName}`);
+
+      consumptions.push(consumption);
       deductMaterialStock(recipeItem.materialId, quantityConsumed);
     } else if (recipeItem.itemType === 'product' && recipeItem.linkedProductId) {
-      // Linked product - recursively process its recipe
+      // Linked product - recursively process its recipe (don't record the link itself)
       console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
 
       // Get the linked product to find its WC ID
@@ -246,6 +245,7 @@ export function recordProductSale(
           linkedProduct.name,
           quantityConsumed,
           orderItemId,
+          undefined,  // Don't pass bundle selection to nested products
           depth + 1,
           chain
         );
