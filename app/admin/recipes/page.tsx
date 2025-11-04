@@ -309,7 +309,7 @@ export default function RecipesPage() {
   }
 
   // Total COGS = Supplier Cost + Recipe Cost
-  const totalCOGS = selectedProduct ? selectedProduct.supplierCost + (recipe?.totalCost || 0) : 0;
+  const totalCOGS = selectedProduct ? (selectedProduct.supplierCost || 0) + (recipe?.totalCost || 0) : 0;
   const grossProfit = selectedProduct ? selectedProduct.currentPrice - totalCOGS : 0;
   const grossMargin = selectedProduct && selectedProduct.currentPrice > 0
     ? (grossProfit / selectedProduct.currentPrice) * 100
@@ -411,11 +411,11 @@ export default function RecipesPage() {
                     <p className="text-sm text-gray-500">Supplier Cost</p>
                     <div className="flex items-center gap-2">
                       <p className="text-lg font-semibold text-blue-600">
-                        RM {selectedProduct.supplierCost.toFixed(2)}
+                        RM {(selectedProduct.supplierCost || 0).toFixed(2)}
                       </p>
                       <button
                         onClick={() => {
-                          setNewUnitCost(selectedProduct.supplierCost.toString());
+                          setNewUnitCost((selectedProduct.supplierCost || 0).toString());
                           setEditingCost(true);
                         }}
                         className="text-blue-600 hover:text-blue-800"
@@ -605,7 +605,7 @@ export default function RecipesPage() {
                   autoFocus
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Current: RM {selectedProduct.supplierCost.toFixed(2)}
+                  Current: RM {(selectedProduct.supplierCost || 0).toFixed(2)}
                 </p>
               </div>
 
