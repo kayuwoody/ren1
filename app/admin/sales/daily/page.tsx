@@ -326,13 +326,13 @@ export default function DailySalesDetailPage() {
                           </thead>
                           <tbody className="divide-y">
                             {order.items.map((item, idx) => {
-                              const hasItemDiscount = item.discountReason;
+                              const hasItemDiscount = item.retailPrice !== item.finalPrice;
                               return (
                                 <tr key={idx} className="hover:bg-gray-50">
                                   <td className="px-4 py-3">
                                     <div>
                                       <p className="font-medium">{item.name}</p>
-                                      {hasItemDiscount && (
+                                      {item.discountReason && (
                                         <p className="text-xs text-green-600 mt-1">• {item.discountReason}</p>
                                       )}
                                     </div>
