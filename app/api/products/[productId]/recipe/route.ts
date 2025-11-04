@@ -85,16 +85,26 @@ export async function GET(
         mandatoryGroups: Object.entries(mandatoryGroups).map(
           ([groupName, items]) => ({
             groupName,
-            items: items.map((item) => ({
-              id: item.linkedProductId || item.materialId,
-              type: item.itemType,
-              name: item.linkedProductName || item.materialName,
-              sku: item.linkedProductSku,
-              quantity: item.quantity,
-              unit: item.unit,
-              cost: item.calculatedCost,
-              priceAdjustment: 0, // Will be fetched from WooCommerce if needed
-            })),
+            items: items.map((item) => {
+              let priceAdjustment = 0;
+              // For linked products, get their basePrice
+              if (item.itemType === 'product' && item.linkedProductId) {
+                const linkedProd = getProduct(item.linkedProductId);
+                if (linkedProd) {
+                  priceAdjustment = linkedProd.basePrice * item.quantity;
+                }
+              }
+              return {
+                id: item.linkedProductId || item.materialId,
+                type: item.itemType,
+                name: item.linkedProductName || item.materialName,
+                sku: item.linkedProductSku,
+                quantity: item.quantity,
+                unit: item.unit,
+                cost: item.calculatedCost,
+                priceAdjustment,
+              };
+            }),
           })
         ),
         mandatoryIndividual: mandatoryIndividual.map((item) => ({
@@ -106,16 +116,26 @@ export async function GET(
           unit: item.unit,
           cost: item.calculatedCost,
         })),
-        optional: optional.map((item) => ({
-          id: item.linkedProductId || item.materialId,
-          type: item.itemType,
-          name: item.linkedProductName || item.materialName,
-          sku: item.linkedProductSku,
-          quantity: item.quantity,
-          unit: item.unit,
-          cost: item.calculatedCost,
-          priceAdjustment: 0, // Will be fetched from WooCommerce if needed
-        })),
+        optional: optional.map((item) => {
+          let priceAdjustment = 0;
+          // For linked products, get their basePrice
+          if (item.itemType === 'product' && item.linkedProductId) {
+            const linkedProd = getProduct(item.linkedProductId);
+            if (linkedProd) {
+              priceAdjustment = linkedProd.basePrice * item.quantity;
+            }
+          }
+          return {
+            id: item.linkedProductId || item.materialId,
+            type: item.itemType,
+            name: item.linkedProductName || item.materialName,
+            sku: item.linkedProductSku,
+            quantity: item.quantity,
+            unit: item.unit,
+            cost: item.calculatedCost,
+            priceAdjustment,
+          };
+        }),
       },
       needsModal,
     });

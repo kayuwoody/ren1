@@ -93,7 +93,7 @@ export function upsertProduct(
     const stmt = db.prepare(`
       UPDATE Product
       SET wcId = ?, name = ?, sku = ?, category = ?, basePrice = ?,
-          unitCost = ?, stockQuantity = ?, imageUrl = ?, updatedAt = ?
+          supplierCost = ?, unitCost = ?, stockQuantity = ?, imageUrl = ?, updatedAt = ?
       WHERE id = ?
     `);
 
@@ -103,6 +103,7 @@ export function upsertProduct(
       sku,
       product.category,
       product.basePrice,
+      product.supplierCost,
       product.unitCost,
       product.stockQuantity,
       product.imageUrl || null,
@@ -112,9 +113,9 @@ export function upsertProduct(
   } else {
     // Insert new product
     const stmt = db.prepare(`
-      INSERT INTO Product (id, wcId, name, sku, category, basePrice, unitCost,
+      INSERT INTO Product (id, wcId, name, sku, category, basePrice, supplierCost, unitCost,
                           stockQuantity, imageUrl, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -124,6 +125,7 @@ export function upsertProduct(
       sku,
       product.category,
       product.basePrice,
+      product.supplierCost,
       product.unitCost,
       product.stockQuantity,
       product.imageUrl || null,
@@ -156,7 +158,7 @@ export function deleteProduct(id: string): boolean {
  * Sync product from WooCommerce
  */
 export function syncProductFromWooCommerce(wcProduct: any): Product {
-  // Check if product already exists to preserve unitCost
+  // Check if product already exists to preserve local cost fields
   const existing = getProductByWcId(wcProduct.id);
 
   return upsertProduct({
@@ -166,6 +168,7 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     sku: wcProduct.sku,
     category: wcProduct.categories?.[0]?.slug || 'uncategorized',
     basePrice: parseFloat(wcProduct.price) || 0,
+    supplierCost: existing ? existing.supplierCost : 0, // Preserve existing supplierCost (local field)
     unitCost: existing ? existing.unitCost : 0, // Preserve existing unitCost from recipes
     stockQuantity: wcProduct.stock_quantity || 0,
     imageUrl: wcProduct.images?.[0]?.src,
