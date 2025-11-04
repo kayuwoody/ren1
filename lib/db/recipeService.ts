@@ -280,6 +280,7 @@ export function setProductRecipe(
     quantity: number;
     unit: string;
     isOptional?: boolean;
+    selectionGroup?: string;
   }>
 ): ProductRecipeItem[] {
   // Delete existing recipe
@@ -296,6 +297,7 @@ export function setProductRecipe(
       quantity: item.quantity,
       unit: item.unit,
       isOptional: item.isOptional,
+      selectionGroup: item.selectionGroup,
       sortOrder: index,
     });
     recipeItems.push(recipeItem);
