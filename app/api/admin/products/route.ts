@@ -36,6 +36,7 @@ export async function GET(req: Request) {
         sku: product.sku,
         category: product.category,
         currentPrice: wcProduct ? parseFloat(wcProduct.price) || 0 : product.basePrice,
+        supplierCost: product.supplierCost,
         unitCost: product.unitCost,
         imageUrl: product.imageUrl,
       };
