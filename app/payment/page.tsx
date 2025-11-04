@@ -127,6 +127,7 @@ export default function PaymentPage() {
           productName: item.name,
           quantity: item.quantity,
           orderItemId: item.id,
+          meta_data: item.meta_data, // Include bundle metadata for filtering
         }));
 
         const consumptionRes = await fetch("/api/orders/consumption", {

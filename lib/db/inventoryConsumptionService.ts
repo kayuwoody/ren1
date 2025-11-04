@@ -38,6 +38,10 @@ export function recordProductSale(
   productName: string,
   quantitySold: number,
   orderItemId?: string,
+  bundleSelection?: {
+    selectedMandatory: Record<string, string>;
+    selectedOptional: string[];
+  },
   depth: number = 0,
   parentChain: string = ''
 ): InventoryConsumption[] {
@@ -148,6 +152,22 @@ export function recordProductSale(
     // Skip optional items (add-ons that weren't necessarily used)
     if (recipeItem.isOptional) {
       return;
+    }
+
+    // Handle bundle selection filtering (only at depth 0 - the main product)
+    if (depth === 0 && bundleSelection && recipeItem.selectionGroup) {
+      // This item is part of a selection group (XOR choice like Hot vs Iced)
+      const selectedItemId = bundleSelection.selectedMandatory[recipeItem.selectionGroup];
+
+      // Check if this specific item was selected
+      const isSelected = recipeItem.linkedProductId === selectedItemId;
+
+      if (!isSelected) {
+        console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup})`);
+        return; // Skip this item - it wasn't selected
+      } else {
+        console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup})`);
+      }
     }
 
     // Calculate total consumed (recipe quantity × units sold)
