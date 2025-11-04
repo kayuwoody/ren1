@@ -13,12 +13,12 @@ export default function CheckoutPage() {
   const [isStaffMode, setIsStaffMode] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
     isOpen: boolean;
-    productId: number | null;
+    itemIndex: number | null;
     productName: string;
     retailPrice: number;
   }>({
     isOpen: false,
-    productId: null,
+    itemIndex: null,
     productName: "",
     retailPrice: 0,
   });
@@ -55,10 +55,10 @@ export default function CheckoutPage() {
     router.push("/payment");
   }
 
-  function openDiscountModal(item: any) {
+  function openDiscountModal(item: any, index: number) {
     setDiscountModal({
       isOpen: true,
-      productId: item.productId,
+      itemIndex: index,
       productName: item.name,
       retailPrice: item.retailPrice,
     });
@@ -70,7 +70,7 @@ export default function CheckoutPage() {
   function closeDiscountModal() {
     setDiscountModal({
       isOpen: false,
-      productId: null,
+      itemIndex: null,
       productName: "",
       retailPrice: 0,
     });
@@ -78,12 +78,12 @@ export default function CheckoutPage() {
     setDiscountReason("");
   }
 
-  function applyQuickDiscount(productId: number, percent: number) {
-    updateItemDiscount(productId, { type: "percent", value: percent, reason: `${percent}% off` });
+  function applyQuickDiscount(index: number, percent: number) {
+    updateItemDiscount(index, { type: "percent", value: percent, reason: `${percent}% off` });
   }
 
   function applyCustomDiscount() {
-    if (!discountModal.productId) return;
+    if (discountModal.itemIndex === null) return;
 
     const value = parseFloat(discountValue);
     if (isNaN(value) || value < 0) {
@@ -107,14 +107,14 @@ export default function CheckoutPage() {
     }
 
     updateItemDiscount(
-      discountModal.productId,
+      discountModal.itemIndex,
       { type: discountType, value: value, reason: discountReason || undefined }
     );
     closeDiscountModal();
   }
 
-  function removeDiscount(productId: number) {
-    updateItemDiscount(productId, { type: "percent", value: 0, reason: undefined });
+  function removeDiscount(index: number) {
+    updateItemDiscount(index, { type: "percent", value: 0, reason: undefined });
   }
 
   return (
@@ -149,12 +149,12 @@ export default function CheckoutPage() {
         <>
           {/* Cart items with discount controls */}
           <div className="space-y-3">
-            {cartItems.map((item) => {
+            {cartItems.map((item, index) => {
               const hasDiscount = item.finalPrice < item.retailPrice;
               const itemDiscount = (item.retailPrice - item.finalPrice) * item.quantity;
 
               return (
-                <div key={item.productId} className="bg-white border rounded-lg p-4">
+                <div key={index} className="bg-white border rounded-lg p-4">
                   {/* Item header */}
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
@@ -162,7 +162,7 @@ export default function CheckoutPage() {
                       <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
                     </div>
                     <button
-                      onClick={() => removeFromCart(item.productId)}
+                      onClick={() => removeFromCart(index)}
                       className="text-red-600 hover:text-red-800 text-sm font-medium ml-2"
                     >
                       <X className="w-5 h-5" />
@@ -208,25 +208,25 @@ export default function CheckoutPage() {
                     <div className="flex flex-wrap gap-2">
                       {/* Quick discount buttons */}
                       <button
-                        onClick={() => applyQuickDiscount(item.productId, 10)}
+                        onClick={() => applyQuickDiscount(index, 10)}
                         className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
                       >
                         10% off
                       </button>
                       <button
-                        onClick={() => applyQuickDiscount(item.productId, 20)}
+                        onClick={() => applyQuickDiscount(index, 20)}
                         className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
                       >
                         20% off
                       </button>
                       <button
-                        onClick={() => applyQuickDiscount(item.productId, 50)}
+                        onClick={() => applyQuickDiscount(index, 50)}
                         className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
                       >
                         50% off
                       </button>
                       <button
-                        onClick={() => openDiscountModal(item)}
+                        onClick={() => openDiscountModal(item, index)}
                         className="px-3 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium hover:bg-purple-200 flex items-center gap-1"
                       >
                         <Edit2 className="w-3 h-3" />
@@ -234,7 +234,7 @@ export default function CheckoutPage() {
                       </button>
                       {hasDiscount && (
                         <button
-                          onClick={() => removeDiscount(item.productId)}
+                          onClick={() => removeDiscount(index)}
                           className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-medium hover:bg-red-200"
                         >
                           Remove discount

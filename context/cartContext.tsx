@@ -21,8 +21,8 @@ export interface CartItem {
 interface CartContextType {
   cartItems: CartItem[];
   addToCart: (item: Omit<CartItem, 'finalPrice'>) => void;
-  removeFromCart: (productId: number) => void;
-  updateItemDiscount: (productId: number, discount: {
+  removeFromCart: (index: number) => void;
+  updateItemDiscount: (index: number, discount: {
     type: 'percent' | 'amount' | 'override',
     value: number,
     reason?: string
@@ -145,19 +145,19 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const removeFromCart = (productId: number) => {
-    console.log('➖ Removing from cart:', productId);
-    setCartItems(prev => prev.filter(ci => ci.productId !== productId));
+  const removeFromCart = (index: number) => {
+    console.log('➖ Removing from cart at index:', index);
+    setCartItems(prev => prev.filter((_, i) => i !== index));
   };
 
   const updateItemDiscount = (
-    productId: number,
+    index: number,
     discount: { type: 'percent' | 'amount' | 'override', value: number, reason?: string }
   ) => {
-    console.log('💰 Updating discount for', productId, discount);
+    console.log('💰 Updating discount for cart item at index:', index, discount);
 
-    setCartItems(prev => prev.map(item => {
-      if (item.productId !== productId) return item;
+    setCartItems(prev => prev.map((item, i) => {
+      if (i !== index) return item;
 
       let updated: Omit<CartItem, 'finalPrice'>;
 
