@@ -1,6 +1,7 @@
 // app/api/products/route.ts
 import { NextResponse } from "next/server";
 import { fetchAllWooPages } from "@/lib/api/woocommerce-helpers";
+import { handleApiError } from "@/lib/api/error-handler";
 
 export const dynamic = "force-dynamic"; // ensures this API route runs fresh each time
 
@@ -11,16 +12,7 @@ export async function GET() {
     const products = await fetchAllWooPages("products");
     console.log("✅ WooCommerce returned:", products.length, "products");
     return NextResponse.json(products);
-  } catch (error: any) {
-    console.error("❌ WooCommerce fetch failed");
-
-    if (error.response) {
-      console.error("Status:", error.response.status);
-      console.error("Data:", error.response.data);
-    } else {
-      console.error("Message:", error.message);
-    }
-
-    return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, "/api/products");
   }
 }

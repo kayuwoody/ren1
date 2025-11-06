@@ -120,15 +120,7 @@ export async function GET(req: Request) {
       timestamp: new Date().toISOString()
     });
 
-  } catch (err: any) {
-    console.error('❌ Cleanup job failed:', err);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Cleanup job failed',
-        detail: err.message
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/cron/cleanup-orders');
   }
 }
