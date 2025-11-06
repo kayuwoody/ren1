@@ -1,5 +1,6 @@
 import { db, initDatabase } from './init';
 import { getMaterial } from './materialService';
+import { getProduct } from './productService';
 import { v4 as uuidv4 } from 'uuid';
 
 // Ensure database is initialized
@@ -61,7 +62,6 @@ export function addRecipeItem(item: {
       throw new Error('linkedProductId is required for product items');
     }
     // Get linked product to calculate cost
-    const { getProduct } = require('./productService');
     const linkedProduct = getProduct(item.linkedProductId);
     if (!linkedProduct) {
       throw new Error(`Linked product ${item.linkedProductId} not found`);
@@ -207,7 +207,6 @@ export function updateRecipeItem(
     }
     calculatedCost = quantity * material.costPerUnit;
   } else if (existing.itemType === 'product') {
-    const { getProduct } = require('./productService');
     const linkedProduct = getProduct(existing.linkedProductId!);
     if (!linkedProduct) {
       throw new Error(`Linked product ${existing.linkedProductId} not found`);

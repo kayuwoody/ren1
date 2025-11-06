@@ -102,11 +102,12 @@ export async function GET(req: Request) {
         order.meta_data?.find((m: any) => m.key === '_total_discount')?.value || '0'
       );
 
-      // Get COGS from inventory consumption records
+      // Get COGS from inventory consumption records (fetch once per order, reuse for items)
       let orderCOGS = 0;
+      let orderConsumptions: any[] = [];
       try {
-        const consumptions = getOrderConsumptions(String(order.id));
-        orderCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
+        orderConsumptions = getOrderConsumptions(String(order.id));
+        orderCOGS = orderConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
       } catch (err) {
         console.warn(`⚠️  Could not fetch COGS for order ${order.id}`);
       }
@@ -141,14 +142,13 @@ export async function GET(req: Request) {
         );
         const itemRevenue = finalPrice * item.quantity;
 
-        // Get COGS for this specific product from consumptions
+        // Get COGS for this specific product from cached consumptions (no duplicate DB call)
         let itemCOGS = 0;
         try {
-          const consumptions = getOrderConsumptions(String(order.id));
-          // Filter by order item ID if available, otherwise we can't distinguish between multiple items of same product
+          // Reuse orderConsumptions from above - no need to fetch again!
           const itemConsumptions = item.id
-            ? consumptions.filter(c => Number(c.orderItemId) === Number(item.id))
-            : consumptions;
+            ? orderConsumptions.filter(c => Number(c.orderItemId) === Number(item.id))
+            : orderConsumptions;
           itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
         } catch (err) {
           // COGS not available
