@@ -10,6 +10,9 @@ interface Product {
   name: string;
   price: string;
   images: { src: string }[];
+  categories: { id: number; name: string; slug: string }[];
+  stock_quantity: number | null;
+  manage_stock: boolean;
 }
 
 interface RecipeData {
@@ -25,6 +28,8 @@ const ProductListPage: React.FC = () => {
   const [isStaffMode, setIsStaffMode] = useState(false);
   const [modalData, setModalData] = useState<RecipeData | null>(null);
   const [loadingRecipe, setLoadingRecipe] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [showInStockOnly, setShowInStockOnly] = useState(false);
   const { addToCart, cartItems } = useCart();
 
   // Check if staff is logged in
@@ -116,6 +121,26 @@ const ProductListPage: React.FC = () => {
   const cartTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
   const cartQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
+  // Extract unique categories
+  const categories = Array.from(
+    new Set(
+      products.flatMap(p => p.categories.map(c => c.slug))
+    )
+  ).sort();
+
+  // Filter products based on selected filters
+  const filteredProducts = products.filter(product => {
+    // Category filter
+    const categoryMatch = selectedCategory === "all" ||
+      product.categories.some(cat => cat.slug === selectedCategory);
+
+    // Stock filter
+    const stockMatch = !showInStockOnly ||
+      (product.manage_stock ? (product.stock_quantity ?? 0) > 0 : true);
+
+    return categoryMatch && stockMatch;
+  });
+
   return (
     <div className="max-w-4xl mx-auto p-4 pb-24">
       {/* Staff Mode Banner */}
@@ -148,13 +173,60 @@ const ProductListPage: React.FC = () => {
 
       <h1 className="text-2xl font-bold mb-6">Menu</h1>
 
+      {/* Filter Controls */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+        {/* Category Filter */}
+        <div className="flex-1">
+          <label htmlFor="category-filter" className="block text-sm font-medium text-gray-700 mb-1">
+            Category
+          </label>
+          <select
+            id="category-filter"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+          >
+            <option value="all">All Categories</option>
+            {categories.map(category => (
+              <option key={category} value={category}>
+                {category.charAt(0).toUpperCase() + category.slice(1).replace(/-/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Stock Filter */}
+        <div className="flex items-end">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showInStockOnly}
+              onChange={(e) => setShowInStockOnly(e.target.checked)}
+              className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+            />
+            <span className="text-sm font-medium text-gray-700">In Stock Only</span>
+          </label>
+        </div>
+
+        {/* Results count */}
+        <div className="flex items-end">
+          <p className="text-sm text-gray-600">
+            {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+      </div>
+
       {/* Responsive grid: 1 col mobile, 2 cols tablet, 3 cols desktop */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {products.map(product => (
+        {filteredProducts.map(product => {
+          const isOutOfStock = product.manage_stock && (product.stock_quantity ?? 0) === 0;
+          return (
           <div
             key={product.id}
-            className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => handleAddToCart(product)}
+            className={`bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden transition-shadow ${
+              isOutOfStock ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'
+            }`}
+            onClick={() => !isOutOfStock && handleAddToCart(product)}
           >
             {/* Image container with aspect ratio */}
             <div className="relative w-full aspect-square bg-gray-100">
@@ -163,18 +235,42 @@ const ProductListPage: React.FC = () => {
                 alt={product.name}
                 className="absolute inset-0 w-full h-full object-cover"
               />
+              {/* Stock status badge */}
+              {product.manage_stock && (
+                <div className="absolute top-2 right-2">
+                  {(product.stock_quantity ?? 0) === 0 ? (
+                    <span className="px-2 py-1 bg-red-600 text-white text-xs font-semibold rounded">
+                      Out of Stock
+                    </span>
+                  ) : (product.stock_quantity ?? 0) < 10 ? (
+                    <span className="px-2 py-1 bg-yellow-500 text-white text-xs font-semibold rounded">
+                      Low Stock ({product.stock_quantity})
+                    </span>
+                  ) : null}
+                </div>
+              )}
             </div>
 
             {/* Product info */}
             <div className="p-3">
               <h3 className="font-semibold text-gray-900 mb-1 line-clamp-1">{product.name}</h3>
+              {/* Category tag */}
+              {product.categories.length > 0 && (
+                <p className="text-xs text-gray-500 mb-1">
+                  {product.categories[0].name}
+                </p>
+              )}
               <p className="text-lg font-bold text-green-700">RM {parseFloat(product.price).toFixed(2)}</p>
-              <button className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded transition-colors">
-                Add to Cart
+              <button
+                className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                disabled={product.manage_stock && (product.stock_quantity ?? 0) === 0}
+              >
+                {product.manage_stock && (product.stock_quantity ?? 0) === 0 ? 'Out of Stock' : 'Add to Cart'}
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Floating cart summary - only show when items in cart */}
