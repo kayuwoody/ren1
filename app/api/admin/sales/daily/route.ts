@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 
 export async function GET(req: Request) {
@@ -42,29 +42,13 @@ export async function GET(req: Request) {
       endLocal: new Date(endUTC.getTime() + (8 * 60 * 60 * 1000)).toISOString(),
     });
 
-    // Fetch orders for the day
-    const allOrders: any[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data } = await wcApi.get('orders', {
-        per_page: 100,
-        page,
-        after: startUTC.toISOString(),
-        before: endUTC.toISOString(),
-        orderby: 'date',
-        order: 'desc',
-      }) as { data: any[] };
-
-      allOrders.push(...data);
-
-      if (data.length < 100) {
-        hasMore = false;
-      } else {
-        page++;
-      }
-    }
+    // Fetch orders for the day (using pagination helper)
+    const allOrders = await fetchAllWooPages('orders', {
+      after: startUTC.toISOString(),
+      before: endUTC.toISOString(),
+      orderby: 'date',
+      order: 'desc',
+    });
 
     // Filter to completed/processing orders
     const orders = allOrders.filter(
@@ -76,13 +60,13 @@ export async function GET(req: Request) {
     // Process each order
     const detailedOrders = orders.map((order) => {
       const finalTotal = parseFloat(
-        order.meta_data?.find((m: any) => m.key === '_final_total')?.value || order.total
+        getMetaValue(order.meta_data, '_final_total', order.total)
       );
       const retailTotal = parseFloat(
-        order.meta_data?.find((m: any) => m.key === '_retail_total')?.value || order.total
+        getMetaValue(order.meta_data, '_retail_total', order.total)
       );
       const totalDiscount = parseFloat(
-        order.meta_data?.find((m: any) => m.key === '_total_discount')?.value || '0'
+        getMetaValue(order.meta_data, '_total_discount', '0')
       );
 
       // Get COGS from consumption records (fetch once per order, reuse for items)
@@ -110,12 +94,12 @@ export async function GET(req: Request) {
       console.log(`Order ${order.id}: Processing ${order.line_items?.length || 0} line items`);
       const items = order.line_items?.map((item: any) => {
         const retailPrice = parseFloat(
-          item.meta_data?.find((m: any) => m.key === '_retail_price')?.value || item.price
+          getMetaValue(item.meta_data, '_retail_price', item.price)
         );
         const finalPrice = parseFloat(
-          item.meta_data?.find((m: any) => m.key === '_final_price')?.value || item.price
+          getMetaValue(item.meta_data, '_final_price', item.price)
         );
-        const discountReason = item.meta_data?.find((m: any) => m.key === '_discount_reason')?.value;
+        const discountReason = getMetaValue(item.meta_data, '_discount_reason');
 
         // Get item-specific COGS from cached consumptions (no duplicate DB call)
         let itemCOGS = 0;
@@ -150,8 +134,8 @@ export async function GET(req: Request) {
         const itemMargin = itemRevenue > 0 ? (itemProfit / itemRevenue) * 100 : 0;
 
         // Check if this is a bundled product and use display name
-        const isBundle = item.meta_data?.find((m: any) => m.key === '_is_bundle')?.value === 'true';
-        const bundleDisplayName = item.meta_data?.find((m: any) => m.key === '_bundle_display_name')?.value;
+        const isBundle = getMetaValue(item.meta_data, '_is_bundle') === 'true';
+        const bundleDisplayName = getMetaValue(item.meta_data, '_bundle_display_name');
         const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
 
         return {
@@ -166,7 +150,7 @@ export async function GET(req: Request) {
           itemProfit,
           itemMargin,
           isBundle,
-          baseProductName: item.meta_data?.find((m: any) => m.key === '_bundle_base_product_name')?.value,
+          baseProductName: getMetaValue(item.meta_data, '_bundle_base_product_name'),
         };
       }) || [];
 
