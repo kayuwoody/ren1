@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
 import { syncProductFromWooCommerce, getAllProducts } from '@/lib/db/productService';
 
 /**
@@ -8,11 +8,10 @@ import { syncProductFromWooCommerce, getAllProducts } from '@/lib/db/productServ
  */
 export async function GET(req: Request) {
   try {
-    const { data: wcProducts } = (await wcApi.get('products', {
-      per_page: 100,
+    const wcProducts = await fetchAllWooPages('products', {
       orderby: 'title',
       order: 'asc'
-    })) as { data: any };
+    });
 
     // Sync each product to local database
     wcProducts.forEach((wcProduct: any) => {

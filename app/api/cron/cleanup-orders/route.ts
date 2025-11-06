@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { updateWooOrder } from '@/lib/orderService';
 
 /**
@@ -36,11 +36,10 @@ export async function GET(req: Request) {
     //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     // }
 
-    // 2. Fetch all orders with ready-for-pickup status
-    const { data: readyOrders } = (await wcApi.get('orders', {
+    // 2. Fetch all orders with ready-for-pickup status (using pagination helper)
+    const readyOrders = await fetchAllWooPages('orders', {
       status: 'ready-for-pickup',
-      per_page: 100, // Adjust as needed
-    })) as { data: any };
+    });
 
     if (!Array.isArray(readyOrders) || readyOrders.length === 0) {
       console.log('✅ No orders to clean up');
@@ -66,11 +65,9 @@ export async function GET(req: Request) {
           : null;
 
         // Option 2: Check custom meta field (more accurate)
-        const readyTimeMeta = order.meta_data?.find(
-          (m: any) => m.key === '_ready_timestamp'
-        );
-        const readyTime = readyTimeMeta?.value
-          ? new Date(readyTimeMeta.value).getTime()
+        const readyTimestamp = getMetaValue(order.meta_data, '_ready_timestamp');
+        const readyTime = readyTimestamp
+          ? new Date(readyTimestamp).getTime()
           : modifiedTime;
 
         if (!readyTime) {

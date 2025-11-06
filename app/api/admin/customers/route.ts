@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
 
 /**
  * GET /api/admin/customers
@@ -7,11 +7,10 @@ import { wcApi } from '@/lib/wooClient';
  */
 export async function GET(req: Request) {
   try {
-    const { data: customers } = (await wcApi.get('customers', {
-      per_page: 100, // Adjust as needed
+    const customers = await fetchAllWooPages('customers', {
       orderby: 'registered_date',
       order: 'desc'
-    })) as { data: any };
+    });
 
     return NextResponse.json(customers);
   } catch (err: any) {

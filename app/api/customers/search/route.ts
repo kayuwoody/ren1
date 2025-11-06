@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,12 +15,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Search for customer in WooCommerce
-    // WooCommerce doesn't have direct phone search, so we search all customers
+    // WooCommerce doesn't have direct phone search, so we fetch all customers
     // and filter by billing phone
-    const { data: customers } = (await wcApi.get('customers', {
-      per_page: 100, // Get more customers to search through
+    const customers = await fetchAllWooPages('customers', {
       role: 'all',
-    })) as { data: any };
+    });
 
     let foundCustomer = null;
 
