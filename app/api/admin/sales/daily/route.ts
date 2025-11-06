@@ -85,17 +85,16 @@ export async function GET(req: Request) {
         order.meta_data?.find((m: any) => m.key === '_total_discount')?.value || '0'
       );
 
-      // Get COGS from consumption records (fetch once per order, reuse for items)
+      // Get COGS from consumption records
       let orderCOGS = 0;
       let consumptionCount = 0;
-      let orderConsumptions: any[] = [];
       try {
-        orderConsumptions = getOrderConsumptions(String(order.id));
-        consumptionCount = orderConsumptions.length;
-        orderCOGS = orderConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
+        const consumptions = getOrderConsumptions(String(order.id));
+        consumptionCount = consumptions.length;
+        orderCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
 
-        if (orderConsumptions.length > 0) {
-          console.log(`Order ${order.id}: Found ${orderConsumptions.length} consumptions, COGS = RM ${orderCOGS.toFixed(2)}`);
+        if (consumptions.length > 0) {
+          console.log(`Order ${order.id}: Found ${consumptions.length} consumptions, COGS = RM ${orderCOGS.toFixed(2)}`);
         } else {
           console.log(`Order ${order.id}: No consumption records found (COGS = RM 0.00)`);
         }
@@ -117,14 +116,15 @@ export async function GET(req: Request) {
         );
         const discountReason = item.meta_data?.find((m: any) => m.key === '_discount_reason')?.value;
 
-        // Get item-specific COGS from cached consumptions (no duplicate DB call)
+        // Get item-specific COGS
         let itemCOGS = 0;
         try {
-          // Reuse orderConsumptions from above - no need to fetch again!
-          console.log(`  🔍 Item "${item.name}" (ID: ${item.id}): Total consumptions for order = ${orderConsumptions.length}`);
+          const consumptions = getOrderConsumptions(String(order.id));
+
+          console.log(`  🔍 Item "${item.name}" (ID: ${item.id}): Total consumptions for order = ${consumptions.length}`);
 
           // Debug: show all orderItemIds in consumption records
-          const orderItemIds = orderConsumptions.map(c => c.orderItemId).filter(Boolean);
+          const orderItemIds = consumptions.map(c => c.orderItemId).filter(Boolean);
           if (orderItemIds.length > 0) {
             console.log(`     OrderItemIds in consumptions: [${orderItemIds.join(', ')}]`);
           } else {
@@ -132,7 +132,7 @@ export async function GET(req: Request) {
           }
 
           const itemConsumptions = item.id
-            ? orderConsumptions.filter(c => Number(c.orderItemId) === Number(item.id))
+            ? consumptions.filter(c => Number(c.orderItemId) === Number(item.id))
             : [];
           itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
 
