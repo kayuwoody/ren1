@@ -78,6 +78,15 @@ export default function HeaderNav() {
       for (const orderId of activeOrderIds) {
         try {
           const res = await fetch(`/api/orders/${orderId}`);
+
+          // Remove deleted orders (404) from active list
+          if (res.status === 404) {
+            console.log(`Order ${orderId} was deleted from WooCommerce, removing from active list`);
+            const filtered = activeOrderIds.filter((id: string) => id !== orderId);
+            localStorage.setItem('activeOrders', JSON.stringify(filtered));
+            continue;
+          }
+
           if (!res.ok) continue;
 
           const order = await res.json();
