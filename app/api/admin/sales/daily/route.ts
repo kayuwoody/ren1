@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
+import { handleApiError } from '@/lib/api/error-handler';
 
 export async function GET(req: Request) {
   console.log('🔧 [DEBUG] Daily sales API loaded - Code version: 2025-11-03-v2');
@@ -193,11 +194,7 @@ export async function GET(req: Request) {
       summary,
       orders: detailedOrders,
     });
-  } catch (err: any) {
-    console.error('❌ Daily sales report error:', err);
-    return NextResponse.json(
-      { error: 'Failed to generate daily sales report', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/sales/daily');
   }
 }
