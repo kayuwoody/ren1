@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import woo from '@/lib/wooApi';
 import { v4 as uuidv4 } from 'uuid';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function POST(req: NextRequest) {
     const { email, phone, name, address } = body;
 
     if (!email && !phone) {
-      return NextResponse.json({ error: 'Email or phone is required' }, { status: 400 });
+      return validationError('Email or phone is required', '/api/register-or-lookup');
     }
 
     // Lookup existing customer in WooCommerce
@@ -36,8 +37,7 @@ export async function POST(req: NextRequest) {
     const clientId = uuidv4();
 
     return NextResponse.json({ clientId, wooCustomerId });
-  } catch (err: any) {
-    console.error('❌ API error:', err.response?.data || err.message);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, '/api/register-or-lookup');
   }
 }

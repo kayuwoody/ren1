@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { wcApi } from '@/lib/wooClient';
+import { handleApiError } from '@/lib/api/error-handler';
 
 type Order = any; // tighten if you have a Woo order type
 
@@ -57,12 +58,8 @@ export async function GET(req: Request) {
 
     // No identity -> nothing to return
     return NextResponse.json([]);
-  } catch (err: any) {
-    console.error('❌ /api/orders error:', err?.response?.data || err);
-    return NextResponse.json(
-      { error: 'Failed to load orders' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/orders');
   }
 }
 
