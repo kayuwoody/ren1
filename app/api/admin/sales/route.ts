@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
+import { handleApiError } from '@/lib/api/error-handler';
 
 export async function GET(req: Request) {
   try {
@@ -212,11 +213,7 @@ export async function GET(req: Request) {
     };
 
     return NextResponse.json(report);
-  } catch (err: any) {
-    console.error('❌ Sales report error:', err);
-    return NextResponse.json(
-      { error: 'Failed to generate sales report', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/sales');
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
+import { handleApiError } from '@/lib/api/error-handler';
 
 /**
  * GET /api/admin/customers
@@ -13,11 +14,7 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json(customers);
-  } catch (err: any) {
-    console.error('❌ Failed to fetch customers:', err);
-    return NextResponse.json(
-      { error: 'Failed to fetch customers', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/customers');
   }
 }

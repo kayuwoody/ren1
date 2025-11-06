@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
 import { syncProductFromWooCommerce, getAllProducts } from '@/lib/db/productService';
+import { handleApiError } from '@/lib/api/error-handler';
 
 /**
  * GET /api/admin/products/costs
@@ -49,11 +50,7 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ products: transformedProducts });
-  } catch (err: any) {
-    console.error('❌ Failed to fetch products with costs:', err);
-    return NextResponse.json(
-      { error: 'Failed to fetch products', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/products/costs');
   }
 }
