@@ -11,6 +11,7 @@ type WooMeta = { key: string; value: any };
 export default function OrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<any>(null);
+  const [orderDeleted, setOrderDeleted] = useState(false);
   const [progress, setProgress] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -30,10 +31,27 @@ export default function OrderDetailPage() {
   // 1) Fetch & poll
   useEffect(() => {
     let active = true;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
     const fetchOrder = async () => {
       console.log('⏳ Fetching order', orderId);
       try {
         const res = await fetch(`/api/orders/${orderId}`);
+
+        // Check if order was deleted
+        if (res.status === 404) {
+          console.log(`Order ${orderId} was deleted from WooCommerce`);
+          if (!active) return;
+          setOrderDeleted(true);
+          setOrder(null);
+          // Stop polling if order is deleted
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
+          return;
+        }
+
         const data = await res.json();
         if (!active) return;
         console.log('📥 Fetched order', {
@@ -45,11 +63,15 @@ export default function OrderDetailPage() {
         console.error('Fetch error', e);
       }
     };
+
     fetchOrder();
-    const poll = setInterval(fetchOrder, 30_000); // Reduced from 10s to 30s to minimize API calls
+    pollInterval = setInterval(fetchOrder, 30_000); // Reduced from 10s to 30s to minimize API calls
+
     return () => {
       active = false;
-      clearInterval(poll);
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
     };
   }, [orderId]);
 
@@ -102,6 +124,25 @@ export default function OrderDetailPage() {
   }, [order]);
 
   // 3) Render
+  if (orderDeleted) {
+    return (
+      <div className="p-4 max-w-lg mx-auto">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <h1 className="text-2xl font-bold text-red-800 mb-2">Order Not Found</h1>
+          <p className="text-red-600 mb-4">
+            Order #{orderId} was deleted from WooCommerce.
+          </p>
+          <Link
+            href="/"
+            className="inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
+            Return to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!order) {
     return <div className="p-4">Loading order…</div>;
   }
