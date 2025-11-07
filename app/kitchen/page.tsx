@@ -82,15 +82,16 @@ export default function KitchenDisplayPage() {
     oscillator.stop(audioContext.currentTime + 0.5);
   };
 
-  // Mark order as ready
-  const markReady = async (orderId: number) => {
+  // Mark order as ready (pickup or delivery)
+  const markReady = async (orderId: number, readyType: "pickup" | "delivery") => {
     setUpdatingOrderId(orderId);
     try {
+      const status = readyType === "pickup" ? "ready-for-pickup" : "ready-for-delivery";
       const response = await fetch(`/api/update-order/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "ready-for-pickup",
+          status,
         }),
       });
 
@@ -108,6 +109,15 @@ export default function KitchenDisplayPage() {
     }
   };
 
+  // Get time elapsed since order creation
+  const getOrderAge = (order: Order) => {
+    const createdTime = new Date(order.date_created).getTime();
+    const now = Date.now();
+    const ageMs = now - createdTime;
+    const ageMinutes = Math.floor(ageMs / 60000);
+    return ageMinutes;
+  };
+
   // Get timer info from order metadata
   const getTimerInfo = (order: Order) => {
     const startTimeMeta = order.meta_data.find((m) => m.key === "startTime");
@@ -119,11 +129,22 @@ export default function KitchenDisplayPage() {
 
     const startTime = new Date(startTimeMeta.value).getTime();
     const endTime = new Date(endTimeMeta.value).getTime();
-    const now = Date.now();
 
+    // Validate timestamps
+    if (isNaN(startTime) || isNaN(endTime)) {
+      console.warn(`Invalid timer metadata for order ${order.id}`, { startTimeMeta, endTimeMeta });
+      return null;
+    }
+
+    const now = Date.now();
     const elapsedMs = now - startTime;
     const totalDurationMs = endTime - startTime;
     const remainingMs = endTime - now;
+
+    // Ensure valid calculations
+    if (totalDurationMs <= 0) {
+      return null;
+    }
 
     const elapsedMinutes = Math.floor(elapsedMs / 60000);
     const remainingMinutes = Math.max(0, Math.ceil(remainingMs / 60000));
@@ -241,11 +262,16 @@ export default function KitchenDisplayPage() {
                   <h2 className="text-5xl font-bold text-white mb-1">
                     #{order.number}
                   </h2>
-                  <p className="text-gray-400 text-sm">Order ID: {order.id}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-gray-400 text-sm">Order ID: {order.id}</p>
+                    <p className="text-blue-400 text-sm font-semibold">
+                      🕐 {getOrderAge(order)}m old
+                    </p>
+                  </div>
                 </div>
 
                 {/* Timer */}
-                {timerInfo && (
+                {timerInfo ? (
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-gray-300 text-sm font-medium">
@@ -280,6 +306,12 @@ export default function KitchenDisplayPage() {
                       Started {timerInfo.elapsedMinutes}m ago
                     </p>
                   </div>
+                ) : (
+                  <div className="mb-4 bg-yellow-900 border border-yellow-600 rounded p-2">
+                    <p className="text-yellow-300 text-xs">
+                      ⚠️ No timer set for this order
+                    </p>
+                  </div>
                 )}
 
                 {/* Items */}
@@ -304,18 +336,37 @@ export default function KitchenDisplayPage() {
                   </ul>
                 </div>
 
-                {/* Mark Ready Button */}
-                <button
-                  onClick={() => markReady(order.id)}
-                  disabled={isUpdating}
-                  className={`w-full py-4 rounded-lg font-bold text-xl transition-all ${
-                    isUpdating
-                      ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                      : "bg-green-600 text-white hover:bg-green-500 active:scale-95"
-                  }`}
-                >
-                  {isUpdating ? "⏳ Updating..." : "✅ Mark Ready"}
-                </button>
+                {/* Mark Ready Buttons */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => markReady(order.id, "pickup")}
+                    disabled={isUpdating}
+                    className={`py-3 rounded-lg font-bold text-base transition-all ${
+                      isUpdating
+                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                        : "bg-green-600 text-white hover:bg-green-500 active:scale-95"
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      <span>{isUpdating ? "⏳" : "✅"}</span>
+                      <span className="text-sm">{isUpdating ? "Wait..." : "Ready Pickup"}</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => markReady(order.id, "delivery")}
+                    disabled={isUpdating}
+                    className={`py-3 rounded-lg font-bold text-base transition-all ${
+                      isUpdating
+                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                        : "bg-blue-600 text-white hover:bg-blue-500 active:scale-95"
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      <span>{isUpdating ? "⏳" : "🚗"}</span>
+                      <span className="text-sm">{isUpdating ? "Wait..." : "Ready Delivery"}</span>
+                    </div>
+                  </button>
+                </div>
               </div>
             );
           })}
