@@ -167,14 +167,23 @@ export default function AdminOrdersPage() {
       {/* Header */}
       <header className="bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/admin" className="p-2 hover:bg-gray-100 rounded-lg transition">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">Order Management</h1>
-              <p className="text-sm text-gray-500">Monitor and manage all orders</p>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Link href="/admin" className="p-2 hover:bg-gray-100 rounded-lg transition">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold">Order Management</h1>
+                <p className="text-sm text-gray-500">Monitor and manage all orders</p>
+              </div>
             </div>
+            <Link
+              href="/kitchen"
+              className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-md"
+            >
+              <span className="text-xl">🍳</span>
+              <span>Kitchen Display</span>
+            </Link>
           </div>
         </div>
       </header>
