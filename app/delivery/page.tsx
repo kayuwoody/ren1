@@ -57,7 +57,7 @@ export default function DeliveryPage() {
     }
   };
 
-  // Mark order as delivered
+  // Mark order as delivered (clears delivery flag, customer can now pick up)
   const markDelivered = async (orderId: number) => {
     setCompletingOrderId(orderId);
     try {
@@ -65,8 +65,12 @@ export default function DeliveryPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "completed",
+          status: "ready-for-pickup",
           meta_data: [
+            {
+              key: "_out_for_delivery",
+              value: "no", // Clear delivery flag
+            },
             {
               key: "_delivered_timestamp",
               value: new Date().toISOString(),
@@ -267,7 +271,7 @@ export default function DeliveryPage() {
                       : "bg-green-600 text-white hover:bg-green-500 active:scale-95"
                   }`}
                 >
-                  {isCompleting ? "⏳ Completing..." : "✅ Mark Delivered"}
+                  {isCompleting ? "⏳ Updating..." : "✅ Mark Delivered"}
                 </button>
               </div>
             );
