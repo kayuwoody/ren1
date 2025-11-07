@@ -29,9 +29,7 @@ export async function GET(req: Request) {
       console.log(`      Total meta_data items: ${order.meta_data?.length || 0}`);
       if (order.meta_data && order.meta_data.length > 0) {
         order.meta_data.forEach((m: any) => {
-          if (m.key.startsWith('_')) {
-            console.log(`        ${m.key} = ${m.value}`);
-          }
+          console.log(`        ${m.key} = ${m.value}`);
         });
       }
       console.log(`      kitchen_ready=${kitchenReady}, shouldShow=${shouldShow}`);
