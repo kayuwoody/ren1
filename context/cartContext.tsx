@@ -119,7 +119,28 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(cartItems));
     console.log('💾 Saved cart to localStorage:', cartItems);
+
+    // Dispatch custom event for same-tab updates
+    window.dispatchEvent(new CustomEvent('cart-updated', { detail: cartItems }));
   }, [cartItems]);
+
+  // Listen for storage changes from other tabs/windows (for customer display)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'cart' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          console.log('🔄 Cart updated from another tab:', parsed);
+          setCartItems(parsed);
+        } catch (err) {
+          console.error('Failed to parse cart from storage event:', err);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const addToCart = (item: Omit<CartItem, 'finalPrice'>) => {
     const finalPrice = calculateFinalPrice(item);
