@@ -91,7 +91,7 @@ export default function DeliveryPage() {
 
   // Get time elapsed since marked ready for delivery
   const getDeliveryAge = (order: Order) => {
-    const readyTimeMeta = order.meta_data?.find((m) => m.key === "_ready_timestamp");
+    const readyTimeMeta = order.meta_data?.find((m) => m.key === "ready_timestamp");
     if (!readyTimeMeta?.value) return null;
 
     const readyTime = new Date(readyTimeMeta.value).getTime();

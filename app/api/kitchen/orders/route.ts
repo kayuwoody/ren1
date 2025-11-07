@@ -21,7 +21,7 @@ export async function GET(req: Request) {
 
     // Filter out orders that are already marked as ready
     const kitchenOrders = allProcessingOrders.filter((order: any) => {
-      const kitchenReady = order.meta_data?.find((m: any) => m.key === "_kitchen_ready")?.value;
+      const kitchenReady = order.meta_data?.find((m: any) => m.key === "kitchen_ready")?.value;
       const shouldShow = kitchenReady !== "yes";
 
       // Debug logging - show ALL metadata for debugging
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
           }
         });
       }
-      console.log(`      _kitchen_ready=${kitchenReady}, shouldShow=${shouldShow}`);
+      console.log(`      kitchen_ready=${kitchenReady}, shouldShow=${shouldShow}`);
 
       return shouldShow;
     });

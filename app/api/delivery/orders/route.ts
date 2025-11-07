@@ -20,12 +20,12 @@ export async function GET(req: Request) {
 
     // Filter for delivery orders that are ready
     const deliveryOrders = allProcessingOrders.filter((order: any) => {
-      const kitchenReady = order.meta_data?.find((m: any) => m.key === "_kitchen_ready")?.value;
-      const outForDelivery = order.meta_data?.find((m: any) => m.key === "_out_for_delivery")?.value;
+      const kitchenReady = order.meta_data?.find((m: any) => m.key === "kitchen_ready")?.value;
+      const outForDelivery = order.meta_data?.find((m: any) => m.key === "out_for_delivery")?.value;
       const shouldShow = kitchenReady === "yes" && outForDelivery === "yes";
 
       // Debug logging for all processing orders
-      console.log(`   🔍 Order #${order.id}: _kitchen_ready=${kitchenReady} (${typeof kitchenReady}), _out_for_delivery=${outForDelivery} (${typeof outForDelivery}), shouldShow=${shouldShow}`);
+      console.log(`   🔍 Order #${order.id}: kitchen_ready=${kitchenReady} (${typeof kitchenReady}), out_for_delivery=${outForDelivery} (${typeof outForDelivery}), shouldShow=${shouldShow}`);
 
       return shouldShow;
     });

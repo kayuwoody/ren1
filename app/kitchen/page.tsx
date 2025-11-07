@@ -98,19 +98,19 @@ export default function KitchenDisplayPage() {
           status: "processing", // Keep in processing
           meta_data: [
             {
-              key: "_kitchen_ready",
+              key: "kitchen_ready",
               value: "yes", // Mark as ready (removes from kitchen display)
             },
             {
-              key: "_fulfillment_method",
+              key: "fulfillment_method",
               value: readyType, // "pickup" or "delivery"
             },
             {
-              key: "_out_for_delivery",
+              key: "out_for_delivery",
               value: readyType === "delivery" ? "yes" : "no",
             },
             {
-              key: "_ready_timestamp",
+              key: "ready_timestamp",
               value: new Date().toISOString(),
             },
           ],
