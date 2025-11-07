@@ -36,8 +36,13 @@ export async function PATCH(
       const itemCount = existing.line_items?.length ?? 1;
       const now = Date.now();
       const duration = 2 * 60_000 * itemCount; // 2 min per item
-      combinedMeta.push({ key: 'startTime', value: String(now) });
-      combinedMeta.push({ key: 'endTime',   value: String(now + duration) });
+
+      // Only add timer if not already present (don't reset timer for delivery orders)
+      const hasTimer = existingMeta.some((m: any) => m.key === 'startTime' || m.key === 'endTime');
+      if (!hasTimer) {
+        combinedMeta.push({ key: 'startTime', value: new Date(now).toISOString() });
+        combinedMeta.push({ key: 'endTime', value: new Date(now + duration).toISOString() });
+      }
     }
 
     // 2b) If going to ready-for-pickup, add timestamp for auto-cleanup
@@ -48,6 +53,16 @@ export async function PATCH(
       });
     }
 
+    // 2c) Merge any additional metadata from request body
+    if (body.meta_data && Array.isArray(body.meta_data)) {
+      for (const newMeta of body.meta_data) {
+        // Remove existing entry with same key if exists
+        combinedMeta = combinedMeta.filter((m: any) => m.key !== newMeta.key);
+        // Add new value
+        combinedMeta.push({ key: newMeta.key, value: newMeta.value });
+      }
+    }
+
     // 3) Build patch payload: status + full meta_data
     const patchPayload: any = {
       status: body.status,
@@ -56,6 +71,11 @@ export async function PATCH(
 
     // 4) Perform the update in one go
     const updated = await updateWooOrder(orderId, patchPayload);
+
+    console.log(`✅ Updated order #${orderId} to status: ${body.status}`);
+    if (body.meta_data) {
+      console.log(`   Added metadata:`, body.meta_data.map((m: any) => m.key).join(', '));
+    }
 
     // 5) If order is now ready, send push notification
     if (body.status === 'ready-for-pickup') {
