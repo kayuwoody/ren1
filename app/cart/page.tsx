@@ -5,7 +5,7 @@ import Link from "next/link";
 export default function CartPage() {
   const { cartItems, removeFromCart } = useCart();
 
-  const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const total = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-6">
@@ -33,7 +33,7 @@ export default function CartPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-semibold">
-                    RM {(item.price * item.quantity).toFixed(2)}
+                    RM {(item.retailPrice * item.quantity).toFixed(2)}
                   </span>
                   <button
                     onClick={() => removeFromCart(item.productId)}

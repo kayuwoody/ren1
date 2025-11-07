@@ -62,7 +62,7 @@ export default function CustomerLookupPage() {
       addToCart({
         productId: item.product_id,
         name: item.name,
-        price: parseFloat(item.price),
+        retailPrice: parseFloat(item.price),
         quantity: item.quantity,
       });
     }

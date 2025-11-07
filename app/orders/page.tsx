@@ -121,7 +121,7 @@ export default function OrdersPage() {
         addToCart({
           productId: item.product_id,
           name: item.name,
-          price: price,
+          retailPrice: price,
           quantity: item.quantity,
         });
       }
