@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { recordProductSale, calculateProductCOGS } from '@/lib/db/inventoryConsumptionService';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 /**
  * POST /api/orders/consumption
@@ -10,10 +11,7 @@ export async function POST(req: Request) {
     const { orderId, lineItems } = await req.json();
 
     if (!orderId || !Array.isArray(lineItems)) {
-      return NextResponse.json(
-        { error: 'Invalid request - orderId and lineItems required' },
-        { status: 400 }
-      );
+      return validationError('orderId and lineItems required', '/api/orders/consumption');
     }
 
     const results = [];
@@ -88,11 +86,7 @@ export async function POST(req: Request) {
       totalCOGS,
       results,
     });
-  } catch (error: any) {
-    console.error('❌ Error recording inventory consumption:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to record inventory consumption' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/orders/consumption');
   }
 }

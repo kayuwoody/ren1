@@ -297,7 +297,15 @@ export function getOrderConsumptions(orderId: string): InventoryConsumption[] {
     WHERE orderId = ?
     ORDER BY consumedAt
   `);
-  return stmt.all(orderId) as InventoryConsumption[];
+  const results = stmt.all(orderId) as InventoryConsumption[];
+
+  // Debug logging
+  console.log(`🔍 getOrderConsumptions("${orderId}"): Found ${results.length} records`);
+  if (results.length > 0) {
+    console.log(`   First record: orderItemId=${results[0].orderItemId} (type: ${typeof results[0].orderItemId})`);
+  }
+
+  return results;
 }
 
 /**

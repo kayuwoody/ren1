@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
+import { handleApiError } from '@/lib/api/error-handler';
 
 /**
  * GET /api/admin/customers
@@ -7,18 +8,13 @@ import { wcApi } from '@/lib/wooClient';
  */
 export async function GET(req: Request) {
   try {
-    const { data: customers } = (await wcApi.get('customers', {
-      per_page: 100, // Adjust as needed
+    const customers = await fetchAllWooPages('customers', {
       orderby: 'registered_date',
       order: 'desc'
-    })) as { data: any };
+    });
 
     return NextResponse.json(customers);
-  } catch (err: any) {
-    console.error('❌ Failed to fetch customers:', err);
-    return NextResponse.json(
-      { error: 'Failed to fetch customers', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/customers');
   }
 }

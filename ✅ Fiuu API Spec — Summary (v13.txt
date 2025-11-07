@@ -1,0 +1,240 @@
+﻿✅ Fiuu API Spec — Summary (v13.90, Jun 2025)
+________________
+
+
+🔄 Core Payment Flow (High-Level)
+1. Merchant → Fiuu
+
+   * POST/GET request redirects customer to Fiuu’s hosted payment page.
+
+   * Requests encrypted (vcode).
+
+      2. Customer pays
+
+         * Banking login / e-wallet / QR / card, etc.
+
+            3. Fiuu → Merchant
+
+               * Fiuu sends transaction result via:
+
+                  * Return URL (browser redirect) — unreliable
+
+                  * Notification URL (webhook) — reliable
+
+                  * Callback URL (delayed updates) — for non-realtime payments
+
+                     4. Merchant → Fiuu (optional)
+
+                        * Merchant can requery status to confirm anything that looks off.
+
+________________
+
+
+🔐 Security
+Keys
+Key
+	Purpose
+	Who Uses It
+	Verify Key
+	Generates request hash (vcode)
+	Merchant
+	Secret Key
+	Verifies response hash (skey)
+	Merchant
+	Hashes
+                           * vcode = MD5 hash for outbound payment request
+
+                           * skey = MD5 hash for inbound payment response (double-hashed)
+
+These ensure nobody hijacks your request and reroutes grandma’s grocery payment to buy a PS5.
+________________
+
+
+🌐 Required Endpoints & Domain Rules
+Must register your webhook domains at the portal — otherwise status notifications might never reach you.
+Endpoints to handle:
+                              1. Return URL (front-end redirect)
+
+                              2. Notification URL (server-to-server reliable)
+
+                              3. Callback URL (deferred statuses)
+
+________________
+
+
+🧪 Testing Accounts
+Fiuu offers:
+                                 * Sandbox account — simple testing
+
+                                 * Developer account — full-feature UAT; not eligible for settlement
+
+All “_Dev” accounts never payout. (Don’t ask why your money never shows up.)
+________________
+
+
+💳 Payment Initiation API
+POST/GET to hosted payment page:
+https://pay.fiuu.com/RMS/pay/{MerchantID}/{PaymentMethod}
+
+
+or sandbox equivalent.
+Parameters include:
+                                    * amount
+
+                                    * merchantID
+
+                                    * orderID
+
+                                    * currency
+
+                                    * vcode
+
+                                    * and optional extras
+
+Iframe is not allowed. Banks block it.
+________________
+
+
+💸 Payment Methods Supported
+Way too many to list in detail. Highlights:
+⭐ Major categories
+                                       * Credit/Debit Cards (Visa/Mastercard/UnionPay)
+
+                                       * FPX (Malaysia)
+
+                                       * DuitNow
+
+                                       * PayNet
+
+                                       * QR Pay
+
+                                       * Wallets: GrabPay, TNG, Boost, ShopeePay, GCash, PayMaya, Atome, etc.
+
+                                       * BNPL (Atome, Kredivo, others)
+
+                                       * OTC (7-Eleven, KK Mart, Cosway, etc.)
+
+                                       * BNPL + Installment Cards
+
+                                       * Localized channels in:
+
+                                          * Malaysia
+
+                                          * Singapore
+
+                                          * Philippines
+
+                                          * Thailand
+
+                                          * Indonesia
+
+                                          * Vietnam
+
+                                          * China
+
+                                          * Taiwan
+
+If someone in your region has a way to pay, Fiuu probably supports it.
+________________
+
+
+📬 Result Handling & IPN
+Fiuu provides three possible streams for payment results:
+Channel
+	Nature
+	Reliability
+	Return URL
+	Browser redirect
+	Unreliable
+	Notification URL
+	Webhook
+	Best
+	Callback URL
+	Delayed change
+	Special cases
+	Best practice:
+✅ Use Notification URL
+⚠ Return URL only for UI
+📌 Keep Callback URL to catch late updates
+________________
+
+
+🔍 Merchant Request APIs (Selection)
+                                             * Direct Status Requery
+
+                                             * Indirect Status Requery
+
+                                             * Daily Transaction Report
+
+                                             * Settlement Report
+
+                                             * Partial/Full Refund
+
+                                             * Capture (pre-auth)
+
+                                             * Reversal
+
+                                             * Static QR Generator
+
+                                             * Channel Status
+
+                                             * Channel Success Rate
+
+                                             * BIN Info
+
+                                             * Forex Rate
+
+                                             * Payment Token API (save cards)
+
+                                             * Recurring Plans
+
+                                             * Void Pending Cash/Non-Cash
+
+                                             * Idempotency
+
+Basically: everything you need to track, refund, void, interrogate, threaten, or data-mine your payments.
+________________
+
+
+🔧 Other Tools & Resources
+                                                * Mobile SDK & XDK
+
+                                                * Ready plugins for shopping carts
+
+                                                * JSON + .NET handling examples
+
+                                                * Logos/brand badges
+
+________________
+
+
+TL;DR — Super Short
+Send customers to Fiuu → verify callback → requery if needed → receive settlement.
+Security: vcode + skey
+3 endpoints: Return, Notification (critical), Callback
+Supports many payment channels across ASEAN
+Has rich APIs for settlement, refunds, reports, tokens
+________________
+
+
+🚀 Integration Checklist
+✅ Get merchant + verify + secret keys
+✅ Register webhook domains
+✅ Implement 3 endpoints
+✅ Generate vcode for each request
+✅ Verify skey on response
+✅ Support requery fallback
+Done right → everything works smoothly
+Done wrong → payments disappear into the void
+________________
+
+
+⭐ Quick Implementation Reality Check
+If you integrate:
+                                                   * Hosted Page only: Simple. Just redirect + validate hash.
+
+                                                   * Webhooks: Necessary for reliability.
+
+                                                   * Requery API: Use for sanity checks.
+
+                                                   * Tokenization/Recurring: Supported.

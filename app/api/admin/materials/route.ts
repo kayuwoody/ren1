@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { listMaterials, upsertMaterial } from '@/lib/db/materialService';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,12 +18,8 @@ export async function GET(request: NextRequest) {
     const materials = listMaterials(category);
 
     return NextResponse.json({ materials });
-  } catch (error: any) {
-    console.error('Error fetching materials:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch materials' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/materials');
   }
 }
 
@@ -43,10 +40,7 @@ export async function POST(request: NextRequest) {
 
     // Validation
     if (!name || !category || !purchaseUnit || !purchaseQuantity || !purchaseCost) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+      return validationError('Missing required fields', '/api/admin/materials');
     }
 
     const material = upsertMaterial({
@@ -61,11 +55,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ material });
-  } catch (error: any) {
-    console.error('Error creating material:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to create material' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/materials');
   }
 }

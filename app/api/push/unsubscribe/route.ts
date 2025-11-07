@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { subscriptions } from '../subscribe/route';
+import { handleApiError } from '@/lib/api/error-handler';
 
 /**
  * POST /api/push/unsubscribe
@@ -23,11 +24,7 @@ export async function POST(req: Request) {
       success: true,
       message: 'Push subscription removed'
     });
-  } catch (err: any) {
-    console.error('❌ Failed to remove push subscription:', err);
-    return NextResponse.json(
-      { error: 'Failed to remove subscription', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/push/unsubscribe');
   }
 }

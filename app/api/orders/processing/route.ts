@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { listOrdersByUser, listOrdersByGuest } from '@/lib/orderService';
+import { handleApiError } from '@/lib/api/error-handler';
 
 export async function GET(req: Request) {
   try {
@@ -26,11 +27,7 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json(processingOrders);
-  } catch (err: any) {
-    console.error('❌ /api/orders/processing error:', err);
-    return NextResponse.json(
-      { error: 'Failed to load processing orders' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/orders/processing');
   }
 }

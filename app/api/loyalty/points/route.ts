@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCustomerPoints } from '@/lib/loyaltyService';
 import { cookies } from 'next/headers';
+import { handleApiError, unauthorizedError } from '@/lib/api/error-handler';
 
 /**
  * GET /api/loyalty/points
@@ -24,10 +25,7 @@ export async function GET(req: Request) {
       const userIdCookie = cookieStore.get('userId');
 
       if (!userIdCookie?.value) {
-        return NextResponse.json(
-          { error: 'Not authenticated' },
-          { status: 401 }
-        );
+        return unauthorizedError('Not authenticated', '/api/loyalty/points');
       }
 
       userId = Number(userIdCookie.value);
@@ -36,11 +34,7 @@ export async function GET(req: Request) {
     const points = await getCustomerPoints(userId);
 
     return NextResponse.json(points);
-  } catch (err: any) {
-    console.error('❌ Failed to fetch points:', err);
-    return NextResponse.json(
-      { error: 'Failed to fetch points', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/loyalty/points');
   }
 }
