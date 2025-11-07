@@ -13,7 +13,7 @@ const CartPage: React.FC = () => {
   };
 
   const getTotalPrice = () => {
-    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+    return cartItems.reduce((total, item) => total + (item.retailPrice * item.quantity), 0);
   };
 
   return (
@@ -28,7 +28,7 @@ const CartPage: React.FC = () => {
               key={item.productId}
               name={item.name}
               quantity={item.quantity}
-              price={item.price}
+              price={item.retailPrice}
               customizations={undefined}
               onRemove={() => removeFromCart(item.productId)}
             />

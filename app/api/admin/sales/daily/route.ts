@@ -191,7 +191,15 @@ export async function GET(req: Request) {
     });
 
     // Calculate totals
-    const summary = {
+    const summary: {
+      totalOrders: number;
+      totalRevenue: number;
+      totalRetail: number;
+      totalDiscounts: number;
+      totalCOGS: number;
+      totalProfit: number;
+      overallMargin?: number;
+    } = {
       totalOrders: detailedOrders.length,
       totalRevenue: detailedOrders.reduce((sum, o) => sum + o.finalTotal, 0),
       totalRetail: detailedOrders.reduce((sum, o) => sum + o.retailTotal, 0),
