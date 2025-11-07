@@ -231,7 +231,7 @@ const ProductListPage: React.FC = () => {
             {/* Image container with aspect ratio */}
             <div className="relative w-full aspect-square bg-gray-100">
               <img
-                src={product.images[0]?.src || "/placeholder.jpg"}
+                src={product.images[0]?.src || "/placeholder.svg"}
                 alt={product.name}
                 className="absolute inset-0 w-full h-full object-cover"
               />
