@@ -4,27 +4,28 @@ import { wcApi } from "@/lib/wooClient";
 /**
  * GET /api/delivery/orders
  *
- * Returns orders ready for delivery (ready-for-pickup status with _out_for_delivery flag)
+ * Returns processing orders marked as ready for delivery (with _out_for_delivery flag)
  */
 export async function GET(req: Request) {
   try {
-    // Fetch all ready-for-pickup orders
+    // Fetch all processing orders
     const response: any = await wcApi.get("orders", {
-      status: "ready-for-pickup",
+      status: "processing",
       per_page: 100,
       orderby: "date",
       order: "asc", // Oldest first (highest priority)
     });
 
-    const allReadyOrders = response.data || [];
+    const allProcessingOrders = response.data || [];
 
-    // Filter for delivery orders only
-    const deliveryOrders = allReadyOrders.filter((order: any) => {
+    // Filter for delivery orders that are ready
+    const deliveryOrders = allProcessingOrders.filter((order: any) => {
+      const kitchenReady = order.meta_data?.find((m: any) => m.key === "_kitchen_ready")?.value;
       const outForDelivery = order.meta_data?.find((m: any) => m.key === "_out_for_delivery")?.value;
-      return outForDelivery === "yes";
+      return kitchenReady === "yes" && outForDelivery === "yes";
     });
 
-    console.log(`🚗 Delivery: Found ${deliveryOrders.length} orders out for delivery (of ${allReadyOrders.length} ready-for-pickup)`);
+    console.log(`🚗 Delivery: Found ${deliveryOrders.length} orders ready for delivery (of ${allProcessingOrders.length} processing)`);
 
     return NextResponse.json(deliveryOrders);
   } catch (err: any) {

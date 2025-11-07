@@ -4,8 +4,8 @@ import { wcApi } from "@/lib/wooClient";
 /**
  * GET /api/kitchen/orders
  *
- * Returns ALL processing orders for kitchen display
- * No user filtering - shows all orders being prepared
+ * Returns processing orders NOT yet marked as ready for kitchen display
+ * Filters out orders with _kitchen_ready metadata
  */
 export async function GET(req: Request) {
   try {
@@ -17,11 +17,17 @@ export async function GET(req: Request) {
       order: "asc", // Oldest first (highest priority)
     });
 
-    const orders = response.data || [];
+    const allProcessingOrders = response.data || [];
 
-    console.log(`✅ Kitchen: Found ${orders.length} processing orders`);
+    // Filter out orders that are already marked as ready
+    const kitchenOrders = allProcessingOrders.filter((order: any) => {
+      const kitchenReady = order.meta_data?.find((m: any) => m.key === "_kitchen_ready")?.value;
+      return kitchenReady !== "yes";
+    });
 
-    return NextResponse.json(orders);
+    console.log(`✅ Kitchen: Found ${kitchenOrders.length} orders needing prep (${allProcessingOrders.length} total processing)`);
+
+    return NextResponse.json(kitchenOrders);
   } catch (err: any) {
     console.error("❌ /api/kitchen/orders error:", err);
     return NextResponse.json(

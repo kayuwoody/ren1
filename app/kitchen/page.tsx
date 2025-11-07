@@ -89,14 +89,18 @@ export default function KitchenDisplayPage() {
   const markReady = async (orderId: number, readyType: "pickup" | "delivery") => {
     setUpdatingOrderId(orderId);
     try {
-      // Both pickup and delivery set to ready-for-pickup (removes from kitchen)
-      // Delivery is distinguished by metadata for the delivery driver page
+      // Keep status as processing, use metadata to track ready state
+      // This allows orders to remain visible in appropriate screens until actually completed
       const response = await fetch(`/api/update-order/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "ready-for-pickup",
+          status: "processing", // Keep in processing
           meta_data: [
+            {
+              key: "_kitchen_ready",
+              value: "yes", // Mark as ready (removes from kitchen display)
+            },
             {
               key: "_fulfillment_method",
               value: readyType, // "pickup" or "delivery"
@@ -106,8 +110,8 @@ export default function KitchenDisplayPage() {
               value: readyType === "delivery" ? "yes" : "no",
             },
             {
-              key: "_ready_for_delivery_timestamp",
-              value: readyType === "delivery" ? new Date().toISOString() : "",
+              key: "_ready_timestamp",
+              value: new Date().toISOString(),
             },
           ],
         }),
