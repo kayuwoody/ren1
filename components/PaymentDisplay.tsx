@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePaymentStatus } from "@/lib/hooks/usePaymentStatus";
-import { generatePaymentQR } from "@/lib/paymentService";
 
 interface PaymentDisplayProps {
   orderID: number;
@@ -39,8 +38,6 @@ export default function PaymentDisplay({
   onCancel,
 }: PaymentDisplayProps) {
   const router = useRouter();
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [qrError, setQrError] = useState<string | null>(null);
 
   const { status, isPolling, error } = usePaymentStatus({
     orderID,
@@ -53,16 +50,6 @@ export default function PaymentDisplay({
       console.log("❌ Payment failed", order);
     },
   });
-
-  // Generate QR code on mount
-  useEffect(() => {
-    generatePaymentQR(paymentURL)
-      .then(setQrCode)
-      .catch((err) => {
-        console.error("Failed to generate QR code:", err);
-        setQrError("QR code unavailable");
-      });
-  }, [paymentURL]);
 
   const handleCancel = () => {
     if (confirm("Cancel this payment? The order will be marked as cancelled.")) {
@@ -107,32 +94,19 @@ export default function PaymentDisplay({
         </p>
       </div>
 
-      {/* QR Code */}
-      <div className="bg-white border-2 border-gray-200 rounded-lg p-6 mb-6 flex items-center justify-center">
-        {qrCode ? (
-          <img
-            src={qrCode}
-            alt="Payment QR Code"
-            className="w-full max-w-xs"
-          />
-        ) : qrError ? (
-          <div className="text-center py-8">
-            <p className="text-red-600 mb-2">{qrError}</p>
-            <a
-              href={paymentURL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 underline text-sm"
-            >
-              Open payment link
-            </a>
-          </div>
-        ) : (
-          <div className="py-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-            <p className="text-gray-500 text-sm mt-4">Generating QR code...</p>
-          </div>
-        )}
+      {/* Payment Link */}
+      <div className="bg-white border-2 border-gray-200 rounded-lg p-6 mb-6 text-center">
+        <p className="text-sm text-gray-600 mb-4">
+          Open payment page to complete payment
+        </p>
+        <a
+          href={paymentURL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+        >
+          Open Payment Page →
+        </a>
       </div>
 
       {/* Status */}

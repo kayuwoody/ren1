@@ -23,3 +23,20 @@ export async function GET(
     return handleApiError(error, '/api/orders/[orderId]');
   }
 }
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: { orderId: string } }
+) {
+  try {
+    const body = await req.json();
+    const order = await updateWooOrder(params.orderId, body);
+    return NextResponse.json(order, { status: 200 });
+  } catch (err: any) {
+    console.error('❌ PATCH /api/orders/[orderId] failed:', err);
+    return NextResponse.json(
+      { error: 'Failed to update order' },
+      { status: 500 }
+    );
+  }
+}
