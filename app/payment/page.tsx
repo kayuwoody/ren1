@@ -13,8 +13,11 @@ export default function PaymentPage() {
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_qr" | null>(null);
 
-  // Calculate total
-  const total = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
+  // Calculate total (using finalPrice which includes discounts)
+  const retailTotal = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
+  const finalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
+  const totalDiscount = retailTotal - finalTotal;
+  const hasDiscount = totalDiscount > 0;
 
   // Create order when payment method is selected
   const handlePaymentMethodSelect = async (method: "cash" | "bank_qr") => {
@@ -115,7 +118,15 @@ export default function PaymentPage() {
         {/* Order Summary */}
         <div className="bg-gray-50 rounded-lg p-4 mb-6">
           <p className="text-sm text-gray-500 mb-1">Order Total</p>
-          <p className="text-3xl font-bold text-gray-900">RM {total.toFixed(2)}</p>
+          {hasDiscount && (
+            <p className="text-lg text-gray-400 line-through">RM {retailTotal.toFixed(2)}</p>
+          )}
+          <p className="text-3xl font-bold text-gray-900">RM {finalTotal.toFixed(2)}</p>
+          {hasDiscount && (
+            <p className="text-sm text-green-600 font-medium mt-1">
+              Saved RM {totalDiscount.toFixed(2)}
+            </p>
+          )}
           <p className="text-sm text-gray-600 mt-2">{cartItems.length} item(s)</p>
         </div>
 
