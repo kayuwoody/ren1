@@ -132,6 +132,23 @@ export default function AdminOrdersPage() {
     );
   };
 
+  const getElapsedTime = (order: Order) => {
+    if (order.status === 'completed') return null;
+
+    const createdTime = new Date(order.date_created).getTime();
+    const now = Date.now();
+    const elapsedMs = now - createdTime;
+    const elapsedMinutes = Math.floor(elapsedMs / 60000);
+
+    if (elapsedMinutes < 60) {
+      return `${elapsedMinutes}m`;
+    } else {
+      const hours = Math.floor(elapsedMinutes / 60);
+      const mins = elapsedMinutes % 60;
+      return `${hours}h ${mins}m`;
+    }
+  };
+
   const getCompletionMethod = (order: Order) => {
     if (order.status !== 'completed') return null;
 
@@ -345,6 +362,7 @@ export default function AdminOrdersPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Elapsed</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
@@ -352,13 +370,13 @@ export default function AdminOrdersPage() {
               <tbody className="divide-y">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                       Loading orders...
                     </td>
                   </tr>
                 ) : filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                       No orders found
                     </td>
                   </tr>
@@ -395,6 +413,15 @@ export default function AdminOrdersPage() {
                       </td>
                       <td className="px-6 py-4">
                         {getStatusBadge(order.status)}
+                      </td>
+                      <td className="px-6 py-4">
+                        {getElapsedTime(order) ? (
+                          <span className="text-sm font-medium text-gray-700">
+                            {getElapsedTime(order)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         {getCompletionMethod(order)}
