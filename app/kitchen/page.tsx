@@ -40,21 +40,12 @@ export default function KitchenDisplayPage() {
       }
       const data: Order[] = await response.json();
 
-      // Filter out orders that are out for delivery (no longer in kitchen)
-      const kitchenOrders = data.filter((order) => {
-        const outForDelivery = order.meta_data?.find((m) => m.key === "_out_for_delivery")?.value;
-
-        // Debug logging
-        console.log(`Order #${order.id} - _out_for_delivery:`, outForDelivery, `(type: ${typeof outForDelivery})`);
-
-        return outForDelivery !== "yes";
-      });
-
-      console.log(`📊 Kitchen filter: ${data.length} processing orders → ${kitchenOrders.length} kitchen orders (${data.length - kitchenOrders.length} out for delivery)`);
+      // All processing orders are shown (ready orders moved to ready-for-pickup status)
+      console.log(`✅ Kitchen: ${data.length} orders in processing status`);
 
       // Detect new orders
-      const currentOrderIds = new Set<number>(kitchenOrders.map((order) => order.id));
-      const newOrders = kitchenOrders.filter(
+      const currentOrderIds = new Set<number>(data.map((order) => order.id));
+      const newOrders = data.filter(
         (order) => !previousOrderIds.current.has(order.id)
       );
 
@@ -64,7 +55,7 @@ export default function KitchenDisplayPage() {
       }
 
       previousOrderIds.current = currentOrderIds;
-      setOrders(kitchenOrders);
+      setOrders(data);
       setError(null);
     } catch (err: any) {
       console.error("Error fetching orders:", err);
@@ -98,15 +89,13 @@ export default function KitchenDisplayPage() {
   const markReady = async (orderId: number, readyType: "pickup" | "delivery") => {
     setUpdatingOrderId(orderId);
     try {
-      // Pickup: Set to ready-for-pickup (customer can pick up immediately)
-      // Delivery: Keep in processing with out-for-delivery flag (driver needs to deliver)
-      const status = readyType === "pickup" ? "ready-for-pickup" : "processing";
-
+      // Both pickup and delivery set to ready-for-pickup (removes from kitchen)
+      // Delivery is distinguished by metadata for the delivery driver page
       const response = await fetch(`/api/update-order/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status,
+          status: "ready-for-pickup",
           meta_data: [
             {
               key: "_fulfillment_method",

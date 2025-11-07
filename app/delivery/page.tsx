@@ -39,25 +39,15 @@ export default function DeliveryPage() {
   // Fetch orders out for delivery
   const fetchOrders = async () => {
     try {
-      const response = await fetch("/api/kitchen/orders");
+      const response = await fetch("/api/delivery/orders");
       if (!response.ok) {
         throw new Error("Failed to fetch orders");
       }
       const data: Order[] = await response.json();
 
-      // Filter for orders out for delivery
-      const deliveryOrders = data.filter((order) => {
-        const outForDelivery = order.meta_data?.find((m) => m.key === "_out_for_delivery")?.value;
+      console.log(`🚗 Fetched ${data.length} delivery orders`);
 
-        // Debug logging
-        console.log(`[Delivery] Order #${order.id} - _out_for_delivery:`, outForDelivery, `(type: ${typeof outForDelivery})`);
-
-        return outForDelivery === "yes";
-      });
-
-      console.log(`🚗 Delivery filter: ${data.length} processing orders → ${deliveryOrders.length} delivery orders`);
-
-      setOrders(deliveryOrders);
+      setOrders(data);
       setError(null);
     } catch (err: any) {
       console.error("Error fetching orders:", err);
