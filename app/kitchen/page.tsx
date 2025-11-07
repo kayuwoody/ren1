@@ -150,12 +150,31 @@ export default function KitchenDisplayPage() {
       return null;
     }
 
-    const startTime = new Date(startTimeMeta.value).getTime();
-    const endTime = new Date(endTimeMeta.value).getTime();
+    // Handle both ISO date strings and numeric timestamps
+    let startTime: number;
+    let endTime: number;
+
+    // Try parsing as ISO date first, fallback to numeric timestamp
+    if (typeof startTimeMeta.value === 'string' && startTimeMeta.value.includes('T')) {
+      startTime = new Date(startTimeMeta.value).getTime();
+    } else {
+      startTime = parseInt(startTimeMeta.value);
+    }
+
+    if (typeof endTimeMeta.value === 'string' && endTimeMeta.value.includes('T')) {
+      endTime = new Date(endTimeMeta.value).getTime();
+    } else {
+      endTime = parseInt(endTimeMeta.value);
+    }
 
     // Validate timestamps
     if (isNaN(startTime) || isNaN(endTime)) {
-      console.warn(`Invalid timer metadata for order ${order.id}`, { startTimeMeta, endTimeMeta });
+      console.warn(`Invalid timer metadata for order ${order.id}`, {
+        startValue: startTimeMeta.value,
+        endValue: endTimeMeta.value,
+        startParsed: startTime,
+        endParsed: endTime
+      });
       return null;
     }
 
