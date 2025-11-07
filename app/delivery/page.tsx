@@ -48,8 +48,14 @@ export default function DeliveryPage() {
       // Filter for orders out for delivery
       const deliveryOrders = data.filter((order) => {
         const outForDelivery = order.meta_data?.find((m) => m.key === "_out_for_delivery")?.value;
+
+        // Debug logging
+        console.log(`[Delivery] Order #${order.id} - _out_for_delivery:`, outForDelivery, `(type: ${typeof outForDelivery})`);
+
         return outForDelivery === "yes";
       });
+
+      console.log(`🚗 Delivery filter: ${data.length} processing orders → ${deliveryOrders.length} delivery orders`);
 
       setOrders(deliveryOrders);
       setError(null);

@@ -72,7 +72,15 @@ export async function PATCH(
 
     console.log(`✅ Updated order #${orderId} to status: ${body.status}`);
     if (body.meta_data) {
-      console.log(`   Added metadata:`, body.meta_data.map((m: any) => m.key).join(', '));
+      console.log(`   Added metadata:`, body.meta_data.map((m: any) => `${m.key}=${m.value}`).join(', '));
+    }
+
+    // Verify the metadata was saved
+    const verifyMeta = updated.meta_data?.find((m: any) => m.key === '_out_for_delivery');
+    if (verifyMeta) {
+      console.log(`   ✓ Verified _out_for_delivery in response:`, verifyMeta.value, `(type: ${typeof verifyMeta.value})`);
+    } else {
+      console.log(`   ⚠️ _out_for_delivery NOT found in update response!`);
     }
 
     // 5) If order is now ready, send push notification
