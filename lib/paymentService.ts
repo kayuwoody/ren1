@@ -1,5 +1,3 @@
-import { getWooOrder } from './orderService';
-
 /**
  * Payment Service - WooCommerce Integration
  *
@@ -85,7 +83,12 @@ export function pollPaymentStatus(
     if (stopped) return;
 
     try {
-      const order = await getWooOrder(orderID);
+      // Fetch order via API route (works in browser)
+      const response = await fetch(`/api/orders/${orderID}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch order: ${response.statusText}`);
+      }
+      const order = await response.json();
       const currentStatus = order.status as PaymentStatus;
 
       // Only fire callback if status changed
