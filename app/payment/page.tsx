@@ -34,6 +34,21 @@ export default function PaymentPage() {
           line_items: cartItems.map((item) => ({
             product_id: item.productId,
             quantity: item.quantity,
+            price: item.finalPrice, // Use discounted price
+            meta_data: item.discountReason ? [
+              {
+                key: "_discount_reason",
+                value: item.discountReason,
+              },
+              {
+                key: "_retail_price",
+                value: item.retailPrice.toString(),
+              },
+              {
+                key: "_discount_amount",
+                value: (item.retailPrice - item.finalPrice).toString(),
+              },
+            ] : [],
           })),
           billing: {
             first_name: "Walk-in Customer",
@@ -76,7 +91,7 @@ export default function PaymentPage() {
   // Redirect if cart is empty
   useEffect(() => {
     if (cartItems.length === 0 && !order) {
-      router.push("/cart");
+      router.push("/admin/pos");
     }
   }, [cartItems, order, router]);
 
@@ -170,10 +185,10 @@ export default function PaymentPage() {
 
         {/* Back Button */}
         <button
-          onClick={() => router.push("/cart")}
+          onClick={() => router.push("/admin/pos")}
           className="w-full mt-6 px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
         >
-          ← Back to Cart
+          ← Back to POS
         </button>
       </div>
     </div>
