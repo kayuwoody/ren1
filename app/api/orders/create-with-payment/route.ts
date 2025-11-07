@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createWooOrder } from "@/lib/orderService";
 import { getPaymentInfo } from "@/lib/paymentService";
+import { getPosCustomerId } from "@/lib/posCustomer";
 
 /**
  * POST /api/orders/create-with-payment
@@ -21,7 +22,7 @@ import { getPaymentInfo } from "@/lib/paymentService";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { line_items, userId, guestId, billing, shipping, meta_data } = body;
+    let { line_items, userId, guestId, billing, shipping, meta_data } = body;
 
     // Validation
     if (!line_items || !Array.isArray(line_items) || line_items.length === 0) {
@@ -29,6 +30,22 @@ export async function POST(req: Request) {
         { error: "line_items is required and must be a non-empty array" },
         { status: 400 }
       );
+    }
+
+    // Auto-assign POS customer for walk-in orders
+    // Detect by billing email or "Walk-in Customer" name
+    const isWalkInOrder =
+      billing?.first_name === "Walk-in Customer" ||
+      billing?.email === "pos@coffee-oasis.com.my";
+
+    if (isWalkInOrder && !userId) {
+      try {
+        userId = await getPosCustomerId();
+        console.log(`🏪 Walk-in order assigned to POS customer #${userId}`);
+      } catch (err) {
+        console.error('⚠️ Could not assign POS customer:', err);
+        // Continue without userId - will create as guest order
+      }
     }
 
     // Create order in WooCommerce with 'pending' status (awaiting payment)
