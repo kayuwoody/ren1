@@ -5,9 +5,9 @@ import { mockWcApi } from './mockWooClient';
 const USE_MOCK = process.env.USE_MOCK_API === 'true';
 
 const realWcApi = new WooCommerceRestApi({
-  url: process.env.WC_STORE_URL!,
-  consumerKey: process.env.WC_CONSUMER_KEY!,
-  consumerSecret: process.env.WC_CONSUMER_SECRET!,
+  url: process.env.WC_API_URL || process.env.WC_STORE_URL || '',
+  consumerKey: process.env.WC_CONSUMER_KEY || '',
+  consumerSecret: process.env.WC_CONSUMER_SECRET || '',
   version: 'wc/v3',
   queryStringAuth: true, // Force OAuth 1.0a (query parameters) instead of Basic Auth
 });
@@ -76,7 +76,7 @@ export const wcApi = USE_MOCK ? mockWcApi : wrapWithRetry(realWcApi);
 
 // Enhanced logging
 const apiMode = USE_MOCK ? 'MOCK' : 'LIVE';
-const apiUrl = process.env.WC_STORE_URL || 'not set';
+const apiUrl = process.env.WC_API_URL || process.env.WC_STORE_URL || 'not set';
 console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔧 WooCommerce API Configuration
