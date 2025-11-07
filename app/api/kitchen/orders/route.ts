@@ -24,10 +24,17 @@ export async function GET(req: Request) {
       const kitchenReady = order.meta_data?.find((m: any) => m.key === "_kitchen_ready")?.value;
       const shouldShow = kitchenReady !== "yes";
 
-      // Debug logging
-      if (!shouldShow) {
-        console.log(`   🔍 Filtering out order #${order.id}: _kitchen_ready=${kitchenReady}`);
+      // Debug logging - show ALL metadata for debugging
+      console.log(`   🔍 Order #${order.id}:`);
+      console.log(`      Total meta_data items: ${order.meta_data?.length || 0}`);
+      if (order.meta_data && order.meta_data.length > 0) {
+        order.meta_data.forEach((m: any) => {
+          if (m.key.startsWith('_')) {
+            console.log(`        ${m.key} = ${m.value}`);
+          }
+        });
       }
+      console.log(`      _kitchen_ready=${kitchenReady}, shouldShow=${shouldShow}`);
 
       return shouldShow;
     });
