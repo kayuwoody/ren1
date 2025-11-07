@@ -1,6 +1,6 @@
 // app/api/orders/[orderId]/route.ts
 import { NextResponse } from 'next/server';
-import { getWooOrder } from '@/lib/orderService';
+import { getWooOrder, updateWooOrder } from '@/lib/orderService';
 
 export async function GET(
   _req: Request,
@@ -26,6 +26,23 @@ export async function GET(
 
     return NextResponse.json(
       { error: 'Could not load order.' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: { orderId: string } }
+) {
+  try {
+    const body = await req.json();
+    const order = await updateWooOrder(params.orderId, body);
+    return NextResponse.json(order, { status: 200 });
+  } catch (err: any) {
+    console.error('❌ PATCH /api/orders/[orderId] failed:', err);
+    return NextResponse.json(
+      { error: 'Failed to update order' },
       { status: 500 }
     );
   }

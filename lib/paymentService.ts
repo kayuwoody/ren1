@@ -155,27 +155,13 @@ export function waitForPayment(
 
 /**
  * Generate QR code data URL for payment link
- * Requires qrcode package: npm install qrcode
+ * NOTE: Disabled - using local bank QR codes instead
  *
- * @param paymentURL - WooCommerce payment URL
- * @returns Base64 data URL for QR code image
+ * @deprecated Use local bank QR codes for payments
  */
 export async function generatePaymentQR(paymentURL: string): Promise<string> {
-  try {
-    // Dynamically import qrcode to avoid bundling if not used
-    const QRCode = await import('qrcode');
-    return await QRCode.default.toDataURL(paymentURL, {
-      width: 300,
-      margin: 2,
-      color: {
-        dark: '#000000',
-        light: '#FFFFFF',
-      },
-    });
-  } catch (error) {
-    console.error('Failed to generate QR code:', error);
-    throw new Error('QR code generation failed. Is qrcode package installed?');
-  }
+  // Not implemented - using local bank QR codes
+  throw new Error('QR code generation disabled. Use local bank QR codes instead.');
 }
 
 /**
