@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { wcApi } from '@/lib/wooClient';
 import { recordProductSale } from '@/lib/db/inventoryConsumptionService';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 /**
  * POST /api/debug/recreate-consumptions
@@ -11,10 +12,7 @@ export async function POST(req: Request) {
     const { orderIds } = await req.json();
 
     if (!Array.isArray(orderIds) || orderIds.length === 0) {
-      return NextResponse.json(
-        { error: 'orderIds array is required' },
-        { status: 400 }
-      );
+      return validationError('orderIds array is required', '/api/debug/recreate-consumptions');
     }
 
     const results = [];
@@ -97,11 +95,7 @@ export async function POST(req: Request) {
       results,
     });
 
-  } catch (error: any) {
-    console.error('❌ Error recreating consumptions:', error);
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/debug/recreate-consumptions');
   }
 }

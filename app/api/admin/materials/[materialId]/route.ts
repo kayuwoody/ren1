@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMaterial, upsertMaterial, deleteMaterial, updateMaterialPrice } from '@/lib/db/materialService';
 import { recalculateRecipeCostsForMaterial } from '@/lib/db/recipeService';
+import { handleApiError, notFoundError } from '@/lib/api/error-handler';
 
 export async function GET(
   request: NextRequest,
@@ -18,19 +19,12 @@ export async function GET(
     const material = getMaterial(materialId);
 
     if (!material) {
-      return NextResponse.json(
-        { error: 'Material not found' },
-        { status: 404 }
-      );
+      return notFoundError('Material not found', '/api/admin/materials/[materialId]');
     }
 
     return NextResponse.json({ material });
-  } catch (error: any) {
-    console.error('Error fetching material:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch material' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/materials/[materialId]');
   }
 }
 
@@ -44,10 +38,7 @@ export async function PUT(
 
     const existing = getMaterial(materialId);
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Material not found' },
-        { status: 404 }
-      );
+      return notFoundError('Material not found', '/api/admin/materials/[materialId]');
     }
 
     const {
@@ -110,12 +101,8 @@ export async function PUT(
       priceChanged,
       message: priceChanged ? 'Material updated and recipes recalculated' : 'Material updated'
     });
-  } catch (error: any) {
-    console.error('Error updating material:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to update material' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/materials/[materialId]');
   }
 }
 
@@ -128,10 +115,7 @@ export async function DELETE(
 
     const material = getMaterial(materialId);
     if (!material) {
-      return NextResponse.json(
-        { error: 'Material not found' },
-        { status: 404 }
-      );
+      return notFoundError('Material not found', '/api/admin/materials/[materialId]');
     }
 
     deleteMaterial(materialId);
@@ -140,11 +124,7 @@ export async function DELETE(
       success: true,
       message: 'Material deleted successfully'
     });
-  } catch (error: any) {
-    console.error('Error deleting material:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to delete material' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/materials/[materialId]');
   }
 }

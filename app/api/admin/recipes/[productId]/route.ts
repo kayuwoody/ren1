@@ -15,6 +15,7 @@ import {
   getRecipeSummary,
 } from '@/lib/db/recipeService';
 import { getProduct } from '@/lib/db/productService';
+import { handleApiError, notFoundError, validationError } from '@/lib/api/error-handler';
 
 export async function GET(
   request: NextRequest,
@@ -25,10 +26,7 @@ export async function GET(
 
     const product = getProduct(productId);
     if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+      return notFoundError('Product not found', '/api/admin/recipes/[productId]');
     }
 
     const recipeSummary = getRecipeSummary(productId);
@@ -43,12 +41,8 @@ export async function GET(
     } : null;
 
     return NextResponse.json({ recipe });
-  } catch (error: any) {
-    console.error('Error fetching recipe:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch recipe' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/recipes/[productId]');
   }
 }
 
@@ -62,18 +56,12 @@ export async function PUT(
     const { items } = body;
 
     if (!Array.isArray(items)) {
-      return NextResponse.json(
-        { error: 'Invalid recipe items' },
-        { status: 400 }
-      );
+      return validationError('Invalid recipe items', '/api/admin/recipes/[productId]');
     }
 
     const product = getProduct(productId);
     if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+      return notFoundError('Product not found', '/api/admin/recipes/[productId]');
     }
 
     // Replace entire recipe
@@ -93,12 +81,8 @@ export async function PUT(
       recipe,
       message: 'Recipe updated successfully'
     });
-  } catch (error: any) {
-    console.error('Error updating recipe:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to update recipe' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/recipes/[productId]');
   }
 }
 
@@ -111,10 +95,7 @@ export async function DELETE(
 
     const product = getProduct(productId);
     if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+      return notFoundError('Product not found', '/api/admin/recipes/[productId]');
     }
 
     clearProductRecipe(productId);
@@ -123,11 +104,7 @@ export async function DELETE(
       success: true,
       message: 'Recipe cleared successfully'
     });
-  } catch (error: any) {
-    console.error('Error clearing recipe:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to clear recipe' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/recipes/[productId]');
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/init';
+import { handleApiError, validationError, notFoundError } from '@/lib/api/error-handler';
 
 /**
  * PATCH /api/admin/products/[productId]/cost
@@ -17,19 +18,13 @@ export async function PATCH(
     console.log(`📝 Updating product ${productId} supplierCost to RM ${supplierCost}`);
 
     if (typeof supplierCost !== 'number' || supplierCost < 0) {
-      return NextResponse.json(
-        { error: 'Invalid supplierCost. Must be a non-negative number.' },
-        { status: 400 }
-      );
+      return validationError('Invalid supplierCost. Must be a non-negative number.', '/api/admin/products/[productId]/cost');
     }
 
     // Check if product exists and show current value
     const currentProduct = db.prepare('SELECT * FROM Product WHERE id = ?').get(productId) as any;
     if (!currentProduct) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+      return notFoundError('Product not found', '/api/admin/products/[productId]/cost');
     }
     console.log(`   Current supplierCost: RM ${currentProduct.supplierCost || 0}`);
 
@@ -44,10 +39,7 @@ export async function PATCH(
 
     if (result.changes === 0) {
       console.error(`❌ Failed to update - no rows changed`);
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+      return notFoundError('Product not found', '/api/admin/products/[productId]/cost');
     }
 
     // Get updated product
@@ -60,12 +52,7 @@ export async function PATCH(
       success: true,
       product,
     });
-  } catch (error: any) {
-    console.error('❌ Error updating product cost:', error);
-    console.error('   Error details:', error.message);
-    return NextResponse.json(
-      { error: error.message || 'Failed to update product cost' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/products/[productId]/cost');
   }
 }
