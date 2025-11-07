@@ -86,12 +86,22 @@ export default function KitchenDisplayPage() {
   const markReady = async (orderId: number, readyType: "pickup" | "delivery") => {
     setUpdatingOrderId(orderId);
     try {
-      const status = readyType === "pickup" ? "ready-for-pickup" : "ready-for-delivery";
+      // Both use ready-for-pickup status, but we add metadata to distinguish
       const response = await fetch(`/api/update-order/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status,
+          status: "ready-for-pickup",
+          meta_data: [
+            {
+              key: "_fulfillment_method",
+              value: readyType, // "pickup" or "delivery"
+            },
+            {
+              key: "_ready_for_delivery",
+              value: readyType === "delivery" ? "yes" : "no",
+            },
+          ],
         }),
       });
 
