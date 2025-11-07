@@ -39,25 +39,15 @@ export default function DeliveryPage() {
   // Fetch orders out for delivery
   const fetchOrders = async () => {
     try {
-      const response = await fetch("/api/kitchen/orders");
+      const response = await fetch("/api/delivery/orders");
       if (!response.ok) {
         throw new Error("Failed to fetch orders");
       }
       const data: Order[] = await response.json();
 
-      // Filter for orders out for delivery
-      const deliveryOrders = data.filter((order) => {
-        const outForDelivery = order.meta_data?.find((m) => m.key === "_out_for_delivery")?.value;
+      console.log(`🚗 Fetched ${data.length} delivery orders`);
 
-        // Debug logging
-        console.log(`[Delivery] Order #${order.id} - _out_for_delivery:`, outForDelivery, `(type: ${typeof outForDelivery})`);
-
-        return outForDelivery === "yes";
-      });
-
-      console.log(`🚗 Delivery filter: ${data.length} processing orders → ${deliveryOrders.length} delivery orders`);
-
-      setOrders(deliveryOrders);
+      setOrders(data);
       setError(null);
     } catch (err: any) {
       console.error("Error fetching orders:", err);
@@ -67,7 +57,7 @@ export default function DeliveryPage() {
     }
   };
 
-  // Mark order as delivered
+  // Mark order as delivered (clears delivery flag, customer can now pick up)
   const markDelivered = async (orderId: number) => {
     setCompletingOrderId(orderId);
     try {
@@ -75,8 +65,12 @@ export default function DeliveryPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "completed",
+          status: "ready-for-pickup",
           meta_data: [
+            {
+              key: "_out_for_delivery",
+              value: "no", // Clear delivery flag
+            },
             {
               key: "_delivered_timestamp",
               value: new Date().toISOString(),
@@ -277,7 +271,7 @@ export default function DeliveryPage() {
                       : "bg-green-600 text-white hover:bg-green-500 active:scale-95"
                   }`}
                 >
-                  {isCompleting ? "⏳ Completing..." : "✅ Mark Delivered"}
+                  {isCompleting ? "⏳ Updating..." : "✅ Mark Delivered"}
                 </button>
               </div>
             );

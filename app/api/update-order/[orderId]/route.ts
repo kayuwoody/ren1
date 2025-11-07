@@ -83,6 +83,42 @@ export async function PATCH(
       console.log(`   ⚠️ _out_for_delivery NOT found in update response!`);
     }
 
+    // 4b) If order just moved to processing, record inventory consumption
+    if (body.status === 'processing' && existing.status !== 'processing') {
+      try {
+        console.log(`📦 Recording inventory consumption for order #${orderId}`);
+
+        // Prepare line items for consumption API
+        const lineItems = existing.line_items.map((item: any) => ({
+          productId: item.product_id,
+          productName: item.name,
+          quantity: item.quantity,
+          orderItemId: item.id,
+          meta_data: item.meta_data,
+        }));
+
+        // Call consumption API
+        const consumptionResponse = await fetch(`${req.url.split('/api')[0]}/api/orders/consumption`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId,
+            lineItems,
+          }),
+        });
+
+        if (consumptionResponse.ok) {
+          const consumptionData = await consumptionResponse.json();
+          console.log(`   ✅ Inventory consumed: RM ${consumptionData.totalCOGS?.toFixed(2)} COGS`);
+        } else {
+          console.error(`   ⚠️ Failed to record inventory consumption:`, await consumptionResponse.text());
+        }
+      } catch (consumptionErr) {
+        console.error('   ⚠️ Error calling consumption API:', consumptionErr);
+        // Don't fail the order update if consumption recording fails
+      }
+    }
+
     // 5) If order is now ready, send push notification
     if (body.status === 'ready-for-pickup') {
       try {
