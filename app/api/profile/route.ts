@@ -1,20 +1,20 @@
 // app/api/profile/route.ts
 import { NextResponse } from 'next/server';
 import api from '@/lib/wooApi';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const wooCustomerId = searchParams.get('id');
 
   if (!wooCustomerId) {
-    return NextResponse.json({ error: 'Missing WooCommerce ID' }, { status: 400 });
+    return validationError('Missing WooCommerce ID', '/api/profile');
   }
 
   try {
     const { data: customer } = await api.get(`customers/${wooCustomerId}`);
     return NextResponse.json(customer);
-  } catch (err) {
-    console.error('❌ Failed to fetch WooCommerce customer:', err);
-    return NextResponse.json({ error: 'Could not retrieve profile' }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, '/api/profile');
   }
 }

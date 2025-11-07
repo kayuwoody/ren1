@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { wcApi } from '@/lib/wooClient';
 import { randomUUID } from 'crypto';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 console.log('🔥 /api/login route loaded (passwordless)');
 
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as Incoming;
     const email = normalizeEmail(body);
     if (!email) {
-      return NextResponse.json({ error: 'Missing email' }, { status: 400 });
+      return validationError('Missing email', '/api/login');
     }
 
     // Lookup
@@ -63,8 +64,7 @@ export async function POST(req: Request) {
     });
 
     return res;
-  } catch (err: any) {
-    console.error('❌ /api/login error:', err?.response?.data || err);
-    return NextResponse.json({ error: 'Login failed' }, { status: 500 });
+  } catch (error) {
+    return handleApiError(error, '/api/login');
   }
 }

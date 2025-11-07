@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { handleApiError } from '@/lib/api/error-handler';
 
 /**
  * POST /api/push/subscribe
@@ -33,12 +34,8 @@ export async function POST(req: Request) {
       success: true,
       message: 'Push subscription saved'
     });
-  } catch (err: any) {
-    console.error('❌ Failed to save push subscription:', err);
-    return NextResponse.json(
-      { error: 'Failed to save subscription', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/push/subscribe');
   }
 }
 
