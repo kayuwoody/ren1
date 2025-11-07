@@ -40,9 +40,15 @@ export default function KitchenDisplayPage() {
       }
       const data: Order[] = await response.json();
 
+      // Filter out orders that are out for delivery (no longer in kitchen)
+      const kitchenOrders = data.filter((order) => {
+        const outForDelivery = order.meta_data?.find((m) => m.key === "_out_for_delivery")?.value;
+        return outForDelivery !== "yes";
+      });
+
       // Detect new orders
-      const currentOrderIds = new Set<number>(data.map((order) => order.id));
-      const newOrders = data.filter(
+      const currentOrderIds = new Set<number>(kitchenOrders.map((order) => order.id));
+      const newOrders = kitchenOrders.filter(
         (order) => !previousOrderIds.current.has(order.id)
       );
 
@@ -52,7 +58,7 @@ export default function KitchenDisplayPage() {
       }
 
       previousOrderIds.current = currentOrderIds;
-      setOrders(data);
+      setOrders(kitchenOrders);
       setError(null);
     } catch (err: any) {
       console.error("Error fetching orders:", err);
@@ -86,20 +92,27 @@ export default function KitchenDisplayPage() {
   const markReady = async (orderId: number, readyType: "pickup" | "delivery") => {
     setUpdatingOrderId(orderId);
     try {
-      // Both use ready-for-pickup status, but we add metadata to distinguish
+      // Pickup: Set to ready-for-pickup (customer can pick up immediately)
+      // Delivery: Keep in processing with out-for-delivery flag (driver needs to deliver)
+      const status = readyType === "pickup" ? "ready-for-pickup" : "processing";
+
       const response = await fetch(`/api/update-order/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "ready-for-pickup",
+          status,
           meta_data: [
             {
               key: "_fulfillment_method",
               value: readyType, // "pickup" or "delivery"
             },
             {
-              key: "_ready_for_delivery",
+              key: "_out_for_delivery",
               value: readyType === "delivery" ? "yes" : "no",
+            },
+            {
+              key: "_ready_for_delivery_timestamp",
+              value: readyType === "delivery" ? new Date().toISOString() : "",
             },
           ],
         }),

@@ -177,13 +177,22 @@ export default function AdminOrdersPage() {
                 <p className="text-sm text-gray-500">Monitor and manage all orders</p>
               </div>
             </div>
-            <Link
-              href="/kitchen"
-              className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-md"
-            >
-              <span className="text-xl">🍳</span>
-              <span>Kitchen Display</span>
-            </Link>
+            <div className="flex gap-3">
+              <Link
+                href="/kitchen"
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-md"
+              >
+                <span className="text-xl">🍳</span>
+                <span>Kitchen Display</span>
+              </Link>
+              <Link
+                href="/delivery"
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-md"
+              >
+                <span className="text-xl">🚗</span>
+                <span>Delivery Orders</span>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
