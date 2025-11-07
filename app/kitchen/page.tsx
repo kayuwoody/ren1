@@ -43,8 +43,14 @@ export default function KitchenDisplayPage() {
       // Filter out orders that are out for delivery (no longer in kitchen)
       const kitchenOrders = data.filter((order) => {
         const outForDelivery = order.meta_data?.find((m) => m.key === "_out_for_delivery")?.value;
+
+        // Debug logging
+        console.log(`Order #${order.id} - _out_for_delivery:`, outForDelivery, `(type: ${typeof outForDelivery})`);
+
         return outForDelivery !== "yes";
       });
+
+      console.log(`📊 Kitchen filter: ${data.length} processing orders → ${kitchenOrders.length} kitchen orders (${data.length - kitchenOrders.length} out for delivery)`);
 
       // Detect new orders
       const currentOrderIds = new Set<number>(kitchenOrders.map((order) => order.id));
