@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getProduct, getProductByWcId } from '@/lib/db/productService';
 import { getProductRecipe } from '@/lib/db/recipeService';
+import { handleApiError, notFoundError } from '@/lib/api/error-handler';
 
 /**
  * GET /api/products/[productId]/recipe
@@ -23,10 +24,7 @@ export async function GET(
     const product = getProductByWcId(Number(productId));
 
     if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+      return notFoundError('Product not found', '/api/products/[productId]/recipe');
     }
 
     // Get recipe
@@ -139,11 +137,7 @@ export async function GET(
       },
       needsModal,
     });
-  } catch (error: any) {
-    console.error('Error fetching product recipe:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch product recipe' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/products/[productId]/recipe');
   }
 }

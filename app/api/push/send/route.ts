@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { subscriptions } from '../subscribe/route';
+import { handleApiError, notFoundError } from '@/lib/api/error-handler';
 
 /**
  * POST /api/push/send
@@ -26,10 +27,7 @@ export async function POST(req: Request) {
 
     if (!userSubscription) {
       console.log(`⚠️ No push subscription found for user ${userId}`);
-      return NextResponse.json(
-        { error: 'No subscription found for user' },
-        { status: 404 }
-      );
+      return notFoundError('No subscription found for user', '/api/push/send');
     }
 
     const { subscription } = userSubscription;
@@ -81,11 +79,7 @@ export async function POST(req: Request) {
       userId,
       subscription: !!subscription
     });
-  } catch (err: any) {
-    console.error('❌ Failed to send push notification:', err);
-    return NextResponse.json(
-      { error: 'Failed to send notification', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/push/send');
   }
 }

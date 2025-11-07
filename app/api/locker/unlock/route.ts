@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { updateWooOrder } from '@/lib/orderService';
+import { handleApiError, validationError, unauthorizedError } from '@/lib/api/error-handler';
 
 /**
  * Locker Unlock Webhook
@@ -26,10 +27,7 @@ export async function POST(req: Request) {
     const token = authHeader?.replace('Bearer ', '');
 
     if (!token || token !== process.env.LOCKER_SECRET_TOKEN) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return unauthorizedError('Unauthorized', '/api/locker/unlock');
     }
 
     // 2. Parse payload
@@ -45,20 +43,14 @@ export async function POST(req: Request) {
 
     // 3. Validate required fields
     if (!lockerId || !orderId) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+      return validationError('Missing required fields', '/api/locker/unlock');
     }
 
     // 4. Verify timestamp (prevent replay attacks - max 5 min old)
     const eventTime = new Date(timestamp).getTime();
     const now = Date.now();
     if (now - eventTime > 5 * 60 * 1000) {
-      return NextResponse.json(
-        { error: 'Timestamp too old' },
-        { status: 400 }
-      );
+      return validationError('Timestamp too old', '/api/locker/unlock');
     }
 
     // 5. Update order status to completed
@@ -100,11 +92,7 @@ export async function POST(req: Request) {
       message: `Order #${orderId} marked as collected`
     });
 
-  } catch (err: any) {
-    console.error('❌ Locker unlock webhook error:', err);
-    return NextResponse.json(
-      { error: 'Internal server error', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/locker/unlock');
   }
 }
