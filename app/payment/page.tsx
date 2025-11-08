@@ -34,7 +34,8 @@ export default function PaymentPage() {
           line_items: cartItems.map((item) => ({
             product_id: item.productId,
             quantity: item.quantity,
-            price: item.finalPrice, // Use discounted price
+            subtotal: (item.finalPrice * item.quantity).toString(), // Total before tax
+            total: (item.finalPrice * item.quantity).toString(),    // Total after tax (no tax for now)
             meta_data: item.discountReason ? [
               {
                 key: "_discount_reason",
