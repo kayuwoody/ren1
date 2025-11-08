@@ -237,8 +237,8 @@ const ProductListPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Responsive grid: 2 col mobile, 3 cols tablet, 4 cols desktop */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {/* Responsive grid: 3 col mobile, 4 cols tablet, 5 cols desktop */}
+      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {filteredProducts.map(product => {
           const isOutOfStock = product.manage_stock && (product.stock_quantity ?? 0) === 0;
           return (
