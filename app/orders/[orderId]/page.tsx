@@ -413,7 +413,7 @@ export default function OrderDetailPage() {
 
         {/* View All Orders Button */}
         <Link
-          href="/orders"
+          href="/admin/orders"
           className="flex items-center justify-center gap-2 w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-3 px-4 rounded-lg transition"
         >
           <FileText className="w-5 h-5" />
