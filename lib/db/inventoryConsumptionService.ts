@@ -454,11 +454,6 @@ export function calculateProductCOGS(
     return { totalCOGS: 0, breakdown: [] };
   }
 
-  if (depth === 0) {
-    console.log(`💰 calculateProductCOGS: ${product.name} (WC ID: ${wcProductId}), qty: ${quantity}`);
-    console.log(`   bundleSelection:`, bundleSelection);
-  }
-
   const chain = parentChain ? `${parentChain} → ${product.name}` : product.name;
   const recipe = getProductRecipe(product.id);
 
@@ -498,17 +493,12 @@ export function calculateProductCOGS(
         // This item is part of a selection group (XOR choice like Hot vs Iced)
         const selectedItemId = bundleSelection.selectedMandatory[item.selectionGroup];
 
-        console.log(`🔍 COGS Filter: group="${item.selectionGroup}", linkedProductId="${item.linkedProductId}", selectedId="${selectedItemId}", name="${item.linkedProductName}"`);
-
         // Check if this specific item was selected
         const isSelected = item.linkedProductId === selectedItemId;
 
         if (!isSelected) {
           // Skip this item - it wasn't selected in the XOR group
-          console.log(`   ⏭️  Skipping ${item.linkedProductName}`);
           return;
-        } else {
-          console.log(`   ✅ Including ${item.linkedProductName}`);
         }
       }
 
