@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchWooOrders } from '@/lib/woocommerce';
+import { wcApi } from '@/lib/wooClient';
 
 /**
  * Admin Daily Stats API
@@ -20,17 +20,17 @@ export async function GET() {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     // Fetch today's orders
-    const todayOrders = await fetchWooOrders({
+    const { data: todayOrders } = await wcApi.get('orders', {
       after: today.toISOString(),
       before: tomorrow.toISOString(),
       per_page: 100
-    });
+    }) as { data: any[] };
 
     // Fetch pending orders (any date)
-    const pendingOrders = await fetchWooOrders({
+    const { data: pendingOrders } = await wcApi.get('orders', {
       status: 'pending,processing,on-hold',
       per_page: 100
-    });
+    }) as { data: any[] };
 
     // Calculate stats
     let todayRevenue = 0;
