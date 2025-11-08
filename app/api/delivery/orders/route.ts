@@ -4,7 +4,7 @@ import { wcApi } from "@/lib/wooClient";
 /**
  * GET /api/delivery/orders
  *
- * Returns processing orders marked as ready for delivery (with _out_for_delivery flag)
+ * Returns processing orders marked as ready for delivery (with out_for_delivery flag)
  */
 export async function GET(req: Request) {
   try {
@@ -25,15 +25,8 @@ export async function GET(req: Request) {
     const deliveryOrders = allProcessingOrders.filter((order: any) => {
       const kitchenReady = order.meta_data?.find((m: any) => m.key === "kitchen_ready")?.value;
       const outForDelivery = order.meta_data?.find((m: any) => m.key === "out_for_delivery")?.value;
-      const shouldShow = kitchenReady === "yes" && outForDelivery === "yes";
-
-      // Debug logging for all processing orders
-      console.log(`   🔍 Order #${order.id}: kitchen_ready=${kitchenReady} (${typeof kitchenReady}), out_for_delivery=${outForDelivery} (${typeof outForDelivery}), shouldShow=${shouldShow}`);
-
-      return shouldShow;
+      return kitchenReady === "yes" && outForDelivery === "yes";
     });
-
-    console.log(`🚗 Delivery: Found ${deliveryOrders.length} orders ready for delivery (of ${allProcessingOrders.length} processing)`);
 
     return NextResponse.json(deliveryOrders);
   } catch (err: any) {

@@ -5,7 +5,7 @@ import { wcApi } from "@/lib/wooClient";
  * GET /api/kitchen/orders
  *
  * Returns processing orders NOT yet marked as ready for kitchen display
- * Filters out orders with _kitchen_ready metadata
+ * Filters out orders with kitchen_ready metadata
  */
 export async function GET(req: Request) {
   try {
@@ -25,22 +25,8 @@ export async function GET(req: Request) {
     // Filter out orders that are already marked as ready
     const kitchenOrders = allProcessingOrders.filter((order: any) => {
       const kitchenReady = order.meta_data?.find((m: any) => m.key === "kitchen_ready")?.value;
-      const shouldShow = kitchenReady !== "yes";
-
-      // Debug logging - show ALL metadata for debugging
-      console.log(`   🔍 Order #${order.id}:`);
-      console.log(`      Total meta_data items: ${order.meta_data?.length || 0}`);
-      if (order.meta_data && order.meta_data.length > 0) {
-        order.meta_data.forEach((m: any) => {
-          console.log(`        ${m.key} = ${m.value}`);
-        });
-      }
-      console.log(`      kitchen_ready=${kitchenReady}, shouldShow=${shouldShow}`);
-
-      return shouldShow;
+      return kitchenReady !== "yes";
     });
-
-    console.log(`✅ Kitchen: Found ${kitchenOrders.length} orders needing prep (${allProcessingOrders.length} total processing)`);
 
     return NextResponse.json(kitchenOrders);
   } catch (err: any) {

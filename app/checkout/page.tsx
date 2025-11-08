@@ -49,8 +49,6 @@ export default function CheckoutPage() {
       return;
     }
 
-    console.log("🛒 Proceeding to payment with cart items:", cartItems);
-
     // Navigate to payment page (cart stays intact)
     router.push("/payment");
   }
