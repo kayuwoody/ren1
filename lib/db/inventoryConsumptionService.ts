@@ -426,6 +426,10 @@ export function getConsumptionSummary(
 export function calculateProductCOGS(
   wcProductId: string | number,
   quantity: number,
+  bundleSelection?: {
+    selectedMandatory: Record<string, string>;
+    selectedOptional: string[];
+  },
   depth: number = 0,
   parentChain: string = ''
 ): {
@@ -484,6 +488,20 @@ export function calculateProductCOGS(
   recipe
     .filter(item => !item.isOptional)
     .forEach(item => {
+      // Handle bundle selection filtering (only at depth 0 - the main product)
+      if (depth === 0 && bundleSelection && item.selectionGroup) {
+        // This item is part of a selection group (XOR choice like Hot vs Iced)
+        const selectedItemId = bundleSelection.selectedMandatory[item.selectionGroup];
+
+        // Check if this specific item was selected
+        const isSelected = item.linkedProductId === selectedItemId;
+
+        if (!isSelected) {
+          // Skip this item - it wasn't selected in the XOR group
+          return;
+        }
+      }
+
       if (item.itemType === 'material' && item.materialId) {
         // Direct material - add to breakdown
         breakdown.push({
@@ -501,9 +519,11 @@ export function calculateProductCOGS(
         // Linked product - recursively expand its materials
         const linkedProduct = getProduct(item.linkedProductId);
         if (linkedProduct && linkedProduct.wcId) {
+          // Don't pass bundleSelection to nested calls - only filter at top level
           const linkedCOGS = calculateProductCOGS(
             linkedProduct.wcId,
             item.quantity * quantity,
+            undefined, // Clear bundle selection for nested products
             depth + 1,
             chain
           );
