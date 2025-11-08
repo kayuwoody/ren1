@@ -78,9 +78,9 @@ export default function PaymentPage() {
     // Clear cart
     clearCart();
 
-    // Show success and redirect to kitchen/orders
+    // Show success and redirect to admin POS
     alert(`✅ Payment confirmed! Order #${order.id} sent to kitchen.`);
-    router.push("/orders");
+    router.push("/admin/pos");
   };
 
   const handleCancel = () => {
