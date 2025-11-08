@@ -304,17 +304,6 @@ export default function AdminDashboard() {
                 </div>
                 <p className="text-blue-50">View revenue, analytics, and performance</p>
               </Link>
-
-              <Link
-                href="/admin/costs"
-                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <DollarSign className="w-6 h-6 text-emerald-600" />
-                  <h2 className="text-xl font-semibold">Costs Overview</h2>
-                </div>
-                <p className="text-gray-600">View product costs and profit margins</p>
-              </Link>
             </div>
           </div>
 
