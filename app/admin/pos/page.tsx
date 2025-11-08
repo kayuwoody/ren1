@@ -227,25 +227,6 @@ export default function POSPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Actions */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Quick Action - Add Products */}
-            <Link
-              href="/products"
-              className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition group"
-            >
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-4 bg-green-100 rounded-lg group-hover:bg-green-200 transition">
-                  <Plus className="w-8 h-8 text-green-700" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold">Add Products</h2>
-                  <p className="text-gray-600">Browse menu and add to cart</p>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500">
-                Select products from the menu to build the customer's order
-              </p>
-            </Link>
-
             {/* Current Order Summary */}
             {cartItems.length > 0 && (
               <div className="bg-white rounded-lg shadow">
