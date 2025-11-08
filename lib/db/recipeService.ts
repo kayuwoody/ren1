@@ -318,17 +318,12 @@ export function recalculateRecipeCostsForMaterial(materialId: string): void {
   const stmt = db.prepare('SELECT * FROM ProductRecipe WHERE materialId = ?');
   const items = stmt.all(materialId) as ProductRecipeItem[];
 
-  // Update each recipe item's calculated cost
-  const updateStmt = db.prepare('UPDATE ProductRecipe SET calculatedCost = ? WHERE id = ?');
-
   const productIds = new Set<string>();
   items.forEach(item => {
-    const newCost = item.quantity * material.costPerUnit;
-    updateStmt.run(newCost, item.id);
     productIds.add(item.productId);
   });
 
-  // Update all affected products' total costs
+  // Update all affected products' total costs (this will recursively update)
   productIds.forEach(productId => {
     updateProductTotalCost(productId);
   });
@@ -337,13 +332,68 @@ export function recalculateRecipeCostsForMaterial(materialId: string): void {
 }
 
 /**
- * Update product's total cost based on recipe
+ * Recalculate all product costs in dependency order
+ * This ensures linked products are calculated before products that use them
  */
-export function updateProductTotalCost(productId: string): void {
+export function recalculateAllProductCosts(): void {
+  const allProducts = db.prepare('SELECT id FROM Product').all() as Array<{ id: string }>;
+
+  console.log(`♻️  Recalculating costs for ${allProducts.length} products...`);
+
+  // Process all products - the updateProductTotalCost function handles dependencies
+  allProducts.forEach(({ id }) => {
+    updateProductTotalCost(id);
+  });
+
+  console.log(`✅ All product costs recalculated`);
+}
+
+/**
+ * Update product's total cost based on recipe (with recursive linked product support)
+ */
+export function updateProductTotalCost(productId: string, visited = new Set<string>()): void {
+  // Prevent infinite loops
+  if (visited.has(productId)) {
+    return;
+  }
+  visited.add(productId);
+
   const recipe = getProductRecipe(productId);
 
+  // First, ensure all linked products have updated costs
+  recipe.forEach(item => {
+    if (item.itemType === 'product' && item.linkedProductId) {
+      updateProductTotalCost(item.linkedProductId, visited);
+    }
+  });
+
+  // Now recalculate this product's recipe items with fresh linked product costs
+  const updateStmt = db.prepare('UPDATE ProductRecipe SET calculatedCost = ? WHERE id = ?');
+
+  recipe.forEach(item => {
+    let newCost = 0;
+
+    if (item.itemType === 'material' && item.materialId) {
+      const material = getMaterial(item.materialId);
+      if (material) {
+        newCost = item.quantity * material.costPerUnit;
+      }
+    } else if (item.itemType === 'product' && item.linkedProductId) {
+      const linkedProduct = getProduct(item.linkedProductId);
+      if (linkedProduct) {
+        // Use the freshly calculated unitCost
+        newCost = item.quantity * linkedProduct.unitCost;
+      }
+    }
+
+    updateStmt.run(newCost, item.id);
+  });
+
+  // Reload recipe with updated costs
+  const updatedRecipe = getProductRecipe(productId);
+
   // Sum only required items (not optional)
-  const totalCost = recipe
+  const totalCost = updatedRecipe
     .filter(item => !item.isOptional)
     .reduce((sum, item) => sum + item.calculatedCost, 0);
 

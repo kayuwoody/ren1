@@ -421,9 +421,14 @@ export function getConsumptionSummary(
 }
 
 /**
- * Calculate COGS for a product sale
+ * Calculate COGS for a product sale (recursively expands linked products)
  */
-export function calculateProductCOGS(wcProductId: string | number, quantity: number): {
+export function calculateProductCOGS(
+  wcProductId: string | number,
+  quantity: number,
+  depth: number = 0,
+  parentChain: string = ''
+): {
   totalCOGS: number;
   breakdown: Array<{
     itemType: 'material' | 'product' | 'base';
@@ -433,6 +438,8 @@ export function calculateProductCOGS(wcProductId: string | number, quantity: num
     unit: string;
     costPerUnit: number;
     totalCost: number;
+    depth: number;
+    productChain: string;
   }>;
 } {
   // Find product by WooCommerce ID
@@ -443,6 +450,7 @@ export function calculateProductCOGS(wcProductId: string | number, quantity: num
     return { totalCOGS: 0, breakdown: [] };
   }
 
+  const chain = parentChain ? `${parentChain} → ${product.name}` : product.name;
   const recipe = getProductRecipe(product.id);
 
   const breakdown: Array<{
@@ -453,6 +461,8 @@ export function calculateProductCOGS(wcProductId: string | number, quantity: num
     unit: string;
     costPerUnit: number;
     totalCost: number;
+    depth: number;
+    productChain: string;
   }> = [];
 
   // Add base product cost if it exists (e.g., buying muffins from supplier)
@@ -465,6 +475,8 @@ export function calculateProductCOGS(wcProductId: string | number, quantity: num
       unit: 'unit',
       costPerUnit: product.supplierCost,
       totalCost: product.supplierCost * quantity,
+      depth,
+      productChain: chain,
     });
   }
 
@@ -472,15 +484,32 @@ export function calculateProductCOGS(wcProductId: string | number, quantity: num
   recipe
     .filter(item => !item.isOptional)
     .forEach(item => {
-      breakdown.push({
-        itemType: item.itemType,
-        itemId: (item.itemType === 'material' ? item.materialId : item.linkedProductId) || '',
-        itemName: (item.itemType === 'material' ? item.materialName : item.linkedProductName) || '',
-        quantityUsed: item.quantity * quantity,
-        unit: item.unit,
-        costPerUnit: item.costPerUnit || 0,
-        totalCost: item.calculatedCost * quantity,
-      });
+      if (item.itemType === 'material' && item.materialId) {
+        // Direct material - add to breakdown
+        breakdown.push({
+          itemType: 'material',
+          itemId: item.materialId,
+          itemName: item.materialName || '',
+          quantityUsed: item.quantity * quantity,
+          unit: item.unit,
+          costPerUnit: item.costPerUnit || 0,
+          totalCost: item.calculatedCost * quantity,
+          depth,
+          productChain: chain,
+        });
+      } else if (item.itemType === 'product' && item.linkedProductId) {
+        // Linked product - recursively expand its materials
+        const linkedProduct = getProduct(item.linkedProductId);
+        if (linkedProduct && linkedProduct.wcId) {
+          const linkedCOGS = calculateProductCOGS(
+            linkedProduct.wcId,
+            item.quantity * quantity,
+            depth + 1,
+            chain
+          );
+          breakdown.push(...linkedCOGS.breakdown);
+        }
+      }
     });
 
   const totalCOGS = breakdown.reduce((sum, item) => sum + item.totalCost, 0);
