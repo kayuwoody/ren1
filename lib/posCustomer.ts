@@ -19,11 +19,12 @@ export async function getPosCustomerId(): Promise<number> {
   }
 
   try {
-    // Search for customer by email
+    // Search for customer by email (search across all roles, not just 'customer')
     console.log(`🔍 Looking up POS customer: ${POS_EMAIL}`);
 
     const response: any = await wcApi.get('customers', {
       email: POS_EMAIL,
+      role: 'all',  // Include shop_manager and other roles
       per_page: 1
     });
 
@@ -42,12 +43,15 @@ export async function getPosCustomerId(): Promise<number> {
 
     if (customers.length === 0) {
       // Try searching all customers to see if email is slightly different
-      console.log('⚠️ Email search failed, fetching all customers to debug...');
-      const allResponse: any = await wcApi.get('customers', { per_page: 20 });
+      console.log('⚠️ Email search failed, fetching all users to debug...');
+      const allResponse: any = await wcApi.get('customers', {
+        per_page: 20,
+        role: 'all'  // Include all roles in debug output
+      });
       const allCustomers = allResponse.data || [];
-      console.log(`   Total customers: ${allCustomers.length}`);
+      console.log(`   Total users: ${allCustomers.length}`);
       allCustomers.forEach((c: any) => {
-        console.log(`   - ID ${c.id}: ${c.email} (${c.first_name} ${c.last_name})`);
+        console.log(`   - ID ${c.id}: ${c.email} (${c.first_name} ${c.last_name}) [${c.role || 'customer'}]`);
       });
 
       throw new Error(`POS customer not found with email: ${POS_EMAIL}`);
