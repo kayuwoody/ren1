@@ -32,11 +32,24 @@ interface LockerStatus {
   lastSeen: string;
 }
 
+interface DailyStats {
+  todayOrders: number;
+  todayRevenue: number;
+  itemsSold: number;
+  pendingOrders: number;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [lockers, setLockers] = useState<LockerStatus[]>([]);
+  const [dailyStats, setDailyStats] = useState<DailyStats>({
+    todayOrders: 0,
+    todayRevenue: 0,
+    itemsSold: 0,
+    pendingOrders: 0
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -46,6 +59,7 @@ export default function AdminDashboard() {
     if (authToken === 'authenticated') {
       setIsAuthenticated(true);
       fetchLockerStatus();
+      fetchDailyStats();
     }
   }, []);
 
@@ -77,6 +91,18 @@ export default function AdminDashboard() {
       console.error('Failed to fetch locker status:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDailyStats = async () => {
+    try {
+      const res = await fetch('/api/admin/daily-stats');
+      if (res.ok) {
+        const data = await res.json();
+        setDailyStats(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch daily stats:', err);
     }
   };
 
@@ -128,11 +154,6 @@ export default function AdminDashboard() {
   }
 
   // Dashboard Screen
-  const onlineLockers = lockers.filter(l => l.status !== 'offline').length;
-  const offlineLockers = lockers.filter(l => l.status === 'offline').length;
-  const totalSlots = lockers.reduce((sum, l) => sum + (l.occupiedSlots?.length || 0) + (l.freeSlots?.length || 0), 0);
-  const occupiedSlots = lockers.reduce((sum, l) => sum + (l.occupiedSlots?.length || 0), 0);
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -147,7 +168,10 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-4">
             <button
-              onClick={fetchLockerStatus}
+              onClick={() => {
+                fetchLockerStatus();
+                fetchDailyStats();
+              }}
               className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
             >
               Refresh
@@ -166,34 +190,24 @@ export default function AdminDashboard() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
-        {/* Stats Overview */}
+        {/* Daily Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-3">
-              <Activity className="w-8 h-8 text-green-600" />
+              <Receipt className="w-8 h-8 text-blue-600" />
               <div>
-                <p className="text-sm text-gray-500">Online Lockers</p>
-                <p className="text-2xl font-bold text-green-600">{onlineLockers}</p>
+                <p className="text-sm text-gray-500">Today's Orders</p>
+                <p className="text-2xl font-bold text-blue-600">{dailyStats.todayOrders}</p>
               </div>
             </div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
+              <DollarSign className="w-8 h-8 text-green-600" />
               <div>
-                <p className="text-sm text-gray-500">Offline Lockers</p>
-                <p className="text-2xl font-bold text-red-600">{offlineLockers}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center gap-3">
-              <Lock className="w-8 h-8 text-blue-600" />
-              <div>
-                <p className="text-sm text-gray-500">Occupied Slots</p>
-                <p className="text-2xl font-bold text-blue-600">{occupiedSlots}/{totalSlots}</p>
+                <p className="text-sm text-gray-500">Today's Revenue</p>
+                <p className="text-2xl font-bold text-green-600">RM {dailyStats.todayRevenue.toFixed(2)}</p>
               </div>
             </div>
           </div>
@@ -202,113 +216,146 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-3">
               <Package className="w-8 h-8 text-purple-600" />
               <div>
-                <p className="text-sm text-gray-500">Total Lockers</p>
-                <p className="text-2xl font-bold text-purple-600">{lockers.length}</p>
+                <p className="text-sm text-gray-500">Items Sold</p>
+                <p className="text-2xl font-bold text-purple-600">{dailyStats.itemsSold}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3">
+              <Activity className="w-8 h-8 text-orange-600" />
+              <div>
+                <p className="text-sm text-gray-500">Pending Orders</p>
+                <p className="text-2xl font-bold text-orange-600">{dailyStats.pendingOrders}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Link
-            href="/admin/pos"
-            className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <Receipt className="w-6 h-6 text-white" />
-              <h2 className="text-xl font-semibold">Point of Sale</h2>
-            </div>
-            <p className="text-green-50">Process orders with staff discounts</p>
-          </Link>
+        {/* Quick Actions - Operations */}
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-3 px-2">Operations</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Link
+                href="/admin/pos"
+                className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Receipt className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Point of Sale</h2>
+                </div>
+                <p className="text-green-50">Process orders with staff discounts</p>
+              </Link>
 
-          <Link
-            href="/admin/lockers"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <Lock className="w-6 h-6 text-blue-600" />
-              <h2 className="text-xl font-semibold">Locker Monitoring</h2>
+              <Link
+                href="/admin/orders"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Package className="w-6 h-6 text-purple-600" />
+                  <h2 className="text-xl font-semibold">Order Management</h2>
+                </div>
+                <p className="text-gray-600">Monitor and manage all orders</p>
+              </Link>
             </div>
-            <p className="text-gray-600">View detailed status of all smart lockers</p>
-          </Link>
+          </div>
 
-          <Link
-            href="/admin/orders"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <Package className="w-6 h-6 text-purple-600" />
-              <h2 className="text-xl font-semibold">Order Management</h2>
-            </div>
-            <p className="text-gray-600">Monitor and manage all orders</p>
-          </Link>
+          {/* Inventory & Recipes */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-3 px-2">Inventory & Recipes</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Link
+                href="/admin/materials"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <ShoppingBag className="w-6 h-6 text-green-600" />
+                  <h2 className="text-xl font-semibold">Materials</h2>
+                </div>
+                <p className="text-gray-600">Manage ingredients, packaging, and stock</p>
+              </Link>
 
-          <Link
-            href="/admin/materials"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <ShoppingBag className="w-6 h-6 text-green-600" />
-              <h2 className="text-xl font-semibold">Materials</h2>
+              <Link
+                href="/admin/recipes"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <ChefHat className="w-6 h-6 text-orange-600" />
+                  <h2 className="text-xl font-semibold">Recipes</h2>
+                </div>
+                <p className="text-gray-600">Build product recipes and calculate COGS</p>
+              </Link>
             </div>
-            <p className="text-gray-600">Manage ingredients, packaging, and stock</p>
-          </Link>
+          </div>
 
-          <Link
-            href="/admin/recipes"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <ChefHat className="w-6 h-6 text-orange-600" />
-              <h2 className="text-xl font-semibold">Recipes</h2>
-            </div>
-            <p className="text-gray-600">Build product recipes and calculate COGS</p>
-          </Link>
+          {/* Analytics */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-3 px-2">Analytics</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Link
+                href="/admin/sales"
+                className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Sales Reports</h2>
+                </div>
+                <p className="text-blue-50">View revenue, analytics, and performance</p>
+              </Link>
 
-          <Link
-            href="/admin/sales"
-            className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <DollarSign className="w-6 h-6 text-white" />
-              <h2 className="text-xl font-semibold">Sales Reports</h2>
+              <Link
+                href="/admin/costs"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign className="w-6 h-6 text-emerald-600" />
+                  <h2 className="text-xl font-semibold">Costs Overview</h2>
+                </div>
+                <p className="text-gray-600">View product costs and profit margins</p>
+              </Link>
             </div>
-            <p className="text-blue-50">View revenue, analytics, and performance</p>
-          </Link>
+          </div>
 
-          <Link
-            href="/admin/costs"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <DollarSign className="w-6 h-6 text-emerald-600" />
-              <h2 className="text-xl font-semibold">Costs Overview</h2>
-            </div>
-            <p className="text-gray-600">View product costs and profit margins</p>
-          </Link>
+          {/* System & Customer */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-3 px-2">System & Customer</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Link
+                href="/admin/lockers"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Lock className="w-6 h-6 text-blue-600" />
+                  <h2 className="text-xl font-semibold">Locker Monitoring</h2>
+                </div>
+                <p className="text-gray-600">View detailed status of all smart lockers</p>
+              </Link>
 
-          <Link
-            href="/admin/printers"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <Printer className="w-6 h-6 text-indigo-600" />
-              <h2 className="text-xl font-semibold">Printers</h2>
-            </div>
-            <p className="text-gray-600">Manage receipt and kitchen printers</p>
-          </Link>
+              <Link
+                href="/admin/printers"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Printer className="w-6 h-6 text-indigo-600" />
+                  <h2 className="text-xl font-semibold">Printers</h2>
+                </div>
+                <p className="text-gray-600">Manage receipt and kitchen printers</p>
+              </Link>
 
-          <Link
-            href="/admin/loyalty"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <Star className="w-6 h-6 text-yellow-600" />
-              <h2 className="text-xl font-semibold">Loyalty Points</h2>
+              <Link
+                href="/admin/loyalty"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Star className="w-6 h-6 text-yellow-600" />
+                  <h2 className="text-xl font-semibold">Loyalty Points</h2>
+                </div>
+                <p className="text-gray-600">Manage customer loyalty points and rewards</p>
+              </Link>
             </div>
-            <p className="text-gray-600">Manage customer loyalty points and rewards</p>
-          </Link>
+          </div>
         </div>
 
         {/* Locker Status Quick View */}
