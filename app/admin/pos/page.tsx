@@ -410,14 +410,6 @@ export default function POSPage() {
                     </div>
                   </div>
 
-                  {/* Hold Order Manager */}
-                  <HoldOrderManager
-                    currentCart={cartItems}
-                    currentTotal={finalTotal}
-                    onHoldComplete={clearCart}
-                    onResumeOrder={loadCart}
-                  />
-
                   {/* Proceed to Payment Button */}
                   <button
                     onClick={() => router.push('/payment')}
@@ -429,6 +421,14 @@ export default function POSPage() {
                 </div>
               </div>
             )}
+
+            {/* Hold Order Manager - Always visible */}
+            <HoldOrderManager
+              currentCart={cartItems}
+              currentTotal={finalTotal}
+              onHoldComplete={clearCart}
+              onResumeOrder={loadCart}
+            />
 
             {/* Empty State */}
             {cartItems.length === 0 && (
