@@ -14,6 +14,7 @@ export async function GET(req: Request) {
       per_page: 100,
       orderby: "date",
       order: "asc", // Oldest first (highest priority)
+      _fields: "id,number,status,date_created,total,line_items,meta_data,billing", // Explicitly request meta_data
     });
 
     const allProcessingOrders = response.data || [];
