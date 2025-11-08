@@ -83,7 +83,8 @@ export default function POSPage() {
           const response = await fetch(`/api/products/${item.productId}/cogs?${params}`);
           if (response.ok) {
             const data = await response.json();
-            newCogsData[item.productId] = data;
+            // Use cart item index as key, not productId (bundles share productId)
+            newCogsData[i] = data;
           }
         } catch (err) {
           console.error(`Failed to fetch COGS for ${item.name}:`, err);
@@ -266,7 +267,7 @@ export default function POSPage() {
                     const hasDiscount = item.finalPrice < item.retailPrice;
                     const itemTotal = item.finalPrice * item.quantity;
                     const itemRetailTotal = item.retailPrice * item.quantity;
-                    const itemCogs = cogsData[item.productId]?.totalCOGS || 0;
+                    const itemCogs = cogsData[index]?.totalCOGS || 0;
                     const itemProfit = itemTotal - itemCogs;
                     const profitMargin = itemTotal > 0 ? (itemProfit / itemTotal) * 100 : 0;
 
