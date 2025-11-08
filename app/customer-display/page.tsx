@@ -84,7 +84,7 @@ export default function CustomerDisplayPage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {cartItems.map((item, index) => {
               const itemTotal = item.finalPrice * item.quantity;
               const itemRetailTotal = item.retailPrice * item.quantity;
@@ -94,47 +94,49 @@ export default function CustomerDisplayPage() {
               return (
                 <div
                   key={index}
-                  className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200 hover:border-gray-300 hover:shadow-md transition-all"
+                  className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200 hover:border-gray-300 hover:shadow-md transition-all flex flex-col"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Item Details */}
-                    <div className="flex-1">
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-4xl font-bold text-blue-600">
-                          {item.quantity}×
-                        </span>
-                        <h3 className="text-3xl font-semibold text-gray-800">{item.name}</h3>
-                      </div>
+                  {/* Quantity Badge */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-2xl font-bold text-blue-600">
+                      {item.quantity}×
+                    </span>
+                    {hasItemDiscount && (
+                      <span className="text-lg">🎉</span>
+                    )}
+                  </div>
 
-                      {/* Discount Reason */}
-                      {hasItemDiscount && item.discountReason && (
-                        <p className="text-lg text-green-600 mt-2 flex items-center gap-2">
-                          <span className="text-2xl">🎉</span>
-                          {item.discountReason}
+                  {/* Item Name */}
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3 line-clamp-2 flex-1">
+                    {item.name}
+                  </h3>
+
+                  {/* Discount Reason */}
+                  {hasItemDiscount && item.discountReason && (
+                    <p className="text-xs text-green-600 mb-2 line-clamp-1">
+                      {item.discountReason}
+                    </p>
+                  )}
+
+                  {/* Price */}
+                  <div className="mt-auto">
+                    {hasItemDiscount ? (
+                      <>
+                        <p className="text-sm text-gray-400 line-through">
+                          RM {itemRetailTotal.toFixed(2)}
                         </p>
-                      )}
-                    </div>
-
-                    {/* Price */}
-                    <div className="text-right">
-                      {hasItemDiscount ? (
-                        <>
-                          <p className="text-2xl text-gray-400 line-through">
-                            RM {itemRetailTotal.toFixed(2)}
-                          </p>
-                          <p className="text-4xl font-bold text-green-600">
-                            RM {itemTotal.toFixed(2)}
-                          </p>
-                          <p className="text-lg text-green-600">
-                            Save RM {itemDiscount.toFixed(2)}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-4xl font-bold text-gray-800">
+                        <p className="text-xl font-bold text-green-600">
                           RM {itemTotal.toFixed(2)}
                         </p>
-                      )}
-                    </div>
+                        <p className="text-xs text-green-600">
+                          Save RM {itemDiscount.toFixed(2)}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xl font-bold text-gray-800">
+                        RM {itemTotal.toFixed(2)}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
