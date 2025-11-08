@@ -2,6 +2,9 @@ import { wcApi } from './wooClient';
 
 const POS_CUSTOMER_EMAIL = 'pos-admin@coffee-oasis.com.my';
 
+// Allow overriding via environment variable
+const POS_EMAIL = process.env.NEXT_PUBLIC_POS_CUSTOMER_EMAIL || POS_CUSTOMER_EMAIL;
+
 // Cache the customer ID to avoid repeated API calls
 let cachedPosCustomerId: number | null = null;
 
@@ -17,10 +20,10 @@ export async function getPosCustomerId(): Promise<number> {
 
   try {
     // Search for customer by email
-    console.log(`🔍 Looking up POS customer: ${POS_CUSTOMER_EMAIL}`);
+    console.log(`🔍 Looking up POS customer: ${POS_EMAIL}`);
 
     const response: any = await wcApi.get('customers', {
-      email: POS_CUSTOMER_EMAIL,
+      email: POS_EMAIL,
       per_page: 1
     });
 
@@ -47,13 +50,13 @@ export async function getPosCustomerId(): Promise<number> {
         console.log(`   - ID ${c.id}: ${c.email} (${c.first_name} ${c.last_name})`);
       });
 
-      throw new Error(`POS customer not found with email: ${POS_CUSTOMER_EMAIL}`);
+      throw new Error(`POS customer not found with email: ${POS_EMAIL}`);
     }
 
     const posCustomer = customers[0];
     cachedPosCustomerId = posCustomer.id;
 
-    console.log(`✅ POS customer found: ID ${cachedPosCustomerId} (${POS_CUSTOMER_EMAIL})`);
+    console.log(`✅ POS customer found: ID ${cachedPosCustomerId} (${POS_EMAIL})`);
 
     return cachedPosCustomerId;
   } catch (err: any) {

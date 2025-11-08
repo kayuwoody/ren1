@@ -9,12 +9,14 @@ import { wcApi } from "@/lib/wooClient";
 export async function GET(req: Request) {
   try {
     // Fetch all processing orders
+    // Add timestamp to bust WooCommerce cache
     const response: any = await wcApi.get("orders", {
       status: "processing",
       per_page: 100,
       orderby: "date",
       order: "asc", // Oldest first (highest priority)
       _fields: "id,number,status,date_created,total,line_items,meta_data,billing", // Explicitly request meta_data
+      _: Date.now(), // Cache buster
     });
 
     const allProcessingOrders = response.data || [];
