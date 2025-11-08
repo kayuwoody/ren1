@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { getWooOrder, updateWooOrder } from '@/lib/orderService';
 import { cookies } from 'next/headers';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 export async function PATCH(
   req: Request,
@@ -12,14 +13,11 @@ export async function PATCH(
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    return validationError('Invalid JSON', '/api/update-order/[orderId]');
   }
 
   if (!body.status) {
-    return NextResponse.json(
-      { error: 'Must supply status to update' },
-      { status: 400 }
-    );
+    return validationError('Must supply status to update', '/api/update-order/[orderId]');
   }
 
   try {
@@ -164,11 +162,7 @@ export async function PATCH(
     }
 
     return NextResponse.json(updated);
-  } catch (err: any) {
-    console.error('❌ /api/update-order error:', err);
-    return NextResponse.json(
-      { error: 'Order update failed' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/update-order/[orderId]');
   }
 }

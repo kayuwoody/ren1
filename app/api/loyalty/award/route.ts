@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { awardPoints, POINTS_CONFIG } from '@/lib/loyaltyService';
 import { cookies } from 'next/headers';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 /**
  * POST /api/loyalty/award
@@ -71,10 +72,7 @@ export async function POST(req: Request) {
         description = 'First order bonus';
         break;
       default:
-        return NextResponse.json(
-          { error: 'Invalid reason' },
-          { status: 400 }
-        );
+        return validationError('Invalid reason', '/api/loyalty/award');
     }
 
     // Award points
@@ -86,11 +84,7 @@ export async function POST(req: Request) {
       balance: points.balance,
       message: `+${amount} points earned! ${description}`
     });
-  } catch (err: any) {
-    console.error('❌ Failed to award points:', err);
-    return NextResponse.json(
-      { error: 'Failed to award points', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/loyalty/award');
   }
 }

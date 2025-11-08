@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createWooOrder } from '@/lib/orderService';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 export async function POST(req: Request) {
    try {
@@ -9,10 +10,7 @@ export async function POST(req: Request) {
 
     // Validate line_items
     if (!Array.isArray(line_items) || line_items.length === 0) {
-      return NextResponse.json(
-        { error: 'Must supply at least one line_items entry' },
-        { status: 400 }
-      );
+      return validationError('Must supply at least one line_items entry', '/api/create-order');
     }
 
     // Logged‑in user?
@@ -42,13 +40,7 @@ export async function POST(req: Request) {
 console.log("payload: ",payload);
     const order = await createWooOrder(payload);
     return NextResponse.json(order, { status: 201 });
-  } catch (err: any) {
-    // WooCommerce errors often include response.data
-    const wooErr = err?.response?.data ?? err?.message ?? err;
-    console.error('❌ /api/create-order error:', wooErr);
-    return NextResponse.json(
-      { error: 'Order creation failed', detail: wooErr },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/create-order');
   }
 }

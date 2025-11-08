@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { handleApiError, unauthorizedError } from '@/lib/api/error-handler';
 
 /**
  * Locker Heartbeat Endpoint
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     const token = authHeader?.replace('Bearer ', '');
 
     if (!token || token !== process.env.LOCKER_SECRET_TOKEN) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorizedError('Unauthorized', '/api/locker/heartbeat');
     }
 
     // 2. Parse payload
@@ -71,12 +72,8 @@ export async function POST(req: Request) {
       timestamp: new Date().toISOString()
     });
 
-  } catch (err: any) {
-    console.error('❌ Heartbeat error:', err);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/locker/heartbeat');
   }
 }
 
@@ -110,10 +107,7 @@ export async function GET(req: Request) {
       offline: lockers.filter(l => l.status === 'offline').length
     });
 
-  } catch (err) {
-    return NextResponse.json(
-      { error: 'Failed to fetch locker status' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/locker/heartbeat');
   }
 }

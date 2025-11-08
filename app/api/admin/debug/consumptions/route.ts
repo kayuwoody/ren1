@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/init';
+import { handleApiError } from '@/lib/api/error-handler';
 
 export async function GET(req: Request) {
   try {
@@ -23,11 +24,7 @@ export async function GET(req: Request) {
       success: true,
       consumptions,
     });
-  } catch (error: any) {
-    console.error('Debug consumptions error:', error);
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/debug/consumptions');
   }
 }

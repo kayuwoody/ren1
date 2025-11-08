@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAllProducts } from '@/lib/db/productService';
 import { getProductRecipe } from '@/lib/db/recipeService';
+import { handleApiError } from '@/lib/api/error-handler';
 
 /**
  * GET /api/admin/recipes/debug
@@ -41,11 +42,7 @@ export async function GET() {
       stats,
       products: report,
     });
-  } catch (error: any) {
-    console.error('Debug endpoint error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch debug info' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/recipes/debug');
   }
 }

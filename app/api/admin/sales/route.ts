@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
+import { handleApiError } from '@/lib/api/error-handler';
 
 export async function GET(req: Request) {
   try {
@@ -49,27 +50,11 @@ export async function GET(req: Request) {
       range
     });
 
-    // Fetch all orders (we'll need to paginate if there are many)
-    const allOrders: any[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data } = await wcApi.get('orders', {
-        per_page: 100,
-        page,
-        after: startDate.toISOString(),
-        before: endDate.toISOString(),
-      }) as { data: any[] };
-
-      allOrders.push(...data);
-
-      if (data.length < 100) {
-        hasMore = false;
-      } else {
-        page++;
-      }
-    }
+    // Fetch all orders (using pagination helper)
+    const allOrders = await fetchAllWooPages('orders', {
+      after: startDate.toISOString(),
+      before: endDate.toISOString(),
+    });
 
     console.log(`📦 Fetched ${allOrders.length} total orders from WooCommerce`);
 
@@ -96,17 +81,18 @@ export async function GET(req: Request) {
     orders.forEach((order) => {
       // Get final total and discount from metadata
       const finalTotal = parseFloat(
-        order.meta_data?.find((m: any) => m.key === '_final_total')?.value || order.total
+        getMetaValue(order.meta_data, '_final_total', order.total)
       );
       const discount = parseFloat(
-        order.meta_data?.find((m: any) => m.key === '_total_discount')?.value || '0'
+        getMetaValue(order.meta_data, '_total_discount', '0')
       );
 
-      // Get COGS from inventory consumption records
+      // Get COGS from inventory consumption records (fetch once per order, reuse for items)
       let orderCOGS = 0;
+      let orderConsumptions: any[] = [];
       try {
-        const consumptions = getOrderConsumptions(String(order.id));
-        orderCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
+        orderConsumptions = getOrderConsumptions(String(order.id));
+        orderCOGS = orderConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
       } catch (err) {
         console.warn(`⚠️  Could not fetch COGS for order ${order.id}`);
       }
@@ -137,26 +123,25 @@ export async function GET(req: Request) {
       // Product stats
       order.line_items?.forEach((item: any) => {
         const finalPrice = parseFloat(
-          item.meta_data?.find((m: any) => m.key === '_final_price')?.value || item.price
+          getMetaValue(item.meta_data, '_final_price', item.price)
         );
         const itemRevenue = finalPrice * item.quantity;
 
-        // Get COGS for this specific product from consumptions
+        // Get COGS for this specific product from cached consumptions (no duplicate DB call)
         let itemCOGS = 0;
         try {
-          const consumptions = getOrderConsumptions(String(order.id));
-          // Filter by order item ID if available, otherwise we can't distinguish between multiple items of same product
+          // Reuse orderConsumptions from above - no need to fetch again!
           const itemConsumptions = item.id
-            ? consumptions.filter(c => Number(c.orderItemId) === Number(item.id))
-            : consumptions;
+            ? orderConsumptions.filter(c => Number(c.orderItemId) === Number(item.id))
+            : orderConsumptions;
           itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
         } catch (err) {
           // COGS not available
         }
 
         // Use bundle display name if available for proper tracking of combinations
-        const isBundle = item.meta_data?.find((m: any) => m.key === '_is_bundle')?.value === 'true';
-        const bundleDisplayName = item.meta_data?.find((m: any) => m.key === '_bundle_display_name')?.value;
+        const isBundle = getMetaValue(item.meta_data, '_is_bundle') === 'true';
+        const bundleDisplayName = getMetaValue(item.meta_data, '_bundle_display_name');
         const productName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
 
         if (!productStats[productName]) {
@@ -228,11 +213,7 @@ export async function GET(req: Request) {
     };
 
     return NextResponse.json(report);
-  } catch (err: any) {
-    console.error('❌ Sales report error:', err);
-    return NextResponse.json(
-      { error: 'Failed to generate sales report', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/sales');
   }
 }

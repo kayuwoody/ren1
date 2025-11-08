@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getWooOrder, updateWooOrder } from '@/lib/orderService';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 /**
  * PATCH /api/orders/[orderId]/update-items
@@ -17,10 +18,7 @@ export async function PATCH(
     const { line_items } = await req.json();
 
     if (!line_items || !Array.isArray(line_items)) {
-      return NextResponse.json(
-        { error: 'line_items array required' },
-        { status: 400 }
-      );
+      return validationError('line_items array required', '/api/orders/[orderId]/update-items');
     }
 
     // 1. Fetch existing order
@@ -28,10 +26,7 @@ export async function PATCH(
 
     // 2. Only allow updates on pending orders
     if (existing.status !== 'pending') {
-      return NextResponse.json(
-        { error: 'Can only update pending orders' },
-        { status: 400 }
-      );
+      return validationError('Can only update pending orders', '/api/orders/[orderId]/update-items');
     }
 
     // 3. Match cart items to existing line_items by product_id
@@ -86,11 +81,7 @@ export async function PATCH(
     console.log(`✅ Updated line_items for order #${orderId}`);
 
     return NextResponse.json(updated);
-  } catch (err: any) {
-    console.error('❌ Update line_items failed:', err);
-    return NextResponse.json(
-      { error: 'Failed to update order', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/orders/[orderId]/update-items');
   }
 }

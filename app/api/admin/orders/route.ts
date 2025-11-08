@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
+import { handleApiError } from '@/lib/api/error-handler';
 
 /**
  * GET /api/admin/orders
@@ -15,19 +16,14 @@ export async function GET(req: Request) {
     // const isAdmin = await checkAdminAuth(req);
     // if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Fetch all orders with expanded parameters
-    const { data: orders } = (await wcApi.get('orders', {
-      per_page: 100, // Adjust as needed
+    // Fetch all orders with expanded parameters (using pagination helper)
+    const orders = await fetchAllWooPages('orders', {
       orderby: 'date',
       order: 'desc'
-    })) as { data: any };
+    });
 
     return NextResponse.json(orders);
-  } catch (err: any) {
-    console.error('❌ Admin orders fetch failed:', err);
-    return NextResponse.json(
-      { error: 'Failed to fetch orders', detail: err.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/admin/orders');
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
+import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,19 +9,15 @@ export async function GET(request: NextRequest) {
     const email = searchParams.get('email');
 
     if (!phone && !email) {
-      return NextResponse.json(
-        { error: 'Phone or email required' },
-        { status: 400 }
-      );
+      return validationError('Phone or email required', '/api/customers/search');
     }
 
     // Search for customer in WooCommerce
-    // WooCommerce doesn't have direct phone search, so we search all customers
+    // WooCommerce doesn't have direct phone search, so we fetch all customers
     // and filter by billing phone
-    const { data: customers } = (await wcApi.get('customers', {
-      per_page: 100, // Get more customers to search through
+    const customers = await fetchAllWooPages('customers', {
       role: 'all',
-    })) as { data: any };
+    });
 
     let foundCustomer = null;
 
@@ -45,11 +42,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ customer: null });
-  } catch (error: any) {
-    console.error('Customer search error:', error);
-    return NextResponse.json(
-      { error: 'Failed to search customers' },
-      { status: 500 }
-    );
+  } catch (error) {
+    return handleApiError(error, '/api/customers/search');
   }
 }
