@@ -69,7 +69,18 @@ export default function POSPage() {
       for (let i = 0; i < cartItems.length; i++) {
         const item = cartItems[i];
         try {
-          const response = await fetch(`/api/products/${item.productId}/cogs?quantity=${item.quantity}`);
+          // Build query params
+          const params = new URLSearchParams({
+            quantity: item.quantity.toString(),
+          });
+
+          // Add bundle selection if present
+          if (item.bundle) {
+            params.append('selectedMandatory', JSON.stringify(item.bundle.selectedMandatory));
+            params.append('selectedOptional', JSON.stringify(item.bundle.selectedOptional));
+          }
+
+          const response = await fetch(`/api/products/${item.productId}/cogs?${params}`);
           if (response.ok) {
             const data = await response.json();
             newCogsData[item.productId] = data;

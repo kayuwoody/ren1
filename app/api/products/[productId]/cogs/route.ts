@@ -25,8 +25,24 @@ export async function GET(
       );
     }
 
+    // Parse bundle selection if provided
+    let bundleSelection: { selectedMandatory: Record<string, string>; selectedOptional: string[] } | undefined;
+    const selectedMandatoryParam = searchParams.get('selectedMandatory');
+    const selectedOptionalParam = searchParams.get('selectedOptional');
+
+    if (selectedMandatoryParam || selectedOptionalParam) {
+      try {
+        bundleSelection = {
+          selectedMandatory: selectedMandatoryParam ? JSON.parse(selectedMandatoryParam) : {},
+          selectedOptional: selectedOptionalParam ? JSON.parse(selectedOptionalParam) : [],
+        };
+      } catch (e) {
+        console.warn('Failed to parse bundle selection:', e);
+      }
+    }
+
     // Calculate COGS using the recursive function (it handles product lookup by WC ID)
-    const cogsResult = calculateProductCOGS(wcProductId, quantity);
+    const cogsResult = calculateProductCOGS(wcProductId, quantity, bundleSelection);
 
     if (cogsResult.totalCOGS === 0 && cogsResult.breakdown.length === 0) {
       // Product not found or has no recipe
