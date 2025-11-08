@@ -121,6 +121,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('cart', JSON.stringify(cartItems));
     console.log('💾 Saved cart to localStorage:', cartItems);
 
+    // Sync to server for cross-device updates (customer display)
+    fetch('/api/cart/current', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cart: cartItems })
+    }).catch(err => console.error('Failed to sync cart to server:', err));
+
     // Dispatch custom event for same-tab updates
     window.dispatchEvent(new CustomEvent('cart-updated', { detail: cartItems }));
   }, [cartItems]);

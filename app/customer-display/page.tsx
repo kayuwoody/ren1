@@ -1,11 +1,10 @@
 "use client";
 
-import { useCart } from "@/context/cartContext";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
 export default function CustomerDisplayPage() {
-  const { cartItems } = useCart();
+  const [cartItems, setCartItems] = useState<any[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
 
@@ -19,6 +18,28 @@ export default function CustomerDisplayPage() {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Poll for cart updates from server (for cross-device sync)
+  useEffect(() => {
+    const fetchCart = async () => {
+      try {
+        const response = await fetch('/api/cart/current');
+        if (response.ok) {
+          const data = await response.json();
+          setCartItems(data.cart || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch cart:', err);
+      }
+    };
+
+    // Fetch immediately
+    fetchCart();
+
+    // Poll every 1 second for real-time updates
+    const interval = setInterval(fetchCart, 1000);
     return () => clearInterval(interval);
   }, []);
 
