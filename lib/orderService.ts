@@ -8,6 +8,7 @@ export type WooLineItem = {
   product_id: number;
   quantity: number;
   variation_id?: number;
+  price?: number;         // Custom price per unit (useful for discounts)
   meta_data?: WooMeta[];  // Line item metadata (e.g., discount info)
 };
 export type WooOrder = any; // replace with full Woo order type if desired

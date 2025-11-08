@@ -76,11 +76,19 @@ export async function PATCH(
     }
 
     // Verify the metadata was saved
-    const verifyMeta = updated.meta_data?.find((m: any) => m.key === '_out_for_delivery');
+    const verifyMeta = updated.meta_data?.find((m: any) => m.key === 'out_for_delivery');
     if (verifyMeta) {
-      console.log(`   ✓ Verified _out_for_delivery in response:`, verifyMeta.value, `(type: ${typeof verifyMeta.value})`);
+      console.log(`   ✓ Verified out_for_delivery in response:`, verifyMeta.value, `(type: ${typeof verifyMeta.value})`);
     } else {
-      console.log(`   ⚠️ _out_for_delivery NOT found in update response!`);
+      console.log(`   ⚠️ out_for_delivery NOT found in update response!`);
+    }
+
+    // Debug: log ALL metadata returned
+    console.log(`   📋 Total metadata items in response: ${updated.meta_data?.length || 0}`);
+    if (updated.meta_data && updated.meta_data.length > 0) {
+      updated.meta_data.forEach((m: any) => {
+        console.log(`      ${m.key} = ${m.value}`);
+      });
     }
 
     // 4b) If order just moved to processing, record inventory consumption

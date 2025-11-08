@@ -40,7 +40,7 @@ export default function KitchenDisplayPage() {
       }
       const data: Order[] = await response.json();
 
-      // All processing orders are shown (ready orders moved to ready-for-pickup status)
+      // Only orders not yet ready are shown (ready pickup → ready-for-pickup status, ready delivery → processing with out_for_delivery flag)
       console.log(`✅ Kitchen: ${data.length} orders in processing status`);
 
       // Detect new orders
@@ -89,25 +89,31 @@ export default function KitchenDisplayPage() {
   const markReady = async (orderId: number, readyType: "pickup" | "delivery") => {
     setUpdatingOrderId(orderId);
     try {
-      // Both pickup and delivery set to ready-for-pickup (removes from kitchen)
-      // Delivery is distinguished by metadata for the delivery driver page
+      // For pickup: move to ready-for-pickup status
+      // For delivery: keep in processing with out_for_delivery flag
+      const status = readyType === "pickup" ? "ready-for-pickup" : "processing";
+
       const response = await fetch(`/api/update-order/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "ready-for-pickup",
+          status,
           meta_data: [
             {
-              key: "_fulfillment_method",
+              key: "kitchen_ready",
+              value: "yes", // Mark as ready (removes from kitchen display)
+            },
+            {
+              key: "fulfillment_method",
               value: readyType, // "pickup" or "delivery"
             },
             {
-              key: "_out_for_delivery",
+              key: "out_for_delivery",
               value: readyType === "delivery" ? "yes" : "no",
             },
             {
-              key: "_ready_for_delivery_timestamp",
-              value: readyType === "delivery" ? new Date().toISOString() : "",
+              key: "ready_timestamp",
+              value: new Date().toISOString(),
             },
           ],
         }),

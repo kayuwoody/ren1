@@ -57,7 +57,7 @@ export default function DeliveryPage() {
     }
   };
 
-  // Mark order as delivered (clears delivery flag, customer can now pick up)
+  // Mark order as delivered (ready for customer pickup)
   const markDelivered = async (orderId: number) => {
     setCompletingOrderId(orderId);
     try {
@@ -65,12 +65,8 @@ export default function DeliveryPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "ready-for-pickup",
+          status: "ready-for-pickup", // Delivered and ready for customer to pick up
           meta_data: [
-            {
-              key: "_out_for_delivery",
-              value: "no", // Clear delivery flag
-            },
             {
               key: "_delivered_timestamp",
               value: new Date().toISOString(),
@@ -95,7 +91,7 @@ export default function DeliveryPage() {
 
   // Get time elapsed since marked ready for delivery
   const getDeliveryAge = (order: Order) => {
-    const readyTimeMeta = order.meta_data?.find((m) => m.key === "_ready_for_delivery_timestamp");
+    const readyTimeMeta = order.meta_data?.find((m) => m.key === "ready_timestamp");
     if (!readyTimeMeta?.value) return null;
 
     const readyTime = new Date(readyTimeMeta.value).getTime();

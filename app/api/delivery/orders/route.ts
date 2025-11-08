@@ -4,27 +4,36 @@ import { wcApi } from "@/lib/wooClient";
 /**
  * GET /api/delivery/orders
  *
- * Returns orders ready for delivery (ready-for-pickup status with _out_for_delivery flag)
+ * Returns processing orders marked as ready for delivery (with _out_for_delivery flag)
  */
 export async function GET(req: Request) {
   try {
-    // Fetch all ready-for-pickup orders
+    // Fetch all processing orders
+    // Add timestamp to bust WooCommerce cache
     const response: any = await wcApi.get("orders", {
-      status: "ready-for-pickup",
+      status: "processing",
       per_page: 100,
       orderby: "date",
       order: "asc", // Oldest first (highest priority)
+      _fields: "id,number,status,date_created,total,line_items,meta_data,billing", // Explicitly request meta_data
+      _: Date.now(), // Cache buster
     });
 
-    const allReadyOrders = response.data || [];
+    const allProcessingOrders = response.data || [];
 
-    // Filter for delivery orders only
-    const deliveryOrders = allReadyOrders.filter((order: any) => {
-      const outForDelivery = order.meta_data?.find((m: any) => m.key === "_out_for_delivery")?.value;
-      return outForDelivery === "yes";
+    // Filter for delivery orders that are ready
+    const deliveryOrders = allProcessingOrders.filter((order: any) => {
+      const kitchenReady = order.meta_data?.find((m: any) => m.key === "kitchen_ready")?.value;
+      const outForDelivery = order.meta_data?.find((m: any) => m.key === "out_for_delivery")?.value;
+      const shouldShow = kitchenReady === "yes" && outForDelivery === "yes";
+
+      // Debug logging for all processing orders
+      console.log(`   🔍 Order #${order.id}: kitchen_ready=${kitchenReady} (${typeof kitchenReady}), out_for_delivery=${outForDelivery} (${typeof outForDelivery}), shouldShow=${shouldShow}`);
+
+      return shouldShow;
     });
 
-    console.log(`🚗 Delivery: Found ${deliveryOrders.length} orders out for delivery (of ${allReadyOrders.length} ready-for-pickup)`);
+    console.log(`🚗 Delivery: Found ${deliveryOrders.length} orders ready for delivery (of ${allProcessingOrders.length} processing)`);
 
     return NextResponse.json(deliveryOrders);
   } catch (err: any) {
