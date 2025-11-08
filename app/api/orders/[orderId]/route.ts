@@ -1,6 +1,6 @@
 // app/api/orders/[orderId]/route.ts
 import { NextResponse } from 'next/server';
-import { getWooOrder } from '@/lib/orderService';
+import { getWooOrder, updateWooOrder } from '@/lib/orderService';
 import { handleApiError, notFoundError, ErrorType } from '@/lib/api/error-handler';
 
 export async function GET(

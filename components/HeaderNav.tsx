@@ -312,7 +312,7 @@ export default function HeaderNav() {
         {/* Cart Icon - Conditional (only when items in cart) */}
         {showCart && (
           <Link
-            href="/cart"
+            href="/admin/pos"
             className="flex flex-col items-center justify-center p-2 hover:bg-blue-100 rounded-lg transition min-w-[60px] relative"
           >
             <ShoppingCart className="w-6 h-6 text-blue-600" />

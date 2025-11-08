@@ -31,25 +31,40 @@ export default function PaymentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          line_items: cartItems.map((item) => ({
-            product_id: item.productId,
-            quantity: item.quantity,
-            price: item.finalPrice, // Use discounted price
-            meta_data: item.discountReason ? [
-              {
-                key: "_discount_reason",
-                value: item.discountReason,
-              },
-              {
-                key: "_retail_price",
-                value: item.retailPrice.toString(),
-              },
-              {
-                key: "_discount_amount",
-                value: (item.retailPrice - item.finalPrice).toString(),
-              },
-            ] : [],
-          })),
+          line_items: cartItems.map((item) => {
+            const meta_data: Array<{ key: string; value: string }> = [];
+
+            // Add discount metadata if applicable
+            if (item.discountReason) {
+              meta_data.push(
+                { key: "_discount_reason", value: item.discountReason },
+                { key: "_retail_price", value: item.retailPrice.toString() },
+                { key: "_discount_amount", value: (item.retailPrice - item.finalPrice).toString() }
+              );
+            }
+
+            // Add final price metadata (always)
+            meta_data.push({ key: "_final_price", value: item.finalPrice.toString() });
+
+            // Add bundle metadata if this is a bundle product
+            if (item.bundle) {
+              meta_data.push(
+                { key: "_is_bundle", value: "true" },
+                { key: "_bundle_display_name", value: item.name },
+                { key: "_bundle_base_product_name", value: item.bundle.baseProductName },
+                { key: "_bundle_mandatory", value: JSON.stringify(item.bundle.selectedMandatory) },
+                { key: "_bundle_optional", value: JSON.stringify(item.bundle.selectedOptional) }
+              );
+            }
+
+            return {
+              product_id: item.productId,
+              quantity: item.quantity,
+              subtotal: (item.finalPrice * item.quantity).toString(),
+              total: (item.finalPrice * item.quantity).toString(),
+              meta_data,
+            };
+          }),
           billing: {
             first_name: "Walk-in Customer",
             email: "pos@coffee-oasis.com.my",
@@ -77,9 +92,9 @@ export default function PaymentPage() {
     // Clear cart
     clearCart();
 
-    // Show success and redirect to kitchen/orders
+    // Show success and redirect to admin POS
     alert(`✅ Payment confirmed! Order #${order.id} sent to kitchen.`);
-    router.push("/orders");
+    router.push("/admin/pos");
   };
 
   const handleCancel = () => {

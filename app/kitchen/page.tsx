@@ -360,23 +360,89 @@ export default function KitchenDisplayPage() {
                 {/* Items */}
                 <div className="mb-4">
                   <h3 className="text-gray-400 text-sm font-semibold mb-2 uppercase">
-                    Items
+                    Items to Prepare
                   </h3>
-                  <ul className="space-y-2">
-                    {order.line_items.map((item) => (
-                      <li
-                        key={item.id}
-                        className="flex items-start gap-3 text-white"
-                      >
-                        <span className="bg-gray-700 text-green-400 font-bold text-lg px-3 py-1 rounded min-w-[3rem] text-center">
-                          {item.quantity}×
-                        </span>
-                        <span className="text-lg font-medium flex-1 leading-tight pt-1">
-                          {item.name}
-                        </span>
-                      </li>
-                    ))}
+                  <ul className="space-y-3">
+                    {order.line_items.map((item) => {
+                      // Extract special notes or customizations from item metadata
+                      const itemMeta = item.meta_data || [];
+                      const hasCustomizations = itemMeta.length > 0;
+
+                      return (
+                        <li
+                          key={item.id}
+                          className="bg-gray-700 rounded-lg p-3"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="bg-green-600 text-white font-bold text-xl px-3 py-2 rounded min-w-[3.5rem] text-center flex-shrink-0">
+                              {item.quantity}×
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-lg font-semibold leading-tight">
+                                {item.name}
+                              </p>
+
+                              {/* Item SKU if available */}
+                              {item.sku && (
+                                <p className="text-gray-400 text-xs mt-1">
+                                  SKU: {item.sku}
+                                </p>
+                              )}
+
+                              {/* Item customizations/metadata */}
+                              {hasCustomizations && (
+                                <div className="mt-2 space-y-1">
+                                  {itemMeta.map((meta: any, idx: number) => {
+                                    // Skip internal metadata
+                                    if (meta.key.startsWith('_')) return null;
+
+                                    return (
+                                      <div key={idx} className="text-sm">
+                                        <span className="text-yellow-400">
+                                          ▸ {meta.display_key || meta.key}:
+                                        </span>
+                                        <span className="text-white ml-1">
+                                          {typeof meta.display_value !== 'undefined' ? meta.display_value : meta.value}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Price for reference */}
+                              <p className="text-gray-400 text-xs mt-2">
+                                RM {parseFloat(item.total).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
+                </div>
+
+                {/* Order Notes/Special Instructions */}
+                {order.customer_note && (
+                  <div className="mb-4 bg-yellow-900 border-2 border-yellow-500 rounded-lg p-3">
+                    <h4 className="text-yellow-300 text-xs font-semibold uppercase mb-1 flex items-center gap-1">
+                      <span>📝</span>
+                      <span>Special Instructions</span>
+                    </h4>
+                    <p className="text-yellow-100 text-sm font-medium">
+                      {order.customer_note}
+                    </p>
+                  </div>
+                )}
+
+                {/* Order Total */}
+                <div className="mb-4 bg-gray-700 rounded-lg p-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400 text-sm">Order Total</span>
+                    <span className="text-white text-xl font-bold">
+                      RM {parseFloat(order.total).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Mark Ready Buttons */}

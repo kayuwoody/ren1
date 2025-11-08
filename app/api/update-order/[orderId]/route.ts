@@ -70,31 +70,9 @@ export async function PATCH(
     // 4) Perform the update in one go
     const updated = await updateWooOrder(orderId, patchPayload);
 
-    console.log(`✅ Updated order #${orderId} to status: ${body.status}`);
-    if (body.meta_data) {
-      console.log(`   Added metadata:`, body.meta_data.map((m: any) => `${m.key}=${m.value}`).join(', '));
-    }
-
-    // Verify the metadata was saved
-    const verifyMeta = updated.meta_data?.find((m: any) => m.key === 'out_for_delivery');
-    if (verifyMeta) {
-      console.log(`   ✓ Verified out_for_delivery in response:`, verifyMeta.value, `(type: ${typeof verifyMeta.value})`);
-    } else {
-      console.log(`   ⚠️ out_for_delivery NOT found in update response!`);
-    }
-
-    // Debug: log ALL metadata returned
-    console.log(`   📋 Total metadata items in response: ${updated.meta_data?.length || 0}`);
-    if (updated.meta_data && updated.meta_data.length > 0) {
-      updated.meta_data.forEach((m: any) => {
-        console.log(`      ${m.key} = ${m.value}`);
-      });
-    }
-
     // 4b) If order just moved to processing, record inventory consumption
     if (body.status === 'processing' && existing.status !== 'processing') {
       try {
-        console.log(`📦 Recording inventory consumption for order #${orderId}`);
 
         // Prepare line items for consumption API
         const lineItems = existing.line_items.map((item: any) => ({
@@ -115,11 +93,8 @@ export async function PATCH(
           }),
         });
 
-        if (consumptionResponse.ok) {
-          const consumptionData = await consumptionResponse.json();
-          console.log(`   ✅ Inventory consumed: RM ${consumptionData.totalCOGS?.toFixed(2)} COGS`);
-        } else {
-          console.error(`   ⚠️ Failed to record inventory consumption:`, await consumptionResponse.text());
+        if (!consumptionResponse.ok) {
+          console.error(`Failed to record inventory consumption:`, await consumptionResponse.text());
         }
       } catch (consumptionErr) {
         console.error('   ⚠️ Error calling consumption API:', consumptionErr);
@@ -152,8 +127,6 @@ export async function PATCH(
               orderId
             })
           });
-
-          console.log(`📬 Push notification sent for order #${orderId}`);
         }
       } catch (notifErr) {
         console.error('Failed to send push notification:', notifErr);

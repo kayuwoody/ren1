@@ -381,10 +381,12 @@ Eliminates ~40 lines of boilerplate error code.
 ## When You Start a New Session
 
 1. **Read this file first** - `.claude/AI_ASSISTANT_GUIDE.md`
-2. **Check for existing utilities** - grep before creating new helpers
-3. **Read similar routes** - understand patterns before changing
-4. **Ask if unclear** - clarify requirements before coding
-5. **Work incrementally** - small batches, frequent commits
+2. **⚠️ READ CRITICAL_FUNCTIONS.md** - `.claude/CRITICAL_FUNCTIONS.md` - DO NOT modify functions listed there without approval!
+3. **Check for existing utilities** - grep before creating new helpers
+4. **Search git history** - `git log --all -S "function_name"` before modifying
+5. **Read similar routes** - understand patterns before changing
+6. **Ask if unclear** - clarify requirements before coding
+7. **Work incrementally** - small batches, frequent commits
 
 ---
 
@@ -401,5 +403,119 @@ This guide is a concise reference. The full docs have:
 
 ---
 
-**Last Updated:** Phase 2 Task 3 completion (error handlers rolled out to all routes)
+## Recent Changes (Session 011CUuTiUmBCgpKEL4iJdCow)
+
+### Critical Bug Fixes
+
+**1. Missing Import Crash Fix** ✅
+- **File:** `app/api/orders/[orderId]/route.ts`
+- **Issue:** `updateWooOrder` was called but not imported, causing crashes on order updates
+- **Fix:** Added `updateWooOrder` to imports from `@/lib/orderService`
+
+**2. Discount Price Capture Fix** ✅
+- **Files:** `app/payment/page.tsx`, `lib/orderService.ts`
+- **Issue:** WooCommerce ignored the `price` field, charged full retail price instead of discounted
+- **Fix:** Changed to use `subtotal` and `total` fields (WooCommerce's correct fields for custom pricing)
+- **Code:**
+  ```typescript
+  subtotal: (item.finalPrice * item.quantity).toString(),
+  total: (item.finalPrice * item.quantity).toString()
+  ```
+
+**3. Cash Payment Display Fix** ✅
+- **File:** `app/payment/page.tsx:116`
+- **Issue:** CashPayment component received `order.total` (WooCommerce calculated) instead of discounted price
+- **Fix:** Pass `finalTotal.toFixed(2)` from cart calculation
+
+**4. POS Customer Assignment Fix** ✅
+- **File:** `lib/posCustomer.ts`
+- **Issue:** Shop manager accounts not found (search only looked for "customer" role)
+- **Fix:** Added `role: 'all'` parameter to customer search
+- **Impact:** Walk-in orders now correctly assigned to `pos-admin@coffee-oasis.com.my` (shop manager)
+
+### Order Flow Improvements
+
+**5. Ready for Pickup Status Flow** ✅
+- **File:** `app/kitchen/page.tsx:94`
+- **Change:** Pickup orders now use `"ready-for-pickup"` status (was staying in `"processing"`)
+- **Flow:**
+  - Pickup: Kitchen → `ready-for-pickup` → Customer picks up → `completed`
+  - Delivery: Kitchen → `processing` + `out_for_delivery` → Delivered → `ready-for-pickup` → Customer picks up → `completed`
+
+**6. Post-Payment Redirect** ✅
+- **File:** `app/payment/page.tsx:83`
+- **Change:** Redirects to `/admin/pos` instead of `/orders` after payment
+- **Reason:** Admin workflow, not customer-facing
+
+### Performance & Code Quality
+
+**7. Excessive Debug Logging Cleanup** ✅
+- **Files:**
+  - `app/api/kitchen/orders/route.ts` (removed per-order metadata logging)
+  - `app/api/delivery/orders/route.ts` (removed debug logs)
+  - `app/api/update-order/[orderId]/route.ts` (removed 10+ logs per update)
+  - `app/checkout/page.tsx` (removed cart logging)
+- **Impact:** Removed 50+ console.log statements from hot paths (10-second polling routes)
+- **Result:** Cleaner logs, better performance, less noise in production
+
+**8. Product Cache Cleanup** ✅
+- **File:** `app/api/products/route.ts`
+- **Feature:** Now removes cached products that no longer exist in WooCommerce
+- **Logic:** Compares WooCommerce product IDs with cached IDs, deletes stale entries
+- **Use case:** Handles trashed/deleted products from WooCommerce
+
+### UI Enhancements
+
+**9. Kitchen Display Enhancement** ✅
+- **File:** `app/kitchen/page.tsx`
+- **Added:**
+  - Item cards with visual separation
+  - Item customizations/metadata display (add-ons, special requests)
+  - SKU for inventory reference
+  - Item prices
+  - Special instructions highlighted in yellow
+  - Order total
+  - Larger quantity badges
+
+**10. Product List UI Improvements** ✅
+- **File:** `app/products/page.tsx`
+- **Added:**
+  - Horizontal scrollable category filter (pill buttons)
+  - Products sorted by category, then by name
+  - "All Items" default selection
+  - Cleaner mobile-friendly layout
+
+### Important Notes
+
+**Customer-Facing Pages (Retained for Future):**
+- `/app/orders/page.tsx` - Customer order history (not currently used)
+- `/app/checkout/page.tsx` - Customer checkout flow (admin uses `/admin/pos`)
+- `/app/products/page.tsx` - Customer product browsing
+- **Status:** Code retained for future customer-facing features, but current workflow uses admin POS
+
+**Order Metadata Keys (Standardized):**
+- `kitchen_ready` (without underscore) - Marks order ready for pickup/delivery
+- `out_for_delivery` (without underscore) - Marks order ready for delivery
+- `_discount_reason`, `_retail_price`, `_discount_amount` - Discount tracking
+- `startTime`, `endTime` - Kitchen timer (2 minutes per item)
+- `_ready_timestamp` - Timestamp for ready-for-pickup status
+
+### Files Modified in This Session
+
+1. `app/api/orders/[orderId]/route.ts` - Fixed missing import
+2. `app/api/update-order/[orderId]/route.ts` - Removed debug logging
+3. `app/api/kitchen/orders/route.ts` - Removed debug logging, fixed metadata comment
+4. `app/api/delivery/orders/route.ts` - Removed debug logging, fixed comment
+5. `app/api/products/route.ts` - Added cache cleanup logic
+6. `app/kitchen/page.tsx` - Enhanced display with prep details
+7. `app/delivery/page.tsx` - Fixed delivered status to ready-for-pickup
+8. `app/products/page.tsx` - Added horizontal category filter, sorting
+9. `app/payment/page.tsx` - Fixed discount capture, cash display, redirect
+10. `app/checkout/page.tsx` - Removed debug logging
+11. `lib/orderService.ts` - Updated WooLineItem type for subtotal/total
+12. `lib/posCustomer.ts` - Fixed customer search to include all roles
+
+---
+
+**Last Updated:** Session 011CUuTiUmBCgpKEL4iJdCow (Major bug fixes + UI enhancements)
 **For questions:** Ask the user - they know the business logic best!

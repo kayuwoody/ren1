@@ -54,8 +54,8 @@ export async function POST(req: Request) {
         }
       }
 
-      // Calculate COGS for this item
-      const cogsData = calculateProductCOGS(productId, quantity);
+      // Calculate COGS for this item (pass bundle selection for XOR filtering)
+      const cogsData = calculateProductCOGS(productId, quantity, bundleSelection);
       totalCOGS += cogsData.totalCOGS;
 
       // Record material consumption and deduct from stock
