@@ -7,6 +7,12 @@ import Image from "next/image";
 export default function CustomerDisplayPage() {
   const { cartItems } = useCart();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [mounted, setMounted] = useState(false);
+
+  // Fix hydration error - only show time after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Update time every second
   useEffect(() => {
@@ -43,20 +49,24 @@ export default function CustomerDisplayPage() {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-xl font-mono text-gray-800">
-              {currentTime.toLocaleTimeString('en-MY', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
-              })}
-            </p>
-            <p className="text-xs text-gray-600">
-              {currentTime.toLocaleDateString('en-MY', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long'
-              })}
-            </p>
+            {mounted && (
+              <>
+                <p className="text-xl font-mono text-gray-800">
+                  {currentTime.toLocaleTimeString('en-MY', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  })}
+                </p>
+                <p className="text-xs text-gray-600">
+                  {currentTime.toLocaleDateString('en-MY', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long'
+                  })}
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -84,7 +94,7 @@ export default function CustomerDisplayPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {cartItems.map((item, index) => {
               const itemTotal = item.finalPrice * item.quantity;
               const itemRetailTotal = item.retailPrice * item.quantity;
