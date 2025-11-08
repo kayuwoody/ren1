@@ -272,7 +272,7 @@ export default function POSPage() {
                     const profitMargin = itemTotal > 0 ? (itemProfit / itemTotal) * 100 : 0;
 
                     return (
-                      <div key={item.productId} className="p-6 space-y-3">
+                      <div key={index} className="p-6 space-y-3">
                         {/* Item Header */}
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
