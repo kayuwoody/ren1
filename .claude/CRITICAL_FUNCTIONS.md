@@ -10,34 +10,66 @@
 
 ## 💰 Money & Payment Functions
 
-### 1. Discount Price Calculation
+### 1. Order Line Item Creation (Discounts + Bundle Metadata)
 **Files:**
-- `app/payment/page.tsx` (lines 34-53)
+- `app/payment/page.tsx` (lines 34-67)
 - `lib/orderService.ts` (WooLineItem type)
 
 **Critical Code:**
 ```typescript
-line_items: cartItems.map((item) => ({
-  product_id: item.productId,
-  quantity: item.quantity,
-  subtotal: (item.finalPrice * item.quantity).toString(), // CRITICAL: Must use finalPrice
-  total: (item.finalPrice * item.quantity).toString(),    // CRITICAL: Not retailPrice!
-  meta_data: item.discountReason ? [...] : [],
-}))
+line_items: cartItems.map((item) => {
+  const meta_data: Array<{ key: string; value: string }> = [];
+
+  // Add discount metadata if applicable
+  if (item.discountReason) {
+    meta_data.push(
+      { key: "_discount_reason", value: item.discountReason },
+      { key: "_retail_price", value: item.retailPrice.toString() },
+      { key: "_discount_amount", value: (item.retailPrice - item.finalPrice).toString() }
+    );
+  }
+
+  // CRITICAL: Always add final price
+  meta_data.push({ key: "_final_price", value: item.finalPrice.toString() });
+
+  // CRITICAL: Add bundle metadata for COGS filtering
+  if (item.bundle) {
+    meta_data.push(
+      { key: "_is_bundle", value: "true" },
+      { key: "_bundle_display_name", value: item.name },
+      { key: "_bundle_base_product_name", value: item.bundle.baseProductName },
+      { key: "_bundle_mandatory", value: JSON.stringify(item.bundle.selectedMandatory) },
+      { key: "_bundle_optional", value: JSON.stringify(item.bundle.selectedOptional) }
+    );
+  }
+
+  return {
+    product_id: item.productId,
+    quantity: item.quantity,
+    subtotal: (item.finalPrice * item.quantity).toString(), // CRITICAL: Must use finalPrice
+    total: (item.finalPrice * item.quantity).toString(),    // CRITICAL: Not retailPrice!
+    meta_data,
+  };
+})
 ```
 
 **Why Critical:**
-- WooCommerce uses `subtotal` and `total` fields to calculate order amounts
-- Using `price` field doesn't work (WooCommerce ignores it)
-- Using `retailPrice` instead of `finalPrice` would charge customers full price
+- **Pricing:** WooCommerce uses `subtotal` and `total` fields (not `price`). Using `retailPrice` instead of `finalPrice` charges full price
+- **Bundle COGS:** Without bundle metadata, consumption records include ALL variants (Hot+Iced) instead of selected variant
+- **Daily Sales:** Bundle metadata enables correct COGS filtering in reports
 
-**Last Working Commit:** `5aeb308` (Fix discounted prices not being captured)
+**Last Working Commits:**
+- Discount capture: `5aeb308`
+- Bundle metadata: `7066506`
 
-**Test Scenario:**
-1. Add product to cart with 20% discount
-2. Original price: RM 10.00 → Discounted: RM 8.00
-3. Complete checkout
-4. Verify WooCommerce order total is RM 8.00 (not RM 10.00)
+**Test Scenarios:**
+1. **Discount Test:**
+   - Add product with 20% discount (RM 10.00 → RM 8.00)
+   - Verify WooCommerce order total is RM 8.00
+2. **Bundle COGS Test:**
+   - Add Iced Latte to cart
+   - Complete order
+   - Check daily sales: COGS should only include Iced materials (not Hot+Iced combined)
 
 ---
 
@@ -86,22 +118,28 @@ router.push("/admin/pos");  // CRITICAL: Admin workflow, not customer-facing /or
 ## 📦 Inventory & COGS Functions
 
 ### 4. Nested Product COGS Calculation
-**File:** `lib/db/inventoryConsumptionService.ts` (lines 423-521)
+**File:** `lib/db/inventoryConsumptionService.ts` (lines 426-550)
 
 **Critical Function:**
 ```typescript
 export function calculateProductCOGS(
   wcProductId: string | number,
   quantity: number,
-  depth: number = 0,      // CRITICAL: Recursive depth tracking
+  bundleSelection?: {                    // CRITICAL: XOR filtering for bundle products
+    selectedMandatory: Record<string, string>;
+    selectedOptional: string[];
+  },
+  depth: number = 0,                     // CRITICAL: Recursive depth tracking
   parentChain: string = ''
 )
 ```
 
 **Why Critical:**
 - **MUST recursively expand linked products to actual materials**
-- Example: Latte → Espresso → Coffee Beans (must show coffee beans, not just "Espresso")
+- **MUST filter by bundle selection** (XOR groups like Hot vs Iced)
+- Example: Iced Latte → Only Iced packaging (NOT Hot+Iced combined) → Espresso → Coffee Beans
 - Without recursion, COGS is wrong for any product with nested linked products
+- Without bundle filtering, shows combined cost of all variants
 
 **Dependencies:**
 - `getProductByWcId()` - Find product by WooCommerce ID
@@ -109,7 +147,20 @@ export function calculateProductCOGS(
 - `getProduct()` - Get linked product details
 - **Recursively calls itself** for linked products (depth + 1)
 
-**Last Working Commit:** `ad29146` (Fix nested COGS calculation)
+**XOR Filtering Logic (lines 492-503):**
+```typescript
+if (depth === 0 && bundleSelection && item.selectionGroup) {
+  const selectedItemId = bundleSelection.selectedMandatory[item.selectionGroup];
+  const isSelected = item.linkedProductId === selectedItemId;
+  if (!isSelected) {
+    return; // Skip non-selected variant
+  }
+}
+```
+
+**Last Working Commits:**
+- Nested COGS: `ad29146`
+- Bundle filtering: `7066506`
 
 **Test Scenario:**
 ```
@@ -143,15 +194,18 @@ export function recordProductSale(
   productName: string,
   quantitySold: number,
   orderItemId?: string,
-  bundleSelection?: {...},
-  depth: number = 0,         // CRITICAL: Recursive depth
+  bundleSelection?: {                    // CRITICAL: XOR filtering for bundle products
+    selectedMandatory: Record<string, string>;
+    selectedOptional: string[];
+  },
+  depth: number = 0,                     // CRITICAL: Recursive depth
   parentChain: string = ''
 )
 ```
 
 **Why Critical:**
 - **MUST recursively deduct materials from stock** for nested products
-- Handles XOR selection (Hot vs Iced) via bundleSelection
+- **MUST filter by bundle selection** (XOR groups like Hot vs Iced)
 - Records consumption history for COGS reporting
 - Deducts materials from inventory
 
@@ -161,22 +215,37 @@ export function recordProductSale(
 - `deductMaterialStock()` - Update inventory
 - **Recursively calls itself** for linked products (lines 242-252)
 
-**Last Working Commit:** `d0d489d` (Implement recursive material deduction)
+**XOR Filtering Logic (lines 158-171):**
+```typescript
+if (depth === 0 && bundleSelection && recipeItem.selectionGroup) {
+  const selectedItemId = bundleSelection.selectedMandatory[recipeItem.selectionGroup];
+  const isSelected = recipeItem.linkedProductId === selectedItemId;
+  if (!isSelected) {
+    return; // Skip non-selected variant - don't deduct its materials!
+  }
+}
+```
+
+**Last Working Commits:**
+- Inventory recursion: `d0d489d`
+- Bundle filtering: Verified in session 011CUuTiUmBCgpKEL4iJdCow
 
 **Test Scenario:**
-1. Sell 1 Latte (Hot)
+1. Sell 1 Iced Latte (bundle product)
 2. Verify consumption records show:
    - Milk: -250ml
    - Coffee Beans: -12g (from nested Espresso)
-   - Cup: -1 (from Hot, not Iced)
-   - Lid: -1
-   - Sleeve: -1
-3. Verify Iced packaging NOT deducted
+   - Iced cup: -1 (from Iced variant)
+   - Iced lid: -1
+   - Straw: -1
+3. Verify Hot packaging NOT deducted (Cup, Hot Lid, Sleeve)
+4. Check daily sales: COGS only includes Iced materials
 
 **⚠️ NEVER:**
 - Remove recursion for linked products
 - Remove bundleSelection handling (breaks XOR logic)
 - Skip deductMaterialStock() calls
+- Remove XOR filtering (causes wrong materials to be deducted)
 
 ---
 

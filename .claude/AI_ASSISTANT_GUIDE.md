@@ -124,15 +124,30 @@ context/
 ### Order Metadata (Important!)
 
 Orders store custom data in `meta_data` array:
-- `_bundle_mandatory` - JSON string of mandatory selections for bundle products
+
+**Line Item Metadata:**
+- `_is_bundle` - Boolean string ("true") indicating bundle product
+- `_bundle_display_name` - Display name (e.g., "Iced Latte")
+- `_bundle_base_product_name` - Base product name (e.g., "Latte")
+- `_bundle_mandatory` - JSON string of mandatory selections (XOR groups like Hot vs Iced)
 - `_bundle_optional` - JSON array of optional add-ons
+- `_discount_reason` - Reason for discount (e.g., "20% off")
+- `_retail_price` - Original retail price before discount
+- `_final_price` - Final price after discount
+- `_discount_amount` - Amount discounted
+
+**Order-Level Metadata:**
 - `startTime` / `endTime` - Timer for kitchen display (2 min per item)
 - `_pickup_timestamp` / `_pickup_locker` - Locker pickup details
 - `_guestId` - For guest checkout orders
+- `kitchen_ready` - Marks order ready for pickup/delivery
+- `out_for_delivery` - Marks order ready for delivery
 
 **Extracting metadata:**
 ```typescript
-const bundleMandatory = getMetaValue(order.meta_data, '_bundle_mandatory', '{}');
+import { getMetaValue } from '@/lib/api/woocommerce-helpers';
+
+const bundleMandatory = getMetaValue(item.meta_data, '_bundle_mandatory', '{}');
 const parsed = JSON.parse(bundleMandatory); // Always validate JSON!
 ```
 
@@ -500,6 +515,45 @@ This guide is a concise reference. The full docs have:
 - `startTime`, `endTime` - Kitchen timer (2 minutes per item)
 - `_ready_timestamp` - Timestamp for ready-for-pickup status
 
+### COGS & Bundle Product Fixes
+
+**11. Bundle Selection Metadata for Orders** ✅
+- **File:** `app/payment/page.tsx:34-67`
+- **Issue:** Bundle products (e.g., Iced Latte) showed incorrect COGS in daily sales (combined Hot+Iced instead of selected variant)
+- **Root Cause:** Bundle selection data wasn't being saved to order metadata, so consumption records couldn't filter by XOR groups
+- **Fix:** Added bundle metadata to order line items:
+  ```typescript
+  if (item.bundle) {
+    meta_data.push(
+      { key: "_is_bundle", value: "true" },
+      { key: "_bundle_display_name", value: item.name },
+      { key: "_bundle_base_product_name", value: item.bundle.baseProductName },
+      { key: "_bundle_mandatory", value: JSON.stringify(item.bundle.selectedMandatory) },
+      { key: "_bundle_optional", value: JSON.stringify(item.bundle.selectedOptional) }
+    );
+  }
+  ```
+- **Impact:** COGS now correctly shows only selected variant materials (Iced Latte = Iced packaging only, not Hot+Iced combined)
+
+**12. React Key Warning for Bundle Variants** ✅
+- **File:** `app/admin/pos/page.tsx:275`
+- **Issue:** Console warning about duplicate keys when Hot and Iced Latte both in cart (share productId 336)
+- **Fix:** Changed cart item key from `item.productId` to `index`
+- **Impact:** Each cart item has unique key, prevents React rendering issues
+
+**13. Debug Logging Cleanup (COGS)** ✅
+- **File:** `lib/db/inventoryConsumptionService.ts`
+- **Removed:** Debug console.log statements from `calculateProductCOGS()` function
+- **Impact:** Cleaner console output during COGS calculations
+
+**14. XOR Filtering Verification** ✅
+- **Files:**
+  - `lib/db/inventoryConsumptionService.ts:158-171` (recordProductSale)
+  - `lib/db/inventoryConsumptionService.ts:492-503` (calculateProductCOGS)
+- **Verified:** Both functions correctly filter recipe items by selection groups
+- **Logic:** Only includes materials from selected bundle variant (e.g., Hot XOR Iced)
+- **Impact:** Inventory consumption and COGS calculations only include selected variant materials
+
 ### Files Modified in This Session
 
 1. `app/api/orders/[orderId]/route.ts` - Fixed missing import
@@ -510,12 +564,14 @@ This guide is a concise reference. The full docs have:
 6. `app/kitchen/page.tsx` - Enhanced display with prep details
 7. `app/delivery/page.tsx` - Fixed delivered status to ready-for-pickup
 8. `app/products/page.tsx` - Added horizontal category filter, sorting
-9. `app/payment/page.tsx` - Fixed discount capture, cash display, redirect
+9. `app/payment/page.tsx` - Fixed discount capture, cash display, redirect, **bundle metadata**
 10. `app/checkout/page.tsx` - Removed debug logging
 11. `lib/orderService.ts` - Updated WooLineItem type for subtotal/total
 12. `lib/posCustomer.ts` - Fixed customer search to include all roles
+13. `app/admin/pos/page.tsx` - Fixed React key warning for bundle variants
+14. `lib/db/inventoryConsumptionService.ts` - Removed debug logging from COGS calculation
 
 ---
 
-**Last Updated:** Session 011CUuTiUmBCgpKEL4iJdCow (Major bug fixes + UI enhancements)
+**Last Updated:** Session 011CUuTiUmBCgpKEL4iJdCow (Major bug fixes + UI enhancements + Bundle COGS fixes)
 **For questions:** Ask the user - they know the business logic best!
