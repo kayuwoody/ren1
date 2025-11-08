@@ -18,6 +18,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
+import HoldOrderManager from '@/components/HoldOrderManager';
 
 /**
  * Point of Sale (POS) Interface
@@ -33,7 +34,7 @@ import Link from 'next/link';
 
 export default function POSPage() {
   const router = useRouter();
-  const { cartItems, clearCart, updateItemDiscount, removeFromCart } = useCart();
+  const { cartItems, clearCart, updateItemDiscount, removeFromCart, loadCart } = useCart();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
     isOpen: boolean;
@@ -408,6 +409,14 @@ export default function POSPage() {
                       <span className="text-green-700">RM {finalTotal.toFixed(2)}</span>
                     </div>
                   </div>
+
+                  {/* Hold Order Manager */}
+                  <HoldOrderManager
+                    currentCart={cartItems}
+                    currentTotal={finalTotal}
+                    onHoldComplete={clearCart}
+                    onResumeOrder={loadCart}
+                  />
 
                   {/* Proceed to Payment Button */}
                   <button

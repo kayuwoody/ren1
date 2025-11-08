@@ -28,6 +28,7 @@ interface CartContextType {
     reason?: string
   }) => void;
   clearCart: () => void;
+  loadCart: (items: CartItem[]) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -218,8 +219,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('cart');
   };
 
+  const loadCart = (items: CartItem[]) => {
+    console.log('📥 Loading cart with', items.length, 'items');
+    setCartItems(items);
+    localStorage.setItem('cart', JSON.stringify(items));
+  };
+
   return (
-    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateItemDiscount, clearCart }}>
+    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateItemDiscount, clearCart, loadCart }}>
       {children}
     </CartContext.Provider>
   );
