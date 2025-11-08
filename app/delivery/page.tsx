@@ -57,7 +57,7 @@ export default function DeliveryPage() {
     }
   };
 
-  // Mark order as delivered and complete
+  // Mark order as delivered (ready for customer pickup)
   const markDelivered = async (orderId: number) => {
     setCompletingOrderId(orderId);
     try {
@@ -65,7 +65,7 @@ export default function DeliveryPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "completed", // Order is fully completed when delivered
+          status: "ready-for-pickup", // Delivered and ready for customer to pick up
           meta_data: [
             {
               key: "_delivered_timestamp",
