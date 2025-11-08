@@ -1,7 +1,7 @@
 // app/api/products/route.ts
 import { NextResponse } from "next/server";
 import { wcApi } from "@/lib/wooClient";
-import { getAllProducts, syncProductFromWooCommerce, getProductByWcId } from "@/lib/db/productService";
+import { getAllProducts, syncProductFromWooCommerce, getProductByWcId, deleteProduct } from "@/lib/db/productService";
 
 export const dynamic = "force-dynamic"; // ensures this API route runs fresh each time
 
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic"; // ensures this API route runs fresh eac
  * 1. Check local SQLite cache first
  * 2. If cache is empty or products missing, fetch from WooCommerce
  * 3. Update local cache with WooCommerce data
+ * 4. Remove cached products that no longer exist in WooCommerce
  *
  * Query params:
  * - force_sync=true: Force fetch from WooCommerce even if cache exists
@@ -56,9 +57,12 @@ export async function GET(req: Request) {
 
     // Step 4: Sync WooCommerce products to local cache
     let syncedCount = 0;
+    const wcProductIds = new Set<number>();
+
     for (const wcProduct of wcProducts) {
       try {
         syncProductFromWooCommerce(wcProduct);
+        wcProductIds.add(wcProduct.id);
         syncedCount++;
       } catch (err) {
         console.error(`⚠️ Failed to sync product ${wcProduct.id}:`, err);
@@ -66,6 +70,27 @@ export async function GET(req: Request) {
     }
 
     console.log(`✅ Synced ${syncedCount}/${wcProducts.length} products to local cache`);
+
+    // Step 5: Remove products from cache that no longer exist in WooCommerce
+    const cachedProducts = getAllProducts();
+    let deletedCount = 0;
+
+    for (const cachedProduct of cachedProducts) {
+      // If cached product has a WooCommerce ID and it's not in the current WooCommerce products, delete it
+      if (cachedProduct.wcId && !wcProductIds.has(cachedProduct.wcId)) {
+        try {
+          deleteProduct(cachedProduct.id);
+          deletedCount++;
+          console.log(`🗑️  Deleted product from cache: ${cachedProduct.name} (WC ID: ${cachedProduct.wcId})`);
+        } catch (err) {
+          console.error(`⚠️ Failed to delete product ${cachedProduct.id}:`, err);
+        }
+      }
+    }
+
+    if (deletedCount > 0) {
+      console.log(`✅ Removed ${deletedCount} products from cache that no longer exist in WooCommerce`);
+    }
 
     return NextResponse.json(wcProducts);
   } catch (error: any) {
