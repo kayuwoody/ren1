@@ -230,10 +230,10 @@ export default function KitchenDisplayPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6">
+    <div className="min-h-screen bg-gray-900 p-3">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="mb-3">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push("/admin/orders")}
@@ -242,10 +242,10 @@ export default function KitchenDisplayPage() {
               <span className="text-white text-2xl">←</span>
             </button>
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2">
+              <h1 className="text-2xl font-bold text-white">
                 🍳 Kitchen Display
               </h1>
-              <p className="text-gray-400 text-lg">
+              <p className="text-gray-400 text-sm">
                 {orders.length} order{orders.length !== 1 ? "s" : ""} in progress
               </p>
             </div>
@@ -281,8 +281,8 @@ export default function KitchenDisplayPage() {
           </div>
         </div>
       ) : (
-        /* Order Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        /* Order Grid - Optimized for landscape tablets in kitchen */
+        <div className="grid grid-cols-3 md:grid-cols-4 gap-4">
           {orders.map((order) => {
             const timerInfo = getTimerInfo(order);
             const isUpdating = updatingOrderId === order.id;
@@ -298,11 +298,11 @@ export default function KitchenDisplayPage() {
             return (
               <div
                 key={order.id}
-                className={`bg-gray-800 rounded-lg border-4 ${borderColor} p-6 shadow-xl transform transition-all hover:scale-105`}
+                className={`bg-gray-800 rounded-lg border-2 ${borderColor} p-3 shadow-lg`}
               >
                 {/* Order Number */}
-                <div className="mb-4">
-                  <h2 className="text-5xl font-bold text-white mb-1">
+                <div className="mb-2">
+                  <h2 className="text-3xl font-bold text-white mb-1">
                     #{order.number}
                   </h2>
                   <div className="flex items-center justify-between">

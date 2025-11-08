@@ -115,7 +115,7 @@ export default function CustomerDisplayPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <div className="space-y-3">
             {cartItems.map((item, index) => {
               const itemTotal = item.finalPrice * item.quantity;
               const itemRetailTotal = item.retailPrice * item.quantity;
@@ -125,46 +125,49 @@ export default function CustomerDisplayPage() {
               return (
                 <div
                   key={index}
-                  className="bg-gray-50 rounded-lg p-2 border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all flex flex-col"
+                  className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all"
                 >
-                  {/* Quantity Badge */}
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-lg font-bold text-blue-600">
-                      {item.quantity}×
-                    </span>
-                    {hasItemDiscount && (
-                      <span className="text-sm">🎉</span>
-                    )}
-                  </div>
+                  <div className="flex items-start justify-between gap-4">
+                    {/* Left: Quantity and Name */}
+                    <div className="flex-1">
+                      <div className="flex items-baseline gap-3 mb-2">
+                        <span className="text-2xl font-bold text-blue-600">
+                          {item.quantity}×
+                        </span>
+                        <h3 className="text-xl font-semibold text-gray-800">
+                          {item.name}
+                        </h3>
+                      </div>
 
-                  {/* Item Name */}
-                  <h3 className="text-sm font-semibold text-gray-800 mb-2 line-clamp-2 flex-1 min-h-[2.5rem]">
-                    {item.name}
-                  </h3>
-
-                  {/* Discount Reason */}
-                  {hasItemDiscount && item.discountReason && (
-                    <p className="text-[10px] text-green-600 mb-1 line-clamp-1">
-                      {item.discountReason}
-                    </p>
-                  )}
-
-                  {/* Price */}
-                  <div className="mt-auto">
-                    {hasItemDiscount ? (
-                      <>
-                        <p className="text-[10px] text-gray-400 line-through">
-                          RM {itemRetailTotal.toFixed(2)}
+                      {/* Discount Reason */}
+                      {hasItemDiscount && item.discountReason && (
+                        <p className="text-sm text-green-600 flex items-center gap-2 ml-10">
+                          <span>🎉</span>
+                          {item.discountReason}
                         </p>
-                        <p className="text-sm font-bold text-green-600">
+                      )}
+                    </div>
+
+                    {/* Right: Price */}
+                    <div className="text-right">
+                      {hasItemDiscount ? (
+                        <>
+                          <p className="text-sm text-gray-400 line-through">
+                            RM {itemRetailTotal.toFixed(2)}
+                          </p>
+                          <p className="text-2xl font-bold text-green-600">
+                            RM {itemTotal.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-green-600">
+                            Save RM {itemDiscount.toFixed(2)}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-2xl font-bold text-gray-800">
                           RM {itemTotal.toFixed(2)}
                         </p>
-                      </>
-                    ) : (
-                      <p className="text-sm font-bold text-gray-800">
-                        RM {itemTotal.toFixed(2)}
-                      </p>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               );
