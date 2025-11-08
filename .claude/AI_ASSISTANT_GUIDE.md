@@ -381,10 +381,12 @@ Eliminates ~40 lines of boilerplate error code.
 ## When You Start a New Session
 
 1. **Read this file first** - `.claude/AI_ASSISTANT_GUIDE.md`
-2. **Check for existing utilities** - grep before creating new helpers
-3. **Read similar routes** - understand patterns before changing
-4. **Ask if unclear** - clarify requirements before coding
-5. **Work incrementally** - small batches, frequent commits
+2. **⚠️ READ CRITICAL_FUNCTIONS.md** - `.claude/CRITICAL_FUNCTIONS.md` - DO NOT modify functions listed there without approval!
+3. **Check for existing utilities** - grep before creating new helpers
+4. **Search git history** - `git log --all -S "function_name"` before modifying
+5. **Read similar routes** - understand patterns before changing
+6. **Ask if unclear** - clarify requirements before coding
+7. **Work incrementally** - small batches, frequent commits
 
 ---
 
