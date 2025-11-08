@@ -40,7 +40,7 @@ export default function KitchenDisplayPage() {
       }
       const data: Order[] = await response.json();
 
-      // All processing orders are shown (ready orders moved to ready-for-pickup status)
+      // Only orders not yet ready are shown (ready pickup → ready-for-pickup status, ready delivery → processing with out_for_delivery flag)
       console.log(`✅ Kitchen: ${data.length} orders in processing status`);
 
       // Detect new orders
@@ -89,13 +89,15 @@ export default function KitchenDisplayPage() {
   const markReady = async (orderId: number, readyType: "pickup" | "delivery") => {
     setUpdatingOrderId(orderId);
     try {
-      // Keep status as processing, use metadata to track ready state
-      // This allows orders to remain visible in appropriate screens until actually completed
+      // For pickup: move to ready-for-pickup status
+      // For delivery: keep in processing with out_for_delivery flag
+      const status = readyType === "pickup" ? "ready-for-pickup" : "processing";
+
       const response = await fetch(`/api/update-order/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "processing", // Keep in processing
+          status,
           meta_data: [
             {
               key: "kitchen_ready",
