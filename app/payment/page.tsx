@@ -113,7 +113,7 @@ export default function PaymentPage() {
       <div className="min-h-screen bg-gray-100 p-4">
         <CashPayment
           orderID={order.id}
-          amount={order.total}
+          amount={finalTotal.toFixed(2)}
           paymentMethod={paymentMethod}
           onSuccess={handlePaymentSuccess}
           onCancel={handleCancel}
