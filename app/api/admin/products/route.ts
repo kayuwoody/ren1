@@ -38,6 +38,7 @@ export async function GET(req: Request) {
         currentPrice: wcProduct ? parseFloat(wcProduct.price) || 0 : product.basePrice,
         supplierCost: product.supplierCost,
         unitCost: product.unitCost,
+        comboPriceOverride: product.comboPriceOverride,
         imageUrl: product.imageUrl,
       };
     });

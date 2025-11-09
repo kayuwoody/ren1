@@ -78,6 +78,7 @@ export async function GET(
         sku: product.sku,
         basePrice: product.basePrice,
         unitCost: product.unitCost,
+        comboPriceOverride: product.comboPriceOverride,
       },
       recipe: {
         mandatoryGroups: Object.entries(mandatoryGroups).map(

@@ -47,6 +47,7 @@ interface Product {
   sku: string;
   basePrice: number;
   unitCost: number;
+  comboPriceOverride?: number;
 }
 
 interface ProductSelectionModalProps {
@@ -92,6 +93,12 @@ export default function ProductSelectionModal({
 
   // Calculate total price
   const calculateTotal = () => {
+    // If combo price override is set, use that exact price
+    if (product.comboPriceOverride !== undefined && product.comboPriceOverride !== null) {
+      return product.comboPriceOverride;
+    }
+
+    // Otherwise, calculate normally
     let total = product.basePrice;
 
     // Add price adjustments from mandatory selections
