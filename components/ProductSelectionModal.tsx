@@ -4,15 +4,11 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 
 interface SelectionGroup {
-  groupName: string;
+  uniqueKey: string;        // Unique identifier for this group (e.g., "root:Pastry" or "Americano:Temperature")
+  groupName: string;        // Display name for the group
   items: Array<{
     id: string;
-    type: string;
     name: string;
-    sku?: string;
-    quantity: number;
-    unit: string;
-    cost: number;
     priceAdjustment: number;
   }>;
 }
@@ -30,12 +26,7 @@ interface RecipeConfig {
   }>;
   optional: Array<{
     id: string;
-    type: string;
     name: string;
-    sku?: string;
-    quantity: number;
-    unit: string;
-    cost: number;
     priceAdjustment: number;
   }>;
 }
@@ -82,7 +73,8 @@ export default function ProductSelectionModal({
       const initialSelections: Record<string, string> = {};
       recipe.mandatoryGroups.forEach((group) => {
         if (group.items.length > 0) {
-          initialSelections[group.groupName] = group.items[0].id;
+          // Use uniqueKey instead of groupName
+          initialSelections[group.uniqueKey] = group.items[0].id;
         }
       });
       setMandatorySelections(initialSelections);
@@ -91,19 +83,19 @@ export default function ProductSelectionModal({
     }
   }, [isOpen, recipe]);
 
-  // Calculate total price
+  // Calculate total price based on selections
   const calculateTotal = () => {
     // If combo price override is set, use that exact price
     if (product.comboPriceOverride !== undefined && product.comboPriceOverride !== null) {
       return product.comboPriceOverride;
     }
 
-    // Otherwise, calculate normally
+    // Start with base price
     let total = product.basePrice;
 
-    // Add price adjustments from mandatory selections
+    // Add price adjustments from mandatory selections (using uniqueKey)
     recipe.mandatoryGroups.forEach((group) => {
-      const selectedId = mandatorySelections[group.groupName];
+      const selectedId = mandatorySelections[group.uniqueKey];
       const selectedItem = group.items.find((item) => item.id === selectedId);
       if (selectedItem) {
         total += selectedItem.priceAdjustment;
@@ -120,13 +112,13 @@ export default function ProductSelectionModal({
     return total;
   };
 
-  // Build display name (e.g., "Hot Latte")
+  // Build display name (e.g., "Blueberry Danish Hot Americano Wake up Wonder")
   const buildDisplayName = () => {
     const parts: string[] = [];
 
-    // Add selected mandatory modifiers
+    // Add selected mandatory modifiers (using uniqueKey)
     recipe.mandatoryGroups.forEach((group) => {
-      const selectedId = mandatorySelections[group.groupName];
+      const selectedId = mandatorySelections[group.uniqueKey];
       const selectedItem = group.items.find((item) => item.id === selectedId);
       if (selectedItem) {
         parts.push(selectedItem.name);
@@ -149,7 +141,7 @@ export default function ProductSelectionModal({
   const handleAddToCart = () => {
     // Validate all mandatory groups have selections
     for (const group of recipe.mandatoryGroups) {
-      if (!mandatorySelections[group.groupName]) {
+      if (!mandatorySelections[group.uniqueKey]) {
         setError(`Please select a ${group.groupName}`);
         return;
       }
@@ -200,9 +192,9 @@ export default function ProductSelectionModal({
             </div>
           )}
 
-          {/* Mandatory Selection Groups (XOR choices) */}
+          {/* Mandatory Selection Groups (XOR choices) - Now includes nested groups! */}
           {recipe.mandatoryGroups.map((group) => (
-            <div key={group.groupName} className="space-y-2">
+            <div key={group.uniqueKey} className="space-y-2">
               <label className="block font-semibold text-gray-700">
                 Choose {group.groupName}: <span className="text-red-500">*</span>
               </label>
@@ -214,13 +206,13 @@ export default function ProductSelectionModal({
                   >
                     <input
                       type="radio"
-                      name={group.groupName}
+                      name={group.uniqueKey}
                       value={item.id}
-                      checked={mandatorySelections[group.groupName] === item.id}
+                      checked={mandatorySelections[group.uniqueKey] === item.id}
                       onChange={(e) =>
                         setMandatorySelections({
                           ...mandatorySelections,
-                          [group.groupName]: e.target.value,
+                          [group.uniqueKey]: e.target.value,
                         })
                       }
                       className="w-4 h-4 text-blue-600"
