@@ -274,34 +274,93 @@ export function calculateBundleCOGS(
 }
 
 /**
- * Get a displayable list of components for showing in UI
- * Returns components formatted for display (indented by depth, with prices)
+ * Get only the DIRECT components of a bundle for customer-facing display
+ * This does NOT recurse - it only shows the immediate linked products (depth 1)
+ *
+ * Example: "Wake up Wonder" → ["Americano", "Danish"] (stops there, doesn't show coffee beans, flour, etc.)
  *
  * @param productId - Local database product ID
  * @param bundleSelection - User's selections for XOR groups and optional items
  * @param quantity - How many units of this product
- * @returns Array of display-ready components
+ * @returns Array of direct component products only (depth 1)
  */
-export function getBundleComponentsForDisplay(
+export function getBundleDirectComponents(
   productId: string,
   bundleSelection?: BundleSelection,
   quantity: number = 1
-): Array<{
-  name: string;
-  quantity: number;
-  price: number;
-  priceAdjustment: number;
-  depth: number;
-  isIndented: boolean;
-}> {
-  const components = expandBundle(productId, bundleSelection, quantity);
+): BundleComponent[] {
+  const product = getProduct(productId);
+  if (!product) {
+    return [];
+  }
 
-  return components.map(component => ({
-    name: component.productName,
-    quantity: component.quantity,
-    price: component.totalPrice,
-    priceAdjustment: component.priceAdjustment,
-    depth: component.depth,
-    isIndented: component.depth > 0,
-  }));
+  const recipe = getProductRecipe(productId);
+  const components: BundleComponent[] = [];
+
+  recipe.forEach((recipeItem) => {
+    // Skip optional items unless explicitly selected
+    if (recipeItem.isOptional) {
+      const isSelected = bundleSelection?.selectedOptional.includes(recipeItem.linkedProductId || '');
+      if (!isSelected) {
+        return;
+      }
+    }
+
+    // Handle bundle selection filtering for XOR groups
+    if (bundleSelection && recipeItem.selectionGroup) {
+      const selectedItemId = bundleSelection.selectedMandatory[recipeItem.selectionGroup];
+      const isSelected = recipeItem.linkedProductId === selectedItemId;
+      if (!isSelected) {
+        return; // Skip this item - it wasn't selected
+      }
+    }
+
+    // Only process linked products (not raw materials)
+    if (recipeItem.itemType !== 'product' || !recipeItem.linkedProductId) {
+      return;
+    }
+
+    const linkedProduct = getProduct(recipeItem.linkedProductId);
+    if (!linkedProduct) {
+      return;
+    }
+
+    const componentQuantity = recipeItem.quantity * quantity;
+
+    // Add ONLY this linked product - do NOT recurse
+    components.push({
+      productId: linkedProduct.id,
+      productName: linkedProduct.name,
+      productSku: linkedProduct.sku,
+      wcId: linkedProduct.wcId,
+      quantity: componentQuantity,
+      basePrice: linkedProduct.basePrice,
+      priceAdjustment: recipeItem.priceAdjustment || 0,
+      effectivePrice: linkedProduct.basePrice + (recipeItem.priceAdjustment || 0),
+      totalPrice: (linkedProduct.basePrice + (recipeItem.priceAdjustment || 0)) * componentQuantity,
+      unitCost: linkedProduct.supplierCost || 0,
+      totalCost: (linkedProduct.supplierCost || 0) * componentQuantity,
+      depth: 1, // Always depth 1 (direct children only)
+      isLinkedProduct: true,
+      parentChain: product.name,
+    });
+  });
+
+  return components;
+}
+
+/**
+ * Get only direct components using WooCommerce product ID (convenience wrapper)
+ */
+export function getBundleDirectComponentsByWcId(
+  wcProductId: number,
+  bundleSelection?: BundleSelection,
+  quantity: number = 1
+): BundleComponent[] {
+  const product = getProductByWcId(wcProductId);
+  if (!product) {
+    console.warn(`⚠️  Product with WC ID ${wcProductId} not found`);
+    return [];
+  }
+  return getBundleDirectComponents(product.id, bundleSelection, quantity);
 }
