@@ -232,13 +232,67 @@ export function recordProductSale(
       consumptions.push(consumption);
       deductMaterialStock(recipeItem.materialId, quantityConsumed);
     } else if (recipeItem.itemType === 'product' && recipeItem.linkedProductId) {
-      // Linked product - recursively process its recipe (don't record the link itself)
+      // Linked product - record the product itself AND recursively process its materials
       console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
 
       // Get the linked product to find its WC ID
       const linkedProduct = getProduct(recipeItem.linkedProductId);
       if (linkedProduct && linkedProduct.wcId) {
-        // Recursively process the linked product's materials
+        // First, record the linked product itself as a consumption entry
+        // This allows reports to show "1x Americano" as part of the combo
+        const consumptionId = uuidv4();
+        const linkedProductConsumption: InventoryConsumption = {
+          id: consumptionId,
+          orderId,
+          orderItemId,
+          productId,
+          productName,
+          productSku: product.sku,
+          quantitySold,
+          itemType: 'product',
+          materialId: undefined,
+          linkedProductId: recipeItem.linkedProductId,
+          materialName: undefined,
+          linkedProductName: recipeItem.linkedProductName,
+          quantityConsumed,
+          unit: 'unit',
+          costPerUnit: linkedProduct.unitCost || 0,
+          totalCost: (linkedProduct.unitCost || 0) * quantityConsumed,
+          consumedAt: now,
+        };
+
+        // Insert the linked product consumption record
+        const stmt = db.prepare(`
+          INSERT INTO InventoryConsumption
+          (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
+           materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
+           unit, costPerUnit, totalCost, consumedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        stmt.run(
+          consumptionId,
+          orderId,
+          orderItemId || null,
+          productId,
+          productName,
+          quantitySold,
+          'product',
+          null,
+          recipeItem.linkedProductId,
+          null,
+          recipeItem.linkedProductName,
+          quantityConsumed,
+          'unit',
+          linkedProduct.unitCost || 0,
+          linkedProductConsumption.totalCost,
+          now
+        );
+
+        console.log(`${indent}      💾 Stored linked product consumption: ${recipeItem.linkedProductName} x${quantityConsumed}`);
+        consumptions.push(linkedProductConsumption);
+
+        // Then recursively process the linked product's materials
         const linkedConsumptions = recordProductSale(
           orderId,
           linkedProduct.wcId,
@@ -516,9 +570,22 @@ export function calculateProductCOGS(
           productChain: chain,
         });
       } else if (item.itemType === 'product' && item.linkedProductId) {
-        // Linked product - recursively expand its materials
+        // Linked product - add product entry THEN recursively expand its materials
         const linkedProduct = getProduct(item.linkedProductId);
         if (linkedProduct && linkedProduct.wcId) {
+          // Add the linked product itself to the breakdown for reporting visibility
+          breakdown.push({
+            itemType: 'product',
+            itemId: item.linkedProductId,
+            itemName: item.linkedProductName || linkedProduct.name,
+            quantityUsed: item.quantity * quantity,
+            unit: 'unit',
+            costPerUnit: linkedProduct.unitCost || 0,
+            totalCost: (linkedProduct.unitCost || 0) * item.quantity * quantity,
+            depth,
+            productChain: chain,
+          });
+
           // Don't pass bundleSelection to nested calls - only filter at top level
           const linkedCOGS = calculateProductCOGS(
             linkedProduct.wcId,
