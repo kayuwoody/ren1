@@ -43,14 +43,25 @@ const ProductListPage: React.FC = () => {
 
     try {
       // Fetch recipe configuration
+      console.log(`🔍 Fetching recipe for "${product.name}" (WC ID: ${product.id})`);
       const response = await fetch(`/api/products/${product.id}/recipe`);
       const data = await response.json();
 
+      console.log(`📋 Recipe response:`, {
+        success: data.success,
+        needsModal: data.needsModal,
+        mandatoryGroups: data.recipe?.mandatoryGroups?.length || 0,
+        optional: data.recipe?.optional?.length || 0,
+        mandatoryIndividual: data.recipe?.mandatoryIndividual?.length || 0,
+      });
+
       if (data.success && data.needsModal) {
         // Product has mandatory selections or optional add-ons - show modal
+        console.log(`✅ Showing modal for "${product.name}"`);
         setModalData(data);
       } else {
         // Simple product - add directly to cart
+        console.log(`➡️  Adding "${product.name}" directly to cart (no modal needed)`);
         addToCart({
           productId: product.id,
           name: product.name,
@@ -80,6 +91,13 @@ const ProductListPage: React.FC = () => {
 
   const handleModalAddToCart = (bundle: any) => {
     // Add bundle to cart
+    console.log(`🛒 Adding bundle to cart:`, {
+      displayName: bundle.displayName,
+      baseProductId: bundle.baseProduct.id,
+      selectedMandatory: bundle.selectedMandatory,
+      selectedOptional: bundle.selectedOptional,
+    });
+
     addToCart({
       productId: bundle.baseProduct.id,
       name: bundle.displayName,
