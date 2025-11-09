@@ -238,8 +238,9 @@ export function recordProductSale(
       // Get the linked product to find its WC ID
       const linkedProduct = getProduct(recipeItem.linkedProductId);
       if (linkedProduct && linkedProduct.wcId) {
-        // First, record the linked product itself as a consumption entry
+        // First, record the linked product itself as a consumption entry (for visibility only - cost tracked via materials)
         // This allows reports to show "1x Americano" as part of the combo
+        // Cost is set to 0 to avoid double-counting (actual costs come from recursive material expansion)
         const consumptionId = uuidv4();
         const linkedProductConsumption: InventoryConsumption = {
           id: consumptionId,
@@ -256,8 +257,8 @@ export function recordProductSale(
           linkedProductName: recipeItem.linkedProductName,
           quantityConsumed,
           unit: 'unit',
-          costPerUnit: linkedProduct.unitCost || 0,
-          totalCost: (linkedProduct.unitCost || 0) * quantityConsumed,
+          costPerUnit: 0, // Cost is 0 - actual cost tracked via materials below
+          totalCost: 0,   // Cost is 0 - actual cost tracked via materials below
           consumedAt: now,
         };
 
@@ -284,12 +285,12 @@ export function recordProductSale(
           recipeItem.linkedProductName,
           quantityConsumed,
           'unit',
-          linkedProduct.unitCost || 0,
-          linkedProductConsumption.totalCost,
+          0, // Cost is 0 - actual cost tracked via materials
+          0, // Cost is 0 - actual cost tracked via materials
           now
         );
 
-        console.log(`${indent}      💾 Stored linked product consumption: ${recipeItem.linkedProductName} x${quantityConsumed}`);
+        console.log(`${indent}      💾 Stored linked product (visibility only): ${recipeItem.linkedProductName} x${quantityConsumed}`);
         consumptions.push(linkedProductConsumption);
 
         // Then recursively process the linked product's materials
@@ -570,18 +571,19 @@ export function calculateProductCOGS(
           productChain: chain,
         });
       } else if (item.itemType === 'product' && item.linkedProductId) {
-        // Linked product - add product entry THEN recursively expand its materials
+        // Linked product - add product entry for visibility, then recursively expand its materials
         const linkedProduct = getProduct(item.linkedProductId);
         if (linkedProduct && linkedProduct.wcId) {
           // Add the linked product itself to the breakdown for reporting visibility
+          // Cost is 0 to avoid double-counting (actual costs come from recursive expansion below)
           breakdown.push({
             itemType: 'product',
             itemId: item.linkedProductId,
             itemName: item.linkedProductName || linkedProduct.name,
             quantityUsed: item.quantity * quantity,
             unit: 'unit',
-            costPerUnit: linkedProduct.unitCost || 0,
-            totalCost: (linkedProduct.unitCost || 0) * item.quantity * quantity,
+            costPerUnit: 0, // Cost is 0 - actual cost tracked via materials
+            totalCost: 0,   // Cost is 0 - actual cost tracked via materials
             depth,
             productChain: chain,
           });
