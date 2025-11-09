@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { updateWooOrder } from '@/lib/orderService';
+import { handleApiError } from '@/lib/api/error-handler';
 
 /**
  * Auto-Cleanup Cron Job

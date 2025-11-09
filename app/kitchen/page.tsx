@@ -8,6 +8,8 @@ interface OrderItem {
   name: string;
   quantity: number;
   total: string;
+  sku?: string;
+  meta_data?: Array<{ key: string; value: any }>;
 }
 
 interface Order {
@@ -16,6 +18,7 @@ interface Order {
   status: string;
   date_created: string;
   total: string;
+  customer_note?: string;
   line_items: OrderItem[];
   meta_data: Array<{ key: string; value: any }>;
 }

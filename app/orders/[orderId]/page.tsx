@@ -13,6 +13,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [orderDeleted, setOrderDeleted] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [expandedBundles, setExpandedBundles] = useState<Record<number, any[]>>({});
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   if (!orderId) {
@@ -74,6 +75,52 @@ export default function OrderDetailPage() {
       }
     };
   }, [orderId]);
+
+  // Fetch expanded bundles for order items with bundle configuration
+  useEffect(() => {
+    if (!order || !order.line_items) return;
+
+    const fetchExpandedBundles = async () => {
+      const newExpanded: Record<number, any[]> = {};
+
+      for (const item of order.line_items) {
+        const isBundle = getItemMeta(item, '_is_bundle') === 'true';
+        if (isBundle) {
+          try {
+            const bundleMandatory = getItemMeta(item, '_bundle_mandatory');
+            const bundleOptional = getItemMeta(item, '_bundle_optional');
+
+            const selectedMandatory = bundleMandatory ? JSON.parse(bundleMandatory) : {};
+            const selectedOptional = bundleOptional ? JSON.parse(bundleOptional) : [];
+
+            const response = await fetch('/api/bundles/expand', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                wcProductId: item.product_id,
+                bundleSelection: {
+                  selectedMandatory,
+                  selectedOptional,
+                },
+                quantity: item.quantity,
+              }),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              newExpanded[item.product_id] = data.components || [];
+            }
+          } catch (err) {
+            console.error('Error fetching expanded bundle:', err);
+          }
+        }
+      }
+
+      setExpandedBundles(newExpanded);
+    };
+
+    fetchExpandedBundles();
+  }, [order]);
 
   // 2) Timer effect: watch for order to land in processing
   useEffect(() => {
@@ -334,12 +381,28 @@ export default function OrderDetailPage() {
             const bundleBaseName = getItemMeta(item, '_bundle_base_product_name');
             const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
 
+            // Get expanded components from state
+            const expandedComponents = expandedBundles[item.product_id] || [];
+
             return (
               <li key={item.id} className="border-b pb-2">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="font-medium">{displayName} × {item.quantity}</div>
-                    {isBundle && bundleBaseName && (
+
+                    {/* Show expanded components */}
+                    {expandedComponents.length > 0 && (
+                      <div className="mt-1 ml-4 space-y-0.5">
+                        {expandedComponents.map((component: any, idx: number) => (
+                          <div key={idx} className="text-xs text-gray-600 flex items-start">
+                            <span className="mr-1">→</span>
+                            <span>{component.productName} × {component.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {isBundle && bundleBaseName && expandedComponents.length === 0 && (
                       <div className="text-xs text-gray-500">Base: {bundleBaseName}</div>
                     )}
                     {discountReason && (
