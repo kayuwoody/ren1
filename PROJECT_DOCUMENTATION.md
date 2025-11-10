@@ -1,32 +1,61 @@
 # Coffee Oasis POS System - Project Documentation
 
-**Current Status:** ✅ Production Ready
-**Last Updated:** October 23, 2025
-**Version:** 2.0.0
+**Current Status:** ✅ Production Ready (Staff/Admin App)
+**Last Updated:** November 9, 2025
+**Version:** 3.0.0
 
 ---
 
-## 🎉 Recent Updates (October 23, 2025)
+## 🎉 Recent Updates (November 2025)
 
-### ✅ **CRITICAL BUGS FIXED**
-- **Fixed cart item property mismatch** - Changed `item.id` → `item.productId` in cart and checkout pages
-- **Fixed navigation** - Home page now correctly links to `/products` instead of non-existent `/menu`
-- **Fixed devcontainer** - Removed deprecated pnpm feature, now uses npm for better compatibility
+### ✨ **NEW MAJOR FEATURES**
 
-### ✨ **NEW FEATURES ADDED**
-- **Mock WooCommerce API** - Development mode with sample data for offline testing
-- **Enhanced logging** - Clear API mode indicators (MOCK vs LIVE)
-- **Environment switching** - Toggle between mock and real API via `USE_MOCK_API` flag
+#### Multi-Screen POS System
+- **Network-enabled displays** - POS serves customer/kitchen displays over local network
+- **Customer Display** - Clean, kiosk-mode display with real-time cart sync
+- **Kitchen Display** - 3-4 column grid optimized for landscape tablets
+- **Server-side cart sync** - All displays stay in sync across devices in real-time
 
-### 🧹 **MAJOR CLEANUP**
-- **Removed 38 outdated files** - Including duplicate app structure, backup files, old savepoints
-- **Cleaned context/ directory** - Now only contains `cartContext.tsx` (correct structure)
-- **Added .gitignore** - Proper Next.js ignore patterns for node_modules, .next, etc.
+#### Hold Order System
+- **Multiple concurrent orders** - Hold orders while serving other customers
+- **Auto-generated tags** - Format: YYMMDD_H### (e.g., 250811_H001)
+- **Customer assignment** - Search and assign customers or use auto-tags
+- **Auto-cleanup** - 4-hour threshold for old held orders
+- **LocalStorage based** - Fast, lightweight, no database needed
 
-### ✅ **VERIFIED WORKING**
-- **WooCommerce API** - Confirmed working from GitHub Codespaces
-- **Real orders** - Successfully creating orders in production WordPress
-- **All features** - Cart, checkout, order tracking fully operational
+#### COGS & Inventory Management
+- **Recipe Builder** - Define product recipes with materials, packaging, and labor
+- **COGS Calculation** - Automatic cost tracking per product
+- **Bundle Products** - Support for products with mandatory/optional add-ons
+- **XOR Groups** - Mutually exclusive ingredient options (e.g., milk types)
+- **Material Database** - Track raw materials with costs and units
+- **Inventory Deduction** - Automatic stock tracking when orders are placed
+
+#### Advanced Discount System
+- **Percent Discounts** - 10%, 20%, staff discount, etc.
+- **Fixed Amount** - Deduct specific RM amounts
+- **Price Override** - Set custom final price for special deals
+- **Discount Reasons** - Track why discounts were applied
+- **Per-item Discounts** - Apply different discounts to each cart item
+
+#### Admin Dashboard Improvements
+- **Daily Operational Stats** - Today's orders, revenue, items sold, pending orders
+- **Grouped Quick Actions** - Organized by Operations, Inventory, Analytics, System
+- **Streamlined UI** - Removed redundant sections and clutter
+- **Real-time Updates** - Stats refresh automatically
+
+### 🎨 **UI/UX IMPROVEMENTS**
+- **Mascot Integration** - Coffee Oasis unicorn mascot on customer display
+- **Kiosk Mode** - Navigation hidden on customer/kitchen displays
+- **Responsive Grids** - All displays adapt to phone/tablet/desktop
+- **Single Column Cart** - Customer display optimized for easy reading
+- **Compact Kitchen Display** - Fits 3-4 orders on tablet screens
+
+### 🐛 **CRITICAL FIXES**
+- **Hydration Error** - Fixed time display server/client mismatch
+- **Cross-device Sync** - Solved localStorage limitation with server-side storage
+- **Cart Property Names** - Standardized on productId/retailPrice/finalPrice
+- **Network Access** - Configured Next.js to accept connections from other devices
 
 ---
 
@@ -34,17 +63,17 @@
 1. [Project Overview](#project-overview)
 2. [Current Status](#current-status)
 3. [Technology Stack](#technology-stack)
-4. [Architecture](#architecture)
+4. [System Architecture](#system-architecture)
 5. [Key Features](#key-features)
-6. [File Structure](#file-structure)
-7. [User Flow](#user-flow)
-8. [API Routes](#api-routes)
-9. [Order Status Workflow](#order-status-workflow)
-10. [Authentication System](#authentication-system)
-11. [Timer System](#timer-system)
-12. [State Management](#state-management)
-13. [Environment Configuration](#environment-configuration)
-14. [Mock API for Development](#mock-api-for-development)
+6. [Multi-Screen Setup](#multi-screen-setup)
+7. [File Structure](#file-structure)
+8. [User Flows](#user-flows)
+9. [API Routes](#api-routes)
+10. [COGS & Recipe System](#cogs--recipe-system)
+11. [Discount System](#discount-system)
+12. [Hold Order System](#hold-order-system)
+13. [State Management](#state-management)
+14. [Environment Configuration](#environment-configuration)
 15. [Setup Instructions](#setup-instructions)
 16. [Future Enhancements](#future-enhancements)
 
@@ -52,34 +81,63 @@
 
 ## Project Overview
 
-**Coffee Oasis** is a Point of Sale (POS) system for a coffee shop built with Next.js and integrated with WooCommerce for product and order management. The system supports both registered users and guest checkouts, with real-time order tracking, progress visualization, and QR code-based pickup.
+**Coffee Oasis** is a comprehensive Point of Sale (POS) system for a grab-and-go coffee shop. Built with Next.js and integrated with WooCommerce for product and order management. The system supports staff operations, customer displays, kitchen management, inventory tracking, and advanced pricing features.
 
 **Live Store**: https://coffee-oasis.com.my
+
+**Primary Use Case**: Staff-only admin app with multi-screen displays for POS, customer-facing, and kitchen operations.
 
 ---
 
 ## Current Status
 
 ### ✅ What's Working
-- ✅ **Authentication** - Passwordless login with email/phone
-- ✅ **Product Catalog** - Fetching from WooCommerce
-- ✅ **Shopping Cart** - Add, remove, quantity management
-- ✅ **Checkout** - Order creation with timer metadata
-- ✅ **Order Tracking** - Real-time progress with polling
-- ✅ **Mock API** - Development mode for offline testing
-- ✅ **GitHub Codespaces** - WooCommerce API accessible
-- ✅ **Clean Codebase** - No duplicate files or outdated code
+
+**Core POS Features:**
+- ✅ **Product Catalog** - Fetching from WooCommerce with categories and filters
+- ✅ **Shopping Cart** - Advanced cart with discounts, bundles, and customizations
+- ✅ **Checkout Flow** - Order creation with full metadata
+- ✅ **Order Tracking** - Real-time status updates and kitchen timer
+- ✅ **Payment Integration** - FiuuPay payment gateway (Malaysian)
+
+**Admin & Staff Features:**
+- ✅ **Hold Order System** - Manage multiple concurrent customers
+- ✅ **Staff Discounts** - Percent, amount, and override pricing
+- ✅ **Admin Dashboard** - Daily stats and quick actions
+- ✅ **Order Management** - Full CRUD with status tracking
+- ✅ **Customer Search** - Find and assign customers to orders
+
+**Inventory & COGS:**
+- ✅ **Materials Database** - Track ingredients, packaging, labor costs
+- ✅ **Recipe Builder** - Define product compositions
+- ✅ **COGS Calculation** - Automatic cost tracking
+- ✅ **Bundle Products** - Mandatory and optional add-ons
+- ✅ **XOR Groups** - Mutually exclusive ingredient options
+- ✅ **Inventory Deduction** - Auto-track stock on order placement
+
+**Multi-Screen System:**
+- ✅ **Customer Display** - Real-time cart sync across devices
+- ✅ **Kitchen Display** - Order queue with timers and status
+- ✅ **Network Configuration** - Multi-device support over LAN
+- ✅ **Kiosk Mode** - Clean displays without navigation
+
+**UI/UX:**
+- ✅ **Responsive Design** - Optimized for phone, tablet, desktop
+- ✅ **Mascot Branding** - Custom Coffee Oasis unicorn
+- ✅ **Clean Admin Interface** - Streamlined workflows
+- ✅ **Real-time Updates** - 1-10 second polling intervals
 
 ### ⚠️ Known Limitations
-- Payment simulation only (no real payment gateway yet)
+- Locker system API exists but not fully implemented
+- No customer-facing self-service app yet (admin/staff only)
 - Polling-based updates (WebSockets not implemented)
-- Manual locker assignment (no automation yet)
+- In-memory cart storage (resets on server restart)
 
 ### 🎯 Ready For
-- ✅ Local development
-- ✅ GitHub Codespaces development
-- ✅ Staging deployment
-- ⚠️ Production (needs real payment integration)
+- ✅ Production deployment (staff operations)
+- ✅ Multi-device POS setup (phone + tablets)
+- ✅ Full inventory and cost tracking
+- ⚠️ Customer self-service (future enhancement)
 
 ---
 
@@ -93,83 +151,302 @@
 - **Icons**: Lucide React
 - **QR Codes**: react-qr-code
 - **Progress Indicators**: react-circular-progressbar
+- **Image Handling**: Next.js Image component
 
 ### Backend
 - **E-commerce Platform**: WooCommerce
 - **API**: WooCommerce REST API v3
-- **API Client**: @woocommerce/woocommerce-rest-api
-- **HTTP Client**: Axios
+- **API Client**: @woocommerce/woocommerce-rest-api + Axios
+- **Database**: SQLite (for recipes/materials)
+- **Session Management**: In-memory storage + localStorage
 
 ### State Management
-- React Context API (Cart management)
-- LocalStorage (User sessions, guest IDs, timer data)
-- HTTP-only Cookies (Server-side session management)
+- React Context API (Cart, global state)
+- LocalStorage (User sessions, held orders, cart backup)
+- Server-side storage (Current cart for multi-device sync)
 
 ---
 
-## Architecture
+## System Architecture
 
-### Application Structure
+### Multi-Screen Architecture
 ```
-Next.js App Router (Server Components + Client Components)
-    ↓
-React Context (Cart State)
-    ↓
-API Routes (Next.js API handlers)
-    ↓
-WooCommerce REST API (External service)
+┌─────────────────┐
+│   POS Device    │ (Small PC / Android - Runs Next.js server)
+│  (Main Server)  │
+│                 │
+│  - Admin/POS UI │ localhost:3000/admin/pos
+│  - Cart Context │
+│  - API Routes   │
+└────────┬────────┘
+         │ Network (0.0.0.0:3000)
+         │
+    ┌────┴────┬──────────┬────────────┐
+    │         │          │            │
+┌───▼────┐ ┌─▼─────┐ ┌──▼────────┐ ┌─▼────────┐
+│Customer│ │Kitchen│ │Customer   │ │Additional│
+│Tablet 1│ │Tablet │ │Tablet 2   │ │Devices   │
+│        │ │       │ │           │ │          │
+│/customer│ │/kitchen│ │/customer │ │...       │
+│-display│ │       │ │-display   │ │          │
+└────────┘ └───────┘ └───────────┘ └──────────┘
 ```
 
 ### Data Flow
-1. **User Actions** → Client Components
-2. **State Updates** → React Context / LocalStorage
-3. **API Calls** → Next.js API Routes
-4. **WooCommerce** → Product/Order Management
-5. **Real-time Updates** → Polling (10-second intervals)
+```
+User Action (POS)
+    ↓
+Cart Context Update
+    ↓
+LocalStorage + Server API (/api/cart/current)
+    ↓
+Customer Displays Poll Server (1s interval)
+    ↓
+UI Updates Across All Devices
+```
 
 ---
 
 ## Key Features
 
-### 1. Passwordless Authentication
-- Email or phone-based login
-- Auto-creates WooCommerce customer accounts
-- 30-day persistent sessions via HTTP-only cookies
-- Support for guest checkout without registration
+### 1. Multi-Screen POS System
 
-### 2. Product Catalog
-- Fetches products from WooCommerce
-- Grid display with images and prices
-- One-click add to cart
-- Prices in Malaysian Ringgit (RM)
+**Network Setup:**
+- POS device runs Next.js server on `0.0.0.0:3000`
+- Other devices connect via `http://[POS-IP]:3000/[route]`
+- Real-time cart synchronization across all screens
+- No database required - in-memory + localStorage
 
-### 3. Shopping Cart
-- Real-time cart updates
-- Quantity management
-- Item removal
-- Persistent across navigation
-- Visual cart badge in header
+**Display Types:**
+1. **POS Display** (`/admin/pos`)
+   - Full admin interface
+   - Cart management with discounts
+   - Hold order controls
+   - Customer assignment
 
-### 4. Order Management
-- **Multi-stage workflow**: pending → processing → ready-for-pickup → completed
-- Real-time order tracking with polling
-- Kitchen timer system (2 minutes per item)
-- Progress bar visualization
-- QR code generation for pickup verification
-- Locker number assignment
+2. **Customer Display** (`/customer-display`)
+   - Kiosk mode (no navigation)
+   - Single column item list
+   - Large, readable fonts
+   - Mascot branding
+   - Real-time cart sync (1s polling)
 
-### 5. Order History
-- View all past orders
-- Filter by status
-- Search by order ID or product name
-- Separate views for guest and logged-in users
+3. **Kitchen Display** (`/kitchen`)
+   - 3-4 column grid (landscape optimized)
+   - Order timers and status
+   - Color-coded urgency (green→yellow→red)
+   - Ready/Delivery buttons
+   - Auto-refresh (10s polling)
 
-### 6. Mock API for Development (NEW!)
-- **Environment-based switching** - Toggle between mock and real API
-- **Sample data** - Pre-configured products (Latte, Cappuccino, Americano, Mocha)
-- **Offline development** - Work without WooCommerce connection
-- **Full feature support** - Products, orders, customers all mocked
-- **Easy toggle** - Set `USE_MOCK_API=true` in `.env.local`
+**Setup Process:**
+```bash
+# On POS device
+npm run dev  # or npm run start
+
+# Find POS IP
+ip addr show | grep inet
+
+# On customer/kitchen tablets
+Open browser to: http://192.168.1.100:3000/customer-display
+```
+
+### 2. Hold Order System
+
+**Use Case:** Regular customer orders but needs time before paying, another customer walks in
+
+**Features:**
+- Hold current cart with customer assignment
+- Auto-generate tags if no customer selected (YYMMDD_H###)
+- Multiple holds supported simultaneously
+- Resume any held order
+- Delete old/cancelled holds
+- 4-hour auto-cleanup
+
+**Implementation:**
+- **Storage**: LocalStorage (fast, no server needed)
+- **UI**: Integrated into POS page
+- **Customer Search**: Reuses admin/orders search pattern
+- **Tag Format**: `250811_H001`, `250811_H002` (daily counter)
+
+**Workflow:**
+```
+1. Customer A orders → Cart has items
+2. Click "Hold Order"
+3. Search customer or auto-generate tag
+4. Cart clears → Order saved to held list
+5. Serve Customer B
+6. After Customer B completes → Resume Customer A's order
+7. Complete transaction
+```
+
+### 3. COGS & Recipe System
+
+**Purpose:** Track product costs and profit margins
+
+**Components:**
+
+**Materials Database:**
+- Raw ingredients (coffee beans, milk, sugar, etc.)
+- Packaging (cups, lids, sleeves, bags)
+- Labor costs (per minute/hour)
+- Unit conversions (g, ml, units, minutes)
+
+**Recipe Builder:**
+- Select base product from WooCommerce
+- Add required materials with quantities
+- Define mandatory ingredient groups (XOR)
+- Add optional add-ons
+- Calculate total COGS
+- View retail price and profit margin
+
+**Bundle Products:**
+- Mandatory groups: Must select exactly one (e.g., milk type)
+- Optional items: Can select multiple (e.g., extra shot, syrup)
+- XOR logic: Selecting one deselects others in same group
+- Price modifiers: Add-ons can increase final price
+
+**COGS Calculation:**
+```typescript
+Material: 20g coffee beans @ RM 45/kg
+= (20 / 1000) * 45 = RM 0.90
+
+Labor: 2 minutes @ RM 15/hour
+= (2 / 60) * 15 = RM 0.50
+
+Total COGS = RM 1.40
+Retail Price = RM 12.00
+Profit = RM 10.60 (88.3%)
+```
+
+**Inventory Tracking:**
+- Deducts materials when order is placed
+- Shows low stock warnings
+- Tracks usage per product
+- Manual stock adjustments
+
+### 4. Advanced Discount System
+
+**Discount Types:**
+
+1. **Percent Discount** (e.g., 10%, 20%, Staff 50%)
+   ```
+   Retail: RM 12.00
+   Discount: 20%
+   Final: RM 9.60
+   ```
+
+2. **Fixed Amount** (e.g., RM 5 off)
+   ```
+   Retail: RM 12.00
+   Discount: -RM 5.00
+   Final: RM 7.00
+   ```
+
+3. **Price Override** (Set exact price)
+   ```
+   Retail: RM 12.00
+   Override: RM 8.00
+   Final: RM 8.00
+   ```
+
+**Features:**
+- Per-item discounts (different for each product)
+- Discount reasons (tracked for reporting)
+- Visual indicators (strikethrough prices)
+- Saved discounts shown on customer display
+- Staff mode required for discount access
+
+**UI:**
+- Quick buttons (10%, 20%, 50%)
+- Custom amount input
+- Reason dropdown + custom input
+- Clear discount option
+- Visual feedback on cart items
+
+### 5. Admin Dashboard
+
+**Daily Stats:**
+- Today's Orders (count)
+- Today's Revenue (total RM)
+- Items Sold (quantity)
+- Pending Orders (count)
+
+**Quick Actions (Grouped):**
+
+**Operations:**
+- Point of Sale (green highlight)
+- Order Management
+
+**Inventory & Recipes:**
+- Materials
+- Recipes
+
+**Analytics:**
+- Sales Reports (blue highlight)
+
+**System & Customer:**
+- Locker Monitoring
+- Printers
+- Loyalty Points
+
+**Features:**
+- Real-time stats refresh
+- One-click navigation
+- Clean, organized layout
+- Removed redundant sections
+
+---
+
+## Multi-Screen Setup
+
+### Hardware Requirements
+
+**Minimum Setup:**
+- 1x Small PC or Android device (POS device - runs server)
+- 1x Tablet (customer display)
+- Network: WiFi or LAN
+
+**Recommended Setup:**
+- 1x Small PC (POS device)
+- 1-2x Tablets (customer displays)
+- 1x Tablet landscape (kitchen display)
+- Network: Dedicated WiFi network
+
+### Network Configuration
+
+**package.json:**
+```json
+{
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0",
+    "start": "next start -H 0.0.0.0"
+  }
+}
+```
+
+**Security Notes:**
+- Only accessible on local network
+- No authentication on display endpoints
+- Use WiFi with WPA2+ encryption
+- Consider firewall rules for production
+
+### Tablet Setup (Customer/Kitchen)
+
+**For Android:**
+1. Install "Fully Kiosk Browser" or "Kiosk Browser Lockdown"
+2. Enter URL: `http://[POS-IP]:3000/customer-display`
+3. Enable fullscreen mode
+4. Disable sleep mode
+5. Lock orientation (landscape for kitchen, portrait for customer)
+6. Disable back button
+7. Auto-reload on connection loss
+
+**For iOS:**
+1. Use Safari or Chrome
+2. Open URL: `http://[POS-IP]:3000/customer-display`
+3. Add to Home Screen
+4. Use Guided Access for kiosk mode
+5. Settings → Display → Auto-Lock → Never
 
 ---
 
@@ -178,274 +455,393 @@ WooCommerce REST API (External service)
 ### Core Application Files
 ```
 /app
-  /page.tsx                          # Home page
-  /layout.tsx                        # Root layout with CartProvider
-  /login/page.tsx                    # Passwordless login
-  /products/page.tsx                 # Product catalog
-  /cart/page.tsx                     # Shopping cart
-  /checkout/page.tsx                 # Checkout flow
-  /orders/page.tsx                   # Order history list
-  /orders/[orderId]/page.tsx         # Order detail with tracking
+  /page.tsx                            # Home/landing page
+  /layout.tsx                          # Root layout with CartProvider
 
+  # Customer-facing
+  /products/page.tsx                   # Product catalog (3-5 cols responsive)
+  /checkout/page.tsx                   # Checkout flow
+  /payment/page.tsx                    # Payment gateway integration
+  /orders/page.tsx                     # Order history
+  /orders/[orderId]/page.tsx           # Order detail/tracking
+
+  # Admin/Staff
+  /admin/page.tsx                      # Admin dashboard with stats
+  /admin/pos/page.tsx                  # Point of Sale interface
+  /admin/orders/page.tsx               # Order management
+  /admin/materials/page.tsx            # Materials database
+  /admin/recipes/page.tsx              # Recipe builder
+  /admin/sales/page.tsx                # Sales reports
+  /admin/lockers/page.tsx              # Locker monitoring
+
+  # Multi-Screen Displays
+  /customer-display/page.tsx           # Customer kiosk display
+  /customer-display/layout.tsx         # No HeaderNav layout
+  /kitchen/page.tsx                    # Kitchen order display
+
+  # API Routes
   /api
-    /login/route.ts                  # Authentication endpoint
-    /products/route.ts               # Product fetching
-    /create-order/route.ts           # Order creation
-    /orders/route.ts                 # List user/guest orders
-    /orders/[orderId]/route.ts       # Get single order
-    /orders/processing/route.ts      # Check for processing orders
-    /update-order/[orderId]/route.ts # Update order status
+    /cart/current/route.ts             # Server-side cart storage
+    /admin/daily-stats/route.ts        # Dashboard statistics
+    /admin/customers/route.ts          # Customer search
+    /products/[id]/recipe/route.ts     # Recipe data fetching
+    /create-order/route.ts             # Order creation
+    /orders/route.ts                   # Order listing
+    /kitchen/orders/route.ts           # Kitchen order queue
+    /locker/heartbeat/route.ts         # Locker status updates
+    /locker/unlock/route.ts            # Locker unlock webhook
 ```
 
 ### Shared Libraries
 ```
 /lib
-  /wooClient.ts                      # WooCommerce API client (with mock support)
-  /mockWooClient.ts                  # Mock API for development
-  /orderService.ts                   # Order CRUD operations
-  /getGuestId.ts                     # Guest ID management
-  /customerService.ts                # Customer operations
-```
-
-### State Management
-```
-/context
-  /cartContext.tsx                   # Cart state provider & hooks
+  /wooClient.ts                        # WooCommerce API client
+  /orderService.ts                     # Order CRUD operations
+  /db.ts                               # SQLite database connection
 ```
 
 ### Components
 ```
 /components
-  /HeaderNav.tsx                     # Navigation with cart badge
-  /cart/CartItem.tsx                 # Cart item component
+  /HeaderNav.tsx                       # Navigation (hidden on kiosk)
+  /HoldOrderManager.tsx                # Hold order UI
+  /ProductSelectionModal.tsx           # Bundle product selector
 ```
 
-### Configuration
+### State Management
 ```
-/.env.local                          # Environment variables
-/next.config.js                      # Next.js configuration
-/tailwind.config.ts                  # Tailwind CSS settings
-/tsconfig.json                       # TypeScript configuration
+/context
+  /cartContext.tsx                     # Cart state + server sync
+```
+
+### Database
+```
+/database.sqlite                       # Materials & recipes storage
 ```
 
 ---
 
-## User Flow
+## User Flows
 
-### Complete Customer Journey
+### Staff POS Workflow
 
-1. **Landing** (`/`)
-   - View login status
-   - Access menu/products
-   - View orders if logged in
+```
+1. Staff opens /admin/pos on POS device
 
-2. **Login** (`/login`)
-   - Enter email or phone
-   - System creates or finds WooCommerce customer
-   - Sets userId cookie (30 days)
-   - Redirects to orders page
+2. Customer Display shows empty cart (on tablet)
 
-3. **Browse Products** (`/products`)
-   - View product grid with images
-   - Click product to add to cart
-   - See cart badge update
+3. Staff clicks Products → Browse menu
 
-4. **Review Cart** (`/cart`)
-   - View all items
-   - Adjust quantities
-   - Remove items
-   - See total price
-   - Proceed to checkout
+4. Staff adds items to cart
+   - Simple products: Direct add
+   - Bundle products: Modal with mandatory/optional selections
 
-5. **Checkout** (`/checkout`)
-   - Review order summary
-   - Confirm and pay
-   - Creates order with timer metadata
-   - Redirects to order detail page
+5. Customer Display updates in real-time (1s sync)
 
-6. **Track Order** (`/orders/[orderId]`)
-   - **Pending**: Shows "Simulate Payment" button
-   - **Processing**: Live progress bar (2 min/item)
-   - **Ready**: Locker number + pickup code + QR code
-   - **Completed**: Final order details
+6. Apply discounts (if staff mode active)
+   - Select discount type
+   - Enter amount/percent
+   - Add reason
 
-7. **Order History** (`/orders`)
-   - List all orders
-   - Filter by status
-   - Search orders
-   - Click to view details
+7. Options:
+   A. Complete Order:
+      - Click "Proceed to Payment"
+      - Process payment
+      - Cart clears
+
+   B. Hold Order:
+      - Click "Hold Order"
+      - Search customer or auto-generate tag
+      - Cart clears, saved to held list
+      - Serve next customer
+      - Resume held order later
+```
+
+### Kitchen Display Workflow
+
+```
+1. Order marked as "processing" after payment
+
+2. Appears in Kitchen Display grid
+
+3. Timer starts (2 min per item)
+   - Green border: On time
+   - Yellow border: 70%+ elapsed
+   - Red border: Overdue
+
+4. Staff prepares order
+
+5. Click "Ready for Pickup" or "Ready for Delivery"
+
+6. Order removed from kitchen display
+
+7. Moves to ready status
+```
 
 ---
 
 ## API Routes
 
-| Endpoint | Method | Purpose | Authentication |
-|----------|--------|---------|----------------|
-| `/api/login` | POST | Passwordless auth, creates/finds customer | None |
-| `/api/products` | GET | Fetch WooCommerce products | None |
-| `/api/create-order` | POST | Create new order with timer | Cookie or guestId |
-| `/api/orders` | GET | List user/guest orders | Cookie or guestId |
-| `/api/orders/[orderId]` | GET | Get single order details | None |
-| `/api/orders/processing` | GET | Check for processing orders | Cookie or guestId |
-| `/api/update-order/[orderId]` | PATCH | Update order status | None |
+### New Routes (v3.0)
 
-### Request/Response Examples
+| Endpoint | Method | Purpose | Auth |
+|----------|--------|---------|------|
+| `/api/cart/current` | GET | Get current cart (server-side) | None |
+| `/api/cart/current` | POST | Update cart (for sync) | None |
+| `/api/admin/daily-stats` | GET | Dashboard statistics | None |
+| `/api/admin/customers` | GET | Search customers | None |
+| `/api/kitchen/orders` | GET | Kitchen order queue | None |
+| `/api/products/[id]/recipe` | GET | Product recipe data | None |
 
-#### Login
-**Request:**
+### Cart Sync API
+
+**POST /api/cart/current**
 ```json
-POST /api/login
 {
-  "email": "user@example.com"
+  "cart": [
+    {
+      "productId": 45,
+      "name": "Hot Latte",
+      "retailPrice": 12.00,
+      "finalPrice": 9.60,
+      "quantity": 2,
+      "discountPercent": 20,
+      "discountReason": "Staff discount"
+    }
+  ]
 }
 ```
 
 **Response:**
 ```json
 {
-  "userId": 123,
-  "email": "user@example.com",
-  "created": false
+  "success": true
 }
 ```
 
-#### Create Order
-**Request:**
-```json
-POST /api/create-order
-{
-  "line_items": [
-    { "product_id": 45, "quantity": 2 },
-    { "product_id": 67, "quantity": 1 }
-  ],
-  "userId": 123,  // or "guestId": "uuid-string"
-  "meta_data": []
-}
-```
-
-**Response:**
+**GET /api/cart/current**
 ```json
 {
-  "id": 789,
-  "status": "pending",
-  "line_items": [...],
-  "meta_data": [
-    { "key": "startTime", "value": "1698123456789" },
-    { "key": "endTime", "value": "1698123816789" }
-  ],
-  "total": "45.50"
+  "cart": [...] // Same structure as POST
 }
 ```
 
 ---
 
-## Order Status Workflow
+## COGS & Recipe System
 
+### Database Schema (SQLite)
+
+**materials table:**
+```sql
+CREATE TABLE materials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  category TEXT,
+  cost REAL NOT NULL,
+  unit TEXT NOT NULL,
+  stock_quantity REAL,
+  supplier TEXT,
+  notes TEXT
+);
 ```
-┌─────────┐    Payment    ┌────────────┐    Kitchen    ┌─────────────────┐    Pickup    ┌───────────┐
-│ pending │─────────────→│ processing │──────────────→│ ready-for-pickup│─────────────→│ completed │
-└─────────┘               └────────────┘               └─────────────────┘              └───────────┘
-                               │                              │
-                               │ Timer starts                 │ Locker assigned
-                               │ (2 min/item)                 │ QR code generated
+
+**recipes table:**
+```sql
+CREATE TABLE recipes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  product_name TEXT NOT NULL,
+  materials JSON NOT NULL,  -- [{material_id, quantity}]
+  total_cogs REAL NOT NULL,
+  created_at TEXT,
+  updated_at TEXT
+);
 ```
 
-### Status Descriptions
+### Recipe Calculation
 
-| Status | Description | UI Display |
-|--------|-------------|------------|
-| `pending` | Order created, awaiting payment | "Simulate Payment" button |
-| `processing` | Payment confirmed, kitchen preparing | Progress bar with timer |
-| `ready-for-pickup` | Order ready in locker | Locker number + QR code |
-| `completed` | Customer picked up order | Order summary only |
+```typescript
+// Example recipe for Hot Latte
+{
+  "product_id": 45,
+  "product_name": "Hot Latte",
+  "materials": [
+    { "material_id": 1, "name": "Coffee Beans", "quantity": 18, "unit": "g", "cost": 0.81 },
+    { "material_id": 2, "name": "Whole Milk", "quantity": 200, "unit": "ml", "cost": 1.20 },
+    { "material_id": 5, "name": "12oz Paper Cup", "quantity": 1, "unit": "unit", "cost": 0.50 },
+    { "material_id": 8, "name": "Labor", "quantity": 2.5, "unit": "minutes", "cost": 0.625 }
+  ],
+  "total_cogs": 3.125,
+  "retail_price": 12.00,
+  "profit": 8.875,
+  "profit_margin": 73.96
+}
+```
 
 ---
 
-## Authentication System
+## Discount System
 
-### Passwordless Flow
+### Cart Item Structure
 
-1. User enters email or phone
-2. System normalizes input:
-   - Email: lowercased
-   - Phone: converted to `{number}@guest.local`
-3. WooCommerce lookup by email
-4. If not found, create new customer with random UUID password
-5. Set HTTP-only cookie with `userId`
-6. Mirror `userId` to localStorage for client-side checks
+```typescript
+interface CartItem {
+  productId: number;
+  name: string;
+  retailPrice: number;      // Original price
+  discountPercent?: number; // e.g., 20 (for 20%)
+  discountAmount?: number;  // e.g., 5.00 (RM 5 off)
+  discountReason?: string;  // e.g., "Staff discount"
+  finalPrice: number;       // Calculated price
+  quantity: number;
+  bundle?: {                // Optional: for bundle products
+    baseProductId: number;
+    baseProductName: string;
+    selectedMandatory: Record<string, string>;
+    selectedOptional: string[];
+  };
+}
+```
 
-### Guest vs. Registered
+### Price Calculation Logic
 
-| Feature | Guest | Registered |
-|---------|-------|------------|
-| Identifier | `guestId` (UUID in localStorage) | `userId` (WooCommerce customer ID) |
-| Storage | localStorage + order meta_data | HTTP-only cookie + WooCommerce |
-| Order Retrieval | meta_key filter | customer_id filter |
-| Persistence | Browser-specific | Cross-device (via email) |
+```typescript
+function calculateFinalPrice(item: CartItem): number {
+  const { retailPrice, discountPercent, discountAmount } = item;
+
+  // Fixed amount takes precedence
+  if (discountAmount !== undefined && discountAmount > 0) {
+    return Math.max(0, retailPrice - discountAmount);
+  }
+
+  // Then percent discount
+  if (discountPercent !== undefined && discountPercent > 0) {
+    return retailPrice * (1 - discountPercent / 100);
+  }
+
+  // No discount
+  return retailPrice;
+}
+```
 
 ---
 
-## Timer System
+## Hold Order System
 
-### Implementation
+### Data Structure
 
-**Server-Side (Order Creation):**
 ```typescript
-const now = Date.now();
-const duration = 2 * 60_000 * line_items.length; // 2 min per item
-const startTime = String(now);
-const endTime = String(now + duration);
-
-meta_data: [
-  { key: 'startTime', value: startTime },
-  { key: 'endTime', value: endTime }
-]
+interface HeldOrder {
+  id: string;              // UUID
+  customerName: string;    // Name or auto-generated tag
+  customerId?: number;     // WooCommerce customer ID (if assigned)
+  cartItems: CartItem[];   // Full cart state
+  total: number;           // Final total with discounts
+  timestamp: number;       // Date.now() when held
+  isAutoGenerated: boolean; // True if using auto-tag
+}
 ```
 
-**Client-Side (Progress Calculation):**
+### Auto-Tag Generation
+
 ```typescript
-const start = Number(getMeta('startTime'));
-const end = Number(getMeta('endTime'));
-const now = Date.now();
-const progress = Math.min(1, Math.max(0, (now - start) / (end - start)));
+// Format: YYMMDD_H###
+// Example: 250811_H001, 250811_H002
+
+function generateHoldTag(): string {
+  const now = new Date();
+  const dateStr = now.toISOString()
+    .slice(2, 10)
+    .replace(/-/g, ''); // YYMMDD
+
+  // Find highest counter for today
+  const todayOrders = heldOrders.filter(o =>
+    o.isAutoGenerated && o.customerName.startsWith(dateStr)
+  );
+
+  let maxCounter = 0;
+  todayOrders.forEach(o => {
+    const match = o.customerName.match(/_H(\d+)$/);
+    if (match) {
+      maxCounter = Math.max(maxCounter, parseInt(match[1]));
+    }
+  });
+
+  const nextCounter = maxCounter + 1;
+  return `${dateStr}_H${String(nextCounter).padStart(3, '0')}`;
+}
 ```
 
-**Update Interval:**
-- Progress bar updates every 1 second
-- Order status polls every 10 seconds
+### Storage & Cleanup
+
+**Storage:** localStorage key `heldOrders`
+**Auto-Cleanup:** Runs every 60 seconds
+**Threshold:** 4 hours
+
+```typescript
+const AUTO_CLEANUP_HOURS = 4;
+
+function cleanupOldOrders() {
+  const cutoffTime = Date.now() - (AUTO_CLEANUP_HOURS * 60 * 60 * 1000);
+  const filtered = heldOrders.filter(order =>
+    order.timestamp > cutoffTime
+  );
+
+  if (filtered.length < heldOrders.length) {
+    saveHeldOrders(filtered);
+  }
+}
+```
 
 ---
 
 ## State Management
 
-### Cart Context
+### Cart Context (Enhanced)
 
 **Location:** `context/cartContext.tsx`
 
-**State:**
+**New Methods:**
 ```typescript
-interface CartItem {
-  productId: number;
-  name: string;
-  price: number;
-  quantity: number;
+interface CartContextType {
+  cartItems: CartItem[];
+  addToCart: (item: Omit<CartItem, 'finalPrice'>) => void;
+  removeFromCart: (index: number) => void;
+  updateItemDiscount: (index: number, discount: {
+    type: 'percent' | 'amount' | 'override',
+    value: number,
+    reason?: string
+  }) => void;
+  clearCart: () => void;
+  loadCart: (items: CartItem[]) => void; // For resuming held orders
 }
 ```
 
-**Methods:**
-- `addToCart(item)` - Adds item or increments quantity
-- `removeFromCart(productId)` - Removes item from cart
-- `clearCart()` - Empties cart (after checkout)
+**Server Sync:**
+```typescript
+useEffect(() => {
+  // Save to localStorage
+  localStorage.setItem('cart', JSON.stringify(cartItems));
+
+  // Sync to server for multi-device
+  fetch('/api/cart/current', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cart: cartItems })
+  });
+}, [cartItems]);
+```
 
 ### LocalStorage Keys
 
-| Key | Type | Purpose |
-|-----|------|---------|
-| `userId` | number | WooCommerce customer ID (mirrors cookie) |
-| `guestId` | UUID | Anonymous user identifier |
-| `currentWooId` | number | Active order ID for header badge |
-| `startTime` | timestamp | Order timer start (mirrored from meta) |
-| `endTime` | timestamp | Order timer end (mirrored from meta) |
+| Key | Type | Purpose | TTL |
+|-----|------|---------|-----|
+| `cart` | CartItem[] | Current cart items | Session |
+| `heldOrders` | HeldOrder[] | Held orders list | 4 hours |
+| `userId` | number | WooCommerce customer ID | 30 days |
+| `guestId` | UUID | Anonymous user ID | Persistent |
+| `admin_auth` | string | Admin session token | Session |
 
 ---
 
@@ -454,274 +850,295 @@ interface CartItem {
 ### Required Variables
 
 ```env
-# Mock API Toggle (NEW!)
-USE_MOCK_API=true                    # Set to 'false' for production
+# Network Configuration (Multi-Screen)
+# Next.js listens on all network interfaces
+# Package.json already configured with -H 0.0.0.0
 
-# WooCommerce Store URL
+# WooCommerce Store
 WC_STORE_URL=https://coffee-oasis.com.my
 NEXT_PUBLIC_WC_STORE_URL=https://coffee-oasis.com.my
 
 # WooCommerce API Credentials
-WC_CONSUMER_KEY=ck_4c68d57aa31e3939fec6fdb3cf7951898b709e79
-WC_CONSUMER_SECRET=cs_d914594329aa922603eea43a1568fd375bc99afd
+WC_CONSUMER_KEY=ck_xxxxxxxxxx
+WC_CONSUMER_SECRET=cs_xxxxxxxxxx
+
+# Database
+DATABASE_PATH=./database.sqlite
 ```
 
-### Environment Modes
+### Network Setup
 
-**Development (Mock API):**
-```env
-USE_MOCK_API=true
-```
-- Uses sample data (no real WooCommerce connection)
-- Fast responses, works offline
-- Perfect for frontend development
-
-**Production (Real API):**
-```env
-USE_MOCK_API=false
-```
-- Connects to real WooCommerce
-- Creates real orders and customers
-- Requires API credentials
-
-### Security Notes
-- Consumer key/secret are server-side only
-- Never expose in client-side code
-- Use `NEXT_PUBLIC_` prefix only for non-sensitive values
-- Rotate keys if compromised
-- Mock API should only be used in development
-
----
-
-## Mock API for Development
-
-### Overview
-The mock API allows development without connecting to the real WooCommerce API. Perfect for:
-- Frontend development
-- Testing without affecting production data
-- Working offline or when API is blocked
-- Faster iteration during development
-
-### Configuration
-
-**Enable Mock API:**
-```bash
-# In .env.local
-USE_MOCK_API=true
-```
-
-**Disable Mock API (use real WooCommerce):**
-```bash
-# In .env.local
-USE_MOCK_API=false
-```
-
-### Mock Data Included
-
-**Products (4 items):**
-- Latte - RM 12.50
-- Cappuccino - RM 11.00
-- Americano - RM 9.50
-- Mocha - RM 13.00
-
-**Features:**
-- Customer creation/lookup
-- Order creation with status transitions
-- Timer metadata for order tracking
-- All CRUD operations supported
-
-### Implementation
-
-**File:** `lib/mockWooClient.ts`
-
-The mock API implements the same interface as the real WooCommerce client:
-```typescript
+**package.json (already configured):**
+```json
 {
-  get(endpoint, params)
-  post(endpoint, payload)
-  put(endpoint, payload)
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0",
+    "start": "next start -H 0.0.0.0"
+  }
 }
 ```
 
-**Logging:**
-When mock API is active, you'll see:
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔧 WooCommerce API Configuration
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Mode: MOCK
-USE_MOCK_API env: true
-Store URL: https://coffee-oasis.com.my
-Using: Mock responses (no real orders)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-### Limitations
-- Mock orders are not saved to WordPress
-- No real payment processing
-- Limited product catalog (4 items)
-- No real customer accounts created
+This allows other devices to connect to the POS server over the network.
 
 ---
 
 ## Setup Instructions
 
-### Prerequisites
-- Node.js 18+
-- npm (comes with Node.js)
-- WooCommerce store with REST API enabled (only for production mode)
+### Quick Start (Single Device Development)
 
-### Option 1: Local Development
-
-1. **Clone repository:**
 ```bash
+# Clone repository
 git clone https://github.com/kayuwoody/ren1.git
 cd ren1
-```
 
-2. **Install dependencies:**
-```bash
+# Install dependencies
 npm install
-```
 
-3. **Configure environment:**
-```bash
-# Copy the existing .env.local or create one
-# For development with mock data:
-echo "USE_MOCK_API=true" > .env.local
-
-# Add WooCommerce credentials (even if using mock):
-echo "WC_STORE_URL=https://coffee-oasis.com.my" >> .env.local
-echo "WC_CONSUMER_KEY=ck_4c68d57aa31e3939fec6fdb3cf7951898b709e79" >> .env.local
-echo "WC_CONSUMER_SECRET=cs_d914594329aa922603eea43a1568fd375bc99afd" >> .env.local
-```
-
-4. **Run development server:**
-```bash
+# Run development server
 npm run dev
-```
 
-5. **Open browser:**
-```
+# Open browser
 http://localhost:3000
 ```
 
-You should see the API mode banner in your terminal:
-```
-🔧 WooCommerce API Configuration
-Mode: MOCK (or LIVE)
-```
+### Multi-Screen Production Setup
 
-### Option 2: GitHub Codespaces (Recommended)
-
-1. **Open in Codespaces:**
-   - Go to https://github.com/kayuwoody/ren1
-   - Click green "Code" button
-   - Select "Codespaces" tab
-   - Click "Create codespace on [branch]"
-
-2. **Wait for setup:**
-   - Devcontainer will automatically install dependencies
-   - Takes ~2-3 minutes on first launch
-
-3. **Configure environment:**
-   - The `.env.local` file already exists
-   - Set `USE_MOCK_API=true` for mock mode
-   - Set `USE_MOCK_API=false` for real API
-
-4. **Start dev server:**
+**1. POS Device (Main Server):**
 ```bash
-npm run dev
+# Install dependencies
+npm install
+
+# Build for production
+npm run build
+
+# Start server
+npm run start
+
+# Server now running on 0.0.0.0:3000
 ```
 
-5. **Access the app:**
-   - Codespaces will show a "Open in Browser" popup
-   - Or use the Ports tab to open port 3000
+**2. Find POS IP Address:**
+```bash
+# Linux/Mac
+ip addr show | grep inet
 
-**Note:** The real WooCommerce API works from GitHub Codespaces!
+# Windows
+ipconfig
 
-### WooCommerce Setup (Production Mode Only)
+# Example output: 192.168.1.100
+```
 
-1. Install WooCommerce plugin on WordPress
-2. Go to WooCommerce > Settings > Advanced > REST API
-3. Create API key with Read/Write permissions
-4. Copy Consumer Key and Consumer Secret to `.env.local`
-5. Set `USE_MOCK_API=false`
-6. Ensure CORS is enabled for your domain
-7. Whitelist Codespaces IP range if using Cloudflare/WAF
+**3. Connect Customer Display (Tablet):**
+```
+Open browser to: http://192.168.1.100:3000/customer-display
+
+Set to fullscreen/kiosk mode
+Disable sleep
+```
+
+**4. Connect Kitchen Display (Tablet):**
+```
+Open browser to: http://192.168.1.100:3000/kitchen
+
+Landscape orientation
+Fullscreen mode
+```
+
+**5. Verify Sync:**
+- Add item on POS
+- Should appear on customer display within 1 second
+- Should appear on kitchen display after payment
+
+### Database Setup
+
+```bash
+# Database file is created automatically on first run
+# Location: ./database.sqlite
+
+# To reset database (WARNING: Deletes all data)
+rm database.sqlite
+
+# Restart server to recreate
+npm run start
+```
 
 ---
 
 ## Future Enhancements
 
-### High Priority
-1. **Real Payment Integration** - Stripe, PayPal, or local gateway
-2. **Push Notifications** - Notify when order ready
-3. **Order Cancellation** - Allow users to cancel pending orders
-4. **Better Error Handling** - User-friendly error messages
-5. **Mobile App** - React Native or PWA
+### High Priority (Next Sprint)
+1. **Locker Integration** - Full implementation with assignment automation
+2. **Customer Self-Service App** - Let customers order and pay themselves
+3. **WebSocket Updates** - Replace polling with real-time push
+4. **Production Payment Gateway** - Full FiuuPay integration testing
+5. **Receipt Printing** - Thermal printer support
 
 ### Medium Priority
-6. **Admin Dashboard** - Kitchen display system
-7. **Inventory Management** - Track stock levels
-8. **Order Modifications** - Edit orders before processing
-9. **Loyalty Program** - Points/rewards system
-10. **Analytics** - Sales reports and insights
+6. **Staff Accounts** - Individual login tracking
+7. **Advanced Reporting** - Sales by period, product, category
+8. **Inventory Alerts** - Low stock notifications
+9. **Mobile POS** - Responsive admin on phone
+10. **Backup & Restore** - Database export/import
 
 ### Nice to Have
-11. **Multi-language Support** - i18n for Malay, Chinese
+11. **Multi-language** - Malay, Chinese support
 12. **Dark Mode** - Theme toggle
-13. **Order Scheduling** - Pre-order for pickup time
-14. **Favorites** - Save frequently ordered items
-15. **Split Payment** - Multiple payment methods
+13. **Order Scheduling** - Pre-orders with pickup time
+14. **Loyalty Integration** - Points redemption in cart
+15. **Split Payment** - Multiple payment methods per order
 
 ---
 
-## Technical Debt
+## Technical Debt & Notes for AI
 
-1. Replace polling with WebSockets for real-time updates
-2. Add comprehensive error boundaries
-3. Implement retry logic for failed API calls
-4. Add unit and integration tests
-5. Optimize bundle size (code splitting)
-6. Add loading skeletons for better UX
-7. Implement proper TypeScript types (replace `any`)
-8. Add API rate limiting
-9. Implement proper logging system
-10. Add accessibility (ARIA labels, keyboard navigation)
+### Known Issues to Address
+1. **In-Memory Cart Storage** - Resets on server restart
+   - Consider: Redis for production multi-instance
+   - Current: Acceptable for single-device setup
+
+2. **Polling vs WebSockets** - Multiple 1-10s intervals
+   - Customer display: 1s (cart sync)
+   - Kitchen display: 10s (order updates)
+   - Consider: Socket.io or Server-Sent Events
+
+3. **No Server Authentication** - Display endpoints open
+   - Current: Relies on local network security
+   - Consider: Token-based auth for displays
+
+4. **SQLite for Recipes** - Local file database
+   - Current: Works for single instance
+   - Consider: PostgreSQL for production
+
+### Code Quality Improvements
+1. Add TypeScript strict mode
+2. Replace `any` types with proper interfaces
+3. Add error boundaries
+4. Implement retry logic for API calls
+5. Add loading skeletons
+6. Add unit tests
+7. Add E2E tests with Playwright
+
+### Performance Optimizations
+1. Implement React Query for caching
+2. Add service worker for offline support
+3. Optimize bundle size (code splitting)
+4. Add image optimization
+5. Implement virtual scrolling for large lists
+
+### Security Enhancements
+1. Add CSRF protection
+2. Implement rate limiting
+3. Add input validation
+4. Sanitize user inputs
+5. Add security headers
+
+---
+
+## Important AI Helper Notes
+
+### When Working on This Codebase
+
+**Cart System:**
+- Cart items use `productId` (not `id`)
+- Price fields: `retailPrice` (original) and `finalPrice` (after discount)
+- Always calculate `finalPrice` when modifying discounts
+- Sync to server after every cart change for multi-device support
+
+**Hold Orders:**
+- Stored in localStorage, cleaned up after 4 hours
+- Auto-tags format: YYMMDD_H### (daily counter)
+- Use `loadCart()` to resume a held order
+- Clear current cart before loading held order
+
+**Multi-Screen:**
+- Customer display polls server every 1 second
+- Kitchen display polls every 10 seconds
+- All displays hide HeaderNav (check pathname)
+- Server runs on 0.0.0.0:3000 for network access
+
+**COGS & Recipes:**
+- SQLite database in `./database.sqlite`
+- Recipes link to WooCommerce product IDs
+- Materials have category, cost, unit, stock
+- Calculate COGS by summing all material costs
+
+**Discounts:**
+- Three types: percent, amount, override
+- Store reason for tracking
+- Update `finalPrice` immediately
+- Show visual indicators (strikethrough)
+
+**Admin Dashboard:**
+- Stats refresh on mount and manual refresh
+- Quick actions grouped by function
+- Removed redundant sections (Costs Overview)
+- Uses WooCommerce API for real-time data
+
+**Responsive Design:**
+- Products: 3-5 columns (mobile to desktop)
+- Customer display: Single column only
+- Kitchen display: 3-4 columns (landscape optimized)
+- Use Tailwind responsive classes
+
+**Key Files to Remember:**
+- `context/cartContext.tsx` - Cart state + server sync
+- `components/HoldOrderManager.tsx` - Hold order logic
+- `app/api/cart/current/route.ts` - Server-side cart storage
+- `components/HeaderNav.tsx` - Kiosk mode check
+- `lib/db.ts` - SQLite database connection
+
+### Common Pitfalls
+1. Don't forget to sync cart to server after updates
+2. Always check if HeaderNav should be hidden (pathname check)
+3. Calculate finalPrice when setting discounts
+4. Clean up intervals/timers in useEffect cleanup
+5. Handle empty/null states in customer display
 
 ---
 
 ## Changelog
 
-### Version 2.0.0 (October 23, 2025)
+### Version 3.0.0 (November 9, 2025)
+
+**🎉 Major New Features:**
+- Multi-screen POS system with network configuration
+- Hold Order system with auto-generated tags
+- Server-side cart syncing for cross-device updates
+- COGS calculation and recipe builder
+- Advanced discount system (percent/amount/override)
+- Customer display with mascot and kiosk mode
+- Kitchen display optimized for tablets
+- Admin dashboard with daily operational stats
+
+**🎨 UI/UX Improvements:**
+- Responsive grids for all displays
+- Mascot integration (Coffee Oasis unicorn)
+- Single column customer display
+- Compact kitchen display (3-4 columns)
+- Streamlined admin interface
+- Removed redundant sections
 
 **🐛 Bug Fixes:**
-- Fixed cart item property mismatch (item.id → item.productId)
-- Fixed home page navigation (/menu → /products)
-- Fixed devcontainer pnpm feature error
+- Fixed hydration error in customer display
+- Fixed cross-device cart sync issue
+- Standardized cart property names
+- Fixed network access configuration
 
-**✨ New Features:**
-- Added mock WooCommerce API for development
-- Added environment-based API switching (USE_MOCK_API)
-- Added enhanced API mode logging with visual banners
-- Added comprehensive .gitignore for Next.js
+**🗑️ Removed:**
+- Costs Overview page (redundant with Recipes)
+- Large Add Products button from POS
+- Redundant sidebar widgets
 
-**🧹 Cleanup:**
-- Removed 38 outdated/duplicate files
-- Cleaned duplicate app structure from context/ directory
-- Removed old savepoint archives and backup files
-- Removed outdated refactor documentation
-
-**✅ Verified:**
-- WooCommerce API works from GitHub Codespaces
-- Real orders successfully creating in production
-- All cart and checkout features operational
+### Version 2.0.0 (October 23, 2025)
+- Mock API for development
+- Cart property fixes
+- Navigation improvements
+- Codebase cleanup
 
 ### Version 1.0.0 (July 3, 2025)
-- Initial implementation
-- Basic POS features
+- Initial POS implementation
 - WooCommerce integration
+- Basic features
 
 ---
 
@@ -729,12 +1146,12 @@ npm run dev
 
 **Repository:** https://github.com/kayuwoody/ren1
 **Store:** https://coffee-oasis.com.my
-**Framework Docs:** https://nextjs.org/docs
+**Framework:** https://nextjs.org/docs
 **WooCommerce API:** https://woocommerce.github.io/woocommerce-rest-api-docs/
 
 ---
 
-**Last Updated:** October 23, 2025
-**Version:** 2.0.0
-**Status:** ✅ Production Ready (needs payment integration)
+**Last Updated:** November 9, 2025
+**Version:** 3.0.0
+**Status:** ✅ Production Ready (Staff/Admin App)
 **Author:** Coffee Oasis Team

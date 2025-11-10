@@ -18,6 +18,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
+import HoldOrderManager from '@/components/HoldOrderManager';
 
 /**
  * Point of Sale (POS) Interface
@@ -33,7 +34,7 @@ import Link from 'next/link';
 
 export default function POSPage() {
   const router = useRouter();
-  const { cartItems, clearCart, updateItemDiscount, removeFromCart } = useCart();
+  const { cartItems, clearCart, updateItemDiscount, removeFromCart, loadCart } = useCart();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
     isOpen: boolean;
@@ -226,25 +227,6 @@ export default function POSPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Actions */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Quick Action - Add Products */}
-            <Link
-              href="/products"
-              className="bg-white rounded-lg shadow-lg p-8 hover:shadow-xl transition group"
-            >
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-4 bg-green-100 rounded-lg group-hover:bg-green-200 transition">
-                  <Plus className="w-8 h-8 text-green-700" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold">Add Products</h2>
-                  <p className="text-gray-600">Browse menu and add to cart</p>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500">
-                Select products from the menu to build the customer's order
-              </p>
-            </Link>
-
             {/* Current Order Summary */}
             {cartItems.length > 0 && (
               <div className="bg-white rounded-lg shadow">
@@ -421,6 +403,14 @@ export default function POSPage() {
               </div>
             )}
 
+            {/* Hold Order Manager - Always visible */}
+            <HoldOrderManager
+              currentCart={cartItems}
+              currentTotal={finalTotal}
+              onHoldComplete={clearCart}
+              onResumeOrder={loadCart}
+            />
+
             {/* Empty State */}
             {cartItems.length === 0 && (
               <div className="bg-white rounded-lg shadow p-12 text-center">
@@ -429,7 +419,7 @@ export default function POSPage() {
                   No items in cart
                 </h3>
                 <p className="text-gray-500 mb-6">
-                  Click "New Order" to start adding products
+                  Use the Products menu to start adding items
                 </p>
                 <Link
                   href="/products"
@@ -442,85 +432,35 @@ export default function POSPage() {
             )}
           </div>
 
-          {/* Right Column - Quick Stats & Tips */}
+          {/* Right Column - Quick Actions */}
           <div className="space-y-4">
-            {/* Quick Stats */}
+            {/* Quick Actions */}
             <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-gray-600" />
-                Order Summary
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Items:</span>
-                  <span className="font-semibold">{totalItems}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Retail Total:</span>
-                  <span className="font-semibold">RM {retailTotal.toFixed(2)}</span>
-                </div>
-                {totalDiscount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-green-600">Discounts:</span>
-                    <span className="font-semibold text-green-600">
-                      -RM {totalDiscount.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between text-lg font-bold border-t pt-2">
-                  <span>Final Total:</span>
-                  <span className="text-green-700">RM {finalTotal.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Staff Tips */}
-            <div className="bg-blue-50 rounded-lg p-6">
-              <h3 className="font-semibold text-blue-900 mb-3">Staff Tips</h3>
-              <ul className="text-sm text-blue-800 space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-0.5">•</span>
-                  <span>Apply discounts at checkout using quick buttons or custom amounts</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-0.5">•</span>
-                  <span>Always add a reason when applying discounts for tracking</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-0.5">•</span>
-                  <span>Use price override for special combo deals</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-0.5">•</span>
-                  <span>Review the order before proceeding to payment</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Keyboard Shortcuts */}
-            <div className="bg-gray-100 rounded-lg p-6">
-              <h3 className="font-semibold text-gray-900 mb-3 text-sm">
+              <h3 className="font-semibold text-gray-900 mb-4">
                 Quick Actions
               </h3>
-              <div className="space-y-2 text-xs text-gray-700">
-                <div className="flex justify-between">
-                  <span>Add Products:</span>
-                  <Link href="/products" className="text-blue-600 hover:underline">
-                    Browse Menu
-                  </Link>
-                </div>
-                <div className="flex justify-between">
-                  <span>Kitchen Display:</span>
-                  <Link href="/kitchen" className="text-blue-600 hover:underline">
-                    View Orders
-                  </Link>
-                </div>
-                <div className="flex justify-between">
-                  <span>Dashboard:</span>
-                  <Link href="/admin" className="text-blue-600 hover:underline">
-                    Back to Admin
-                  </Link>
-                </div>
+              <div className="space-y-3 text-sm text-gray-700">
+                <Link
+                  href="/products"
+                  className="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <span>Browse Menu</span>
+                  <span className="text-blue-600">→</span>
+                </Link>
+                <Link
+                  href="/kitchen"
+                  className="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <span>Kitchen Display</span>
+                  <span className="text-blue-600">→</span>
+                </Link>
+                <Link
+                  href="/admin"
+                  className="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-gray-50 transition"
+                >
+                  <span>Admin Dashboard</span>
+                  <span className="text-blue-600">→</span>
+                </Link>
               </div>
             </div>
           </div>

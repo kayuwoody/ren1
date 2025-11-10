@@ -11,6 +11,7 @@ interface Product {
   currentPrice: number;
   supplierCost: number;
   unitCost: number;
+  comboPriceOverride?: number;
 }
 
 interface Material {
@@ -59,6 +60,8 @@ export default function RecipesPage() {
   const [productSearch, setProductSearch] = useState('');
   const [editingCost, setEditingCost] = useState(false);
   const [newUnitCost, setNewUnitCost] = useState('');
+  const [editingComboPrice, setEditingComboPrice] = useState(false);
+  const [newComboPrice, setNewComboPrice] = useState('');
 
   useEffect(() => {
     fetchProducts();
@@ -200,6 +203,49 @@ export default function RecipesPage() {
     } catch (error) {
       console.error('Failed to update cost:', error);
       alert('Failed to update cost. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateComboPrice() {
+    if (!selectedProduct) return;
+
+    // Allow empty value to clear the override
+    const price = newComboPrice === '' ? null : parseFloat(newComboPrice);
+    if (price !== null && (isNaN(price) || price < 0)) {
+      alert('Please enter a valid price (0 or greater), or leave empty to remove override');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/products/${selectedProduct.id}/combo-price`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comboPriceOverride: price }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update combo price override');
+      }
+
+      // Update local state
+      setSelectedProduct({ ...selectedProduct, comboPriceOverride: price || undefined });
+      setProducts(products.map(p =>
+        p.id === selectedProduct.id ? { ...p, comboPriceOverride: price || undefined } : p
+      ));
+
+      setEditingComboPrice(false);
+      setNewComboPrice('');
+      if (price !== null) {
+        alert(`Combo price override set to RM ${price.toFixed(2)}`);
+      } else {
+        alert('Combo price override removed');
+      }
+    } catch (error) {
+      console.error('Failed to update combo price:', error);
+      alert('Failed to update combo price. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -413,6 +459,26 @@ export default function RecipesPage() {
                   <div>
                     <p className="text-sm text-gray-500">Selling Price</p>
                     <p className="text-lg font-semibold">RM {selectedProduct.currentPrice.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Combo Override</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-lg font-semibold ${selectedProduct.comboPriceOverride ? 'text-purple-600' : 'text-gray-400'}`}>
+                        {selectedProduct.comboPriceOverride
+                          ? `RM ${selectedProduct.comboPriceOverride.toFixed(2)}`
+                          : 'Not set'}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setNewComboPrice(selectedProduct.comboPriceOverride?.toString() || '');
+                          setEditingComboPrice(true);
+                        }}
+                        className="text-purple-600 hover:text-purple-800"
+                        title="Edit combo price override"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Supplier Cost</p>
@@ -640,6 +706,72 @@ export default function RecipesPage() {
                   onClick={updateUnitCost}
                   disabled={saving}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Combo Price Override Modal */}
+        {editingComboPrice && selectedProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-xl font-semibold mb-4">Combo Price Override</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Set a fixed price for <strong>{selectedProduct.name}</strong> when sold as a combo/bundle.
+                <br />
+                <strong>When set:</strong> This exact price will be charged regardless of customer selections.
+                <br />
+                <strong>When empty:</strong> Normal calculation applies (base price + add-ons).
+              </p>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Combo Price (RM)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newComboPrice}
+                  onChange={(e) => setNewComboPrice(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Leave empty to remove override"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Current: {selectedProduct.comboPriceOverride
+                    ? `RM ${selectedProduct.comboPriceOverride.toFixed(2)}`
+                    : 'Not set (using normal calculation)'}
+                </p>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-purple-800">
+                  <strong>Examples:</strong>
+                  <br />• 3 Pies Combo (any 3 pies): RM 24.00
+                  <br />• Coffee + Danish Combo: RM 9.99
+                  <br />• Buy 2 Get 1 Free Deal: RM 16.00
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setEditingComboPrice(false);
+                    setNewComboPrice('');
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateComboPrice}
+                  disabled={saving}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : 'Save'}
                 </button>

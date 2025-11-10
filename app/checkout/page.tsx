@@ -11,6 +11,7 @@ export default function CheckoutPage() {
   const { cartItems, removeFromCart, updateItemDiscount } = useCart();
   const [error, setError] = useState("");
   const [isStaffMode, setIsStaffMode] = useState(false);
+  const [expandedBundles, setExpandedBundles] = useState<Record<number, any[]>>({});
   const [discountModal, setDiscountModal] = useState<{
     isOpen: boolean;
     itemIndex: number | null;
@@ -31,6 +32,63 @@ export default function CheckoutPage() {
     const authToken = sessionStorage.getItem('admin_auth');
     setIsStaffMode(authToken === 'authenticated');
   }, []);
+
+  // Fetch expanded bundles for items with bundle configuration
+  useEffect(() => {
+    const fetchExpandedBundles = async () => {
+      const newExpanded: Record<number, any[]> = {};
+
+      console.log('🔍 Fetching expanded bundles for cart items:', cartItems.length);
+
+      for (const item of cartItems) {
+        console.log('  📦 Item:', {
+          productId: item.productId,
+          name: item.name,
+          hasBundle: !!item.bundle
+        });
+
+        if (item.bundle) {
+          try {
+            console.log('    🔗 Fetching expansion for:', {
+              baseProductId: item.bundle.baseProductId,
+              selectedMandatory: item.bundle.selectedMandatory,
+              selectedOptional: item.bundle.selectedOptional,
+            });
+
+            const response = await fetch('/api/bundles/expand', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                wcProductId: item.bundle.baseProductId,
+                bundleSelection: {
+                  selectedMandatory: item.bundle.selectedMandatory,
+                  selectedOptional: item.bundle.selectedOptional,
+                },
+                quantity: item.quantity,
+              }),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              console.log('    ✅ Got components:', data.components);
+              newExpanded[item.productId] = data.components || [];
+            } else {
+              console.error('    ❌ Failed to fetch:', response.status);
+            }
+          } catch (err) {
+            console.error('    ❌ Error fetching expanded bundle:', err);
+          }
+        }
+      }
+
+      console.log('📦 Final expanded bundles:', newExpanded);
+      setExpandedBundles(newExpanded);
+    };
+
+    if (cartItems.length > 0) {
+      fetchExpandedBundles();
+    }
+  }, [cartItems]);
 
   // Calculate totals
   const retailTotal = cartItems.reduce(
@@ -151,6 +209,15 @@ export default function CheckoutPage() {
               const hasDiscount = item.finalPrice < item.retailPrice;
               const itemDiscount = (item.retailPrice - item.finalPrice) * item.quantity;
 
+              // Get expanded components from state
+              const expandedComponents = expandedBundles[item.productId] || [];
+              console.log(`🎨 Rendering item ${item.name}:`, {
+                productId: item.productId,
+                hasBundle: !!item.bundle,
+                componentsCount: expandedComponents.length,
+                components: expandedComponents
+              });
+
               return (
                 <div key={index} className="bg-white border rounded-lg p-4">
                   {/* Item header */}
@@ -158,6 +225,18 @@ export default function CheckoutPage() {
                     <div className="flex-1">
                       <p className="font-semibold text-lg">{item.name}</p>
                       <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+
+                      {/* Show expanded components */}
+                      {expandedComponents.length > 0 && (
+                        <div className="mt-2 ml-4 space-y-1">
+                          {expandedComponents.map((component, idx) => (
+                            <div key={idx} className="text-sm text-gray-600 flex items-start">
+                              <span className="mr-2">→</span>
+                              <span>{component.productName} × {component.quantity}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={() => removeFromCart(index)}

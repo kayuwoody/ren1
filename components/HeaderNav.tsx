@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useCart } from "@/context/cartContext";
 import { Settings, Coffee, ShoppingCart, Clock, ChevronDown, Shield } from "lucide-react";
@@ -20,10 +21,16 @@ interface OrderStatus {
 }
 
 export default function HeaderNav() {
+  const pathname = usePathname();
   const { cartItems } = useCart();
   const [activeOrders, setActiveOrders] = useState<OrderStatus[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Hide navigation on kiosk-mode pages (customer display, kitchen display)
+  if (pathname === '/customer-display' || pathname === '/kitchen') {
+    return null;
+  }
 
   // Fetch status for all active orders
   useEffect(() => {

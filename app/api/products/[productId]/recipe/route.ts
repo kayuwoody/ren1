@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getProduct, getProductByWcId } from '@/lib/db/productService';
 import { getProductRecipe } from '@/lib/db/recipeService';
+import { flattenAllChoices } from '@/lib/db/recursiveProductExpansion';
 import { handleApiError, notFoundError } from '@/lib/api/error-handler';
 
 /**
  * GET /api/products/[productId]/recipe
  *
  * Fetch a product's recipe configuration including:
- * - Mandatory items (must be selected)
- * - Optional items (can be added)
- * - Selection groups (XOR choices - e.g., Hot vs Iced)
+ * - ALL XOR groups from ALL nesting levels (flattened)
+ * - Optional items from all levels
  *
- * Used by product selection UI to determine if a modal is needed
+ * This enables the modal to show all choices at once, even if they come from nested products.
  */
 export async function GET(
   req: Request,
@@ -27,46 +27,46 @@ export async function GET(
       return notFoundError('Product not found', '/api/products/[productId]/recipe');
     }
 
-    // Get recipe
-    const recipe = getProductRecipe(product.id);
-
     console.log(`\n🔍 Product: ${product.name} (${product.id})`);
-    console.log(`📋 Recipe items found: ${recipe.length}`);
-    recipe.forEach((item, idx) => {
-      console.log(`  ${idx + 1}. ${item.itemType}: ${item.linkedProductName || item.materialName} | Optional: ${item.isOptional} | SelectionGroup: ${item.selectionGroup || 'none'}`);
-    });
 
-    // Group items by type and selection group
-    const mandatoryGroups: Record<string, typeof recipe> = {};
-    const mandatoryIndividual: typeof recipe = [];
-    const optional: typeof recipe = [];
+    // Flatten ALL choices from ALL nesting levels
+    const { xorGroups, optionalItems } = flattenAllChoices(product.id);
 
-    recipe.forEach((item) => {
-      if (item.isOptional) {
-        optional.push(item);
-      } else if (item.selectionGroup) {
-        // Mandatory item with selection group (XOR choice)
-        if (!mandatoryGroups[item.selectionGroup]) {
-          mandatoryGroups[item.selectionGroup] = [];
+    // Get mandatory individual items at root level (for display purposes)
+    // BUT exclude any that have nested XOR groups (those are already shown in the flattened groups)
+    const rootRecipe = getProductRecipe(product.id);
+
+    // Find which products have nested XOR groups
+    const productsWithNestedXORs = new Set<string>();
+    rootRecipe.forEach(item => {
+      if (item.itemType === 'product' && item.linkedProductId && !item.selectionGroup && !item.isOptional) {
+        // Check if this linked product has XOR groups
+        const nestedResult = flattenAllChoices(item.linkedProductId, 1);
+        if (nestedResult.xorGroups.length > 0) {
+          productsWithNestedXORs.add(item.linkedProductId);
         }
-        mandatoryGroups[item.selectionGroup].push(item);
-      } else {
-        // Mandatory item without selection group (always included)
-        mandatoryIndividual.push(item);
       }
     });
 
-    // Determine if modal is needed
-    const needsModal =
-      Object.keys(mandatoryGroups).length > 0 || optional.length > 0;
+    // Only include mandatory individuals that DON'T have nested XOR groups
+    const mandatoryIndividual = rootRecipe.filter(
+      item =>
+        !item.isOptional &&
+        !item.selectionGroup &&
+        item.itemType === 'product' &&
+        !productsWithNestedXORs.has(item.linkedProductId || '')
+    );
 
-    console.log(`\n📊 Grouping results:`);
-    console.log(`  Mandatory groups: ${Object.keys(mandatoryGroups).length}`);
-    Object.entries(mandatoryGroups).forEach(([groupName, items]) => {
-      console.log(`    - ${groupName}: ${items.length} items`);
+    // Determine if modal is needed
+    const needsModal = xorGroups.length > 0 || optionalItems.length > 0;
+
+    console.log(`\n📊 Flattened recipe for modal:`);
+    console.log(`  XOR Groups: ${xorGroups.length}`);
+    xorGroups.forEach(g => {
+      console.log(`    - ${g.displayName} (${g.uniqueKey}): ${g.items.length} items`);
     });
+    console.log(`  Optional: ${optionalItems.length}`);
     console.log(`  Mandatory individual: ${mandatoryIndividual.length}`);
-    console.log(`  Optional: ${optional.length}`);
     console.log(`  ✅ needsModal: ${needsModal}\n`);
 
     return NextResponse.json({
@@ -78,33 +78,16 @@ export async function GET(
         sku: product.sku,
         basePrice: product.basePrice,
         unitCost: product.unitCost,
+        comboPriceOverride: product.comboPriceOverride,
       },
       recipe: {
-        mandatoryGroups: Object.entries(mandatoryGroups).map(
-          ([groupName, items]) => ({
-            groupName,
-            items: items.map((item) => {
-              let priceAdjustment = 0;
-              // For linked products, get their basePrice
-              if (item.itemType === 'product' && item.linkedProductId) {
-                const linkedProd = getProduct(item.linkedProductId);
-                if (linkedProd) {
-                  priceAdjustment = linkedProd.basePrice * item.quantity;
-                }
-              }
-              return {
-                id: item.linkedProductId || item.materialId,
-                type: item.itemType,
-                name: item.linkedProductName || item.materialName,
-                sku: item.linkedProductSku,
-                quantity: item.quantity,
-                unit: item.unit,
-                cost: item.calculatedCost,
-                priceAdjustment,
-              };
-            }),
-          })
-        ),
+        // XOR groups from all nesting levels, flattened
+        mandatoryGroups: xorGroups.map(group => ({
+          uniqueKey: group.uniqueKey,
+          groupName: group.displayName, // Use display name for UI
+          items: group.items,
+        })),
+        // Mandatory individual items (root level only, for display)
         mandatoryIndividual: mandatoryIndividual.map((item) => ({
           id: item.linkedProductId || item.materialId,
           type: item.itemType,
@@ -114,26 +97,8 @@ export async function GET(
           unit: item.unit,
           cost: item.calculatedCost,
         })),
-        optional: optional.map((item) => {
-          let priceAdjustment = 0;
-          // For linked products, get their basePrice
-          if (item.itemType === 'product' && item.linkedProductId) {
-            const linkedProd = getProduct(item.linkedProductId);
-            if (linkedProd) {
-              priceAdjustment = linkedProd.basePrice * item.quantity;
-            }
-          }
-          return {
-            id: item.linkedProductId || item.materialId,
-            type: item.itemType,
-            name: item.linkedProductName || item.materialName,
-            sku: item.linkedProductSku,
-            quantity: item.quantity,
-            unit: item.unit,
-            cost: item.calculatedCost,
-            priceAdjustment,
-          };
-        }),
+        // Optional items from all levels
+        optional: optionalItems,
       },
       needsModal,
     });

@@ -43,14 +43,25 @@ const ProductListPage: React.FC = () => {
 
     try {
       // Fetch recipe configuration
+      console.log(`🔍 Fetching recipe for "${product.name}" (WC ID: ${product.id})`);
       const response = await fetch(`/api/products/${product.id}/recipe`);
       const data = await response.json();
 
+      console.log(`📋 Recipe response:`, {
+        success: data.success,
+        needsModal: data.needsModal,
+        mandatoryGroups: data.recipe?.mandatoryGroups?.length || 0,
+        optional: data.recipe?.optional?.length || 0,
+        mandatoryIndividual: data.recipe?.mandatoryIndividual?.length || 0,
+      });
+
       if (data.success && data.needsModal) {
         // Product has mandatory selections or optional add-ons - show modal
+        console.log(`✅ Showing modal for "${product.name}"`);
         setModalData(data);
       } else {
         // Simple product - add directly to cart
+        console.log(`➡️  Adding "${product.name}" directly to cart (no modal needed)`);
         addToCart({
           productId: product.id,
           name: product.name,
@@ -80,6 +91,13 @@ const ProductListPage: React.FC = () => {
 
   const handleModalAddToCart = (bundle: any) => {
     // Add bundle to cart
+    console.log(`🛒 Adding bundle to cart:`, {
+      displayName: bundle.displayName,
+      baseProductId: bundle.baseProduct.id,
+      selectedMandatory: bundle.selectedMandatory,
+      selectedOptional: bundle.selectedOptional,
+    });
+
     addToCart({
       productId: bundle.baseProduct.id,
       name: bundle.displayName,
@@ -237,8 +255,8 @@ const ProductListPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Responsive grid: 1 col mobile, 2 cols tablet, 3 cols desktop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Responsive grid: 3 col mobile, 4 cols tablet, 5 cols desktop */}
+      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {filteredProducts.map(product => {
           const isOutOfStock = product.manage_stock && (product.stock_quantity ?? 0) === 0;
           return (

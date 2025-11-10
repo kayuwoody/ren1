@@ -28,6 +28,7 @@ interface CartContextType {
     reason?: string
   }) => void;
   clearCart: () => void;
+  loadCart: (items: CartItem[]) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -119,6 +120,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(cartItems));
     console.log('💾 Saved cart to localStorage:', cartItems);
+
+    // Sync to server for cross-device updates (customer display)
+    fetch('/api/cart/current', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cart: cartItems })
+    }).catch(err => console.error('Failed to sync cart to server:', err));
 
     // Dispatch custom event for same-tab updates
     window.dispatchEvent(new CustomEvent('cart-updated', { detail: cartItems }));
@@ -218,8 +226,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('cart');
   };
 
+  const loadCart = (items: CartItem[]) => {
+    console.log('📥 Loading cart with', items.length, 'items');
+    setCartItems(items);
+    localStorage.setItem('cart', JSON.stringify(items));
+  };
+
   return (
-    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateItemDiscount, clearCart }}>
+    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateItemDiscount, clearCart, loadCart }}>
       {children}
     </CartContext.Provider>
   );

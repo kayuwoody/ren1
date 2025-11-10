@@ -14,6 +14,7 @@ export interface Product {
   supplierCost: number;
   unitCost: number;
   stockQuantity: number;
+  comboPriceOverride?: number;
   imageUrl?: string;
   createdAt: string;
   updatedAt: string;

@@ -154,10 +154,14 @@ export function recordProductSale(
       return;
     }
 
-    // Handle bundle selection filtering (only at depth 0 - the main product)
-    if (depth === 0 && bundleSelection && recipeItem.selectionGroup) {
-      // This item is part of a selection group (XOR choice like Hot vs Iced)
-      const selectedItemId = bundleSelection.selectedMandatory[recipeItem.selectionGroup];
+    // Handle bundle selection filtering (works at all depths with unified selection format)
+    if (bundleSelection && recipeItem.selectionGroup) {
+      // Generate the uniqueKey for this selection group
+      // At root level: "root:groupName"
+      // At nested levels: "productId:groupName"
+      const uniqueKey = depth === 0 ? `root:${recipeItem.selectionGroup}` : `${productId}:${recipeItem.selectionGroup}`;
+
+      const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
 
       // Check if this specific item was selected
       const isSelected = recipeItem.linkedProductId === selectedItemId;
@@ -232,20 +236,76 @@ export function recordProductSale(
       consumptions.push(consumption);
       deductMaterialStock(recipeItem.materialId, quantityConsumed);
     } else if (recipeItem.itemType === 'product' && recipeItem.linkedProductId) {
-      // Linked product - recursively process its recipe (don't record the link itself)
+      // Linked product - record the product itself AND recursively process its materials
       console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
 
       // Get the linked product to find its WC ID
       const linkedProduct = getProduct(recipeItem.linkedProductId);
       if (linkedProduct && linkedProduct.wcId) {
-        // Recursively process the linked product's materials
+        // First, record the linked product itself as a consumption entry (for visibility only - cost tracked via materials)
+        // This allows reports to show "1x Americano" as part of the combo
+        // Cost is set to 0 to avoid double-counting (actual costs come from recursive material expansion)
+        const consumptionId = uuidv4();
+        const linkedProductConsumption: InventoryConsumption = {
+          id: consumptionId,
+          orderId,
+          orderItemId,
+          productId,
+          productName,
+          productSku: product.sku,
+          quantitySold,
+          itemType: 'product',
+          materialId: undefined,
+          linkedProductId: recipeItem.linkedProductId,
+          materialName: undefined,
+          linkedProductName: recipeItem.linkedProductName,
+          quantityConsumed,
+          unit: 'unit',
+          costPerUnit: 0, // Cost is 0 - actual cost tracked via materials below
+          totalCost: 0,   // Cost is 0 - actual cost tracked via materials below
+          consumedAt: now,
+        };
+
+        // Insert the linked product consumption record
+        const stmt = db.prepare(`
+          INSERT INTO InventoryConsumption
+          (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
+           materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
+           unit, costPerUnit, totalCost, consumedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        stmt.run(
+          consumptionId,
+          orderId,
+          orderItemId || null,
+          productId,
+          productName,
+          quantitySold,
+          'product',
+          null,
+          recipeItem.linkedProductId,
+          null,
+          recipeItem.linkedProductName,
+          quantityConsumed,
+          'unit',
+          0, // Cost is 0 - actual cost tracked via materials
+          0, // Cost is 0 - actual cost tracked via materials
+          now
+        );
+
+        console.log(`${indent}      💾 Stored linked product (visibility only): ${recipeItem.linkedProductName} x${quantityConsumed}`);
+        consumptions.push(linkedProductConsumption);
+
+        // Then recursively process the linked product's materials
+        // Pass bundleSelection through so nested XOR choices are respected
         const linkedConsumptions = recordProductSale(
           orderId,
           linkedProduct.wcId,
           linkedProduct.name,
           quantityConsumed,
           orderItemId,
-          undefined,  // Don't pass bundle selection to nested products
+          bundleSelection,  // Pass selections through to handle nested XORs
           depth + 1,
           chain
         );
@@ -488,10 +548,11 @@ export function calculateProductCOGS(
   recipe
     .filter(item => !item.isOptional)
     .forEach(item => {
-      // Handle bundle selection filtering (only at depth 0 - the main product)
-      if (depth === 0 && bundleSelection && item.selectionGroup) {
-        // This item is part of a selection group (XOR choice like Hot vs Iced)
-        const selectedItemId = bundleSelection.selectedMandatory[item.selectionGroup];
+      // Handle bundle selection filtering (works at all depths with unified selection format)
+      if (bundleSelection && item.selectionGroup) {
+        // Generate the uniqueKey for this selection group
+        const uniqueKey = depth === 0 ? `root:${item.selectionGroup}` : `${product.id}:${item.selectionGroup}`;
+        const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
 
         // Check if this specific item was selected
         const isSelected = item.linkedProductId === selectedItemId;
@@ -516,14 +577,28 @@ export function calculateProductCOGS(
           productChain: chain,
         });
       } else if (item.itemType === 'product' && item.linkedProductId) {
-        // Linked product - recursively expand its materials
+        // Linked product - add product entry for visibility, then recursively expand its materials
         const linkedProduct = getProduct(item.linkedProductId);
         if (linkedProduct && linkedProduct.wcId) {
-          // Don't pass bundleSelection to nested calls - only filter at top level
+          // Add the linked product itself to the breakdown for reporting visibility
+          // Cost is 0 to avoid double-counting (actual costs come from recursive expansion below)
+          breakdown.push({
+            itemType: 'product',
+            itemId: item.linkedProductId,
+            itemName: item.linkedProductName || linkedProduct.name,
+            quantityUsed: item.quantity * quantity,
+            unit: 'unit',
+            costPerUnit: 0, // Cost is 0 - actual cost tracked via materials
+            totalCost: 0,   // Cost is 0 - actual cost tracked via materials
+            depth,
+            productChain: chain,
+          });
+
+          // Pass bundleSelection through to handle nested XORs
           const linkedCOGS = calculateProductCOGS(
             linkedProduct.wcId,
             item.quantity * quantity,
-            undefined, // Clear bundle selection for nested products
+            bundleSelection, // Pass selections through
             depth + 1,
             chain
           );

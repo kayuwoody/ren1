@@ -150,6 +150,21 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Migration: Add comboPriceOverride column to Product table if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const hasComboPriceOverride = tableInfo.some((col: any) => col.name === 'comboPriceOverride');
+
+    if (tableInfo.length > 0 && !hasComboPriceOverride) {
+      console.log('🔄 Adding comboPriceOverride column to Product table...');
+      db.exec(`ALTER TABLE Product ADD COLUMN comboPriceOverride REAL`);
+      console.log('✅ comboPriceOverride column added');
+      console.log('📝 Note: When set, this override price is used instead of calculated price (base + add-ons)');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
   // Material Price History (audit trail for cost changes)
   db.exec(`
     CREATE TABLE IF NOT EXISTS MaterialPriceHistory (
