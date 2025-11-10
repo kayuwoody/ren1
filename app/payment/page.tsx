@@ -70,6 +70,13 @@ export default function PaymentPage() {
                 { key: "_bundle_mandatory", value: JSON.stringify(item.bundle.selectedMandatory) },
                 { key: "_bundle_optional", value: JSON.stringify(item.bundle.selectedOptional) }
               );
+
+              // Store expanded components (already fetched at add-to-cart time)
+              if (item.components) {
+                meta_data.push(
+                  { key: "_bundle_components", value: JSON.stringify(item.components) }
+                );
+              }
             }
 
             return {
