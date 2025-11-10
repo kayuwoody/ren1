@@ -38,9 +38,23 @@ export default function CheckoutPage() {
     const fetchExpandedBundles = async () => {
       const newExpanded: Record<number, any[]> = {};
 
+      console.log('🔍 Fetching expanded bundles for cart items:', cartItems.length);
+
       for (const item of cartItems) {
+        console.log('  📦 Item:', {
+          productId: item.productId,
+          name: item.name,
+          hasBundle: !!item.bundle
+        });
+
         if (item.bundle) {
           try {
+            console.log('    🔗 Fetching expansion for:', {
+              baseProductId: item.bundle.baseProductId,
+              selectedMandatory: item.bundle.selectedMandatory,
+              selectedOptional: item.bundle.selectedOptional,
+            });
+
             const response = await fetch('/api/bundles/expand', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -56,14 +70,18 @@ export default function CheckoutPage() {
 
             if (response.ok) {
               const data = await response.json();
+              console.log('    ✅ Got components:', data.components);
               newExpanded[item.productId] = data.components || [];
+            } else {
+              console.error('    ❌ Failed to fetch:', response.status);
             }
           } catch (err) {
-            console.error('Error fetching expanded bundle:', err);
+            console.error('    ❌ Error fetching expanded bundle:', err);
           }
         }
       }
 
+      console.log('📦 Final expanded bundles:', newExpanded);
       setExpandedBundles(newExpanded);
     };
 
@@ -193,6 +211,12 @@ export default function CheckoutPage() {
 
               // Get expanded components from state
               const expandedComponents = expandedBundles[item.productId] || [];
+              console.log(`🎨 Rendering item ${item.name}:`, {
+                productId: item.productId,
+                hasBundle: !!item.bundle,
+                componentsCount: expandedComponents.length,
+                components: expandedComponents
+              });
 
               return (
                 <div key={index} className="bg-white border rounded-lg p-4">
