@@ -360,9 +360,16 @@ export function getSelectedComponents(
     const linkedHasXORGroups = linkedRecipe.some(r => r.selectionGroup);
     const linkedHasProducts = linkedRecipe.some(r => r.itemType === 'product');
 
+    console.log(`  🔍 Checking linked product "${linkedProd.name}" (depth=${depth}):`, {
+      hasXORGroups: linkedHasXORGroups,
+      hasProducts: linkedHasProducts,
+      recipeItems: linkedRecipe.map(r => `${r.itemType}:${r.linkedProductName || r.materialName}`)
+    });
+
     // Only recurse if the linked product has XOR groups OR other products
     // Don't recurse if it only has materials (leaf product from user's perspective)
     if (linkedHasXORGroups || linkedHasProducts) {
+      console.log(`    ↪️  Recursing into "${linkedProd.name}"`);
       // This product has nested choices/products - recurse to get the actual selected items
       const nestedComponents = getSelectedComponents(
         item.linkedProductId,
@@ -371,11 +378,14 @@ export function getSelectedComponents(
         depth + 1
       );
 
+      console.log(`    ⬆️  Recursion returned ${nestedComponents.length} components:`, nestedComponents.map(c => c.productName));
+
       // If recursion found components, use those. Otherwise, use this product.
       if (nestedComponents.length > 0) {
         components.push(...nestedComponents);
       } else {
         // No nested components found, add this product as-is
+        console.log(`    ✅ Adding "${linkedProd.name}" (no nested components found)`);
         components.push({
           productId: linkedProd.id,
           productName: linkedProd.name,
@@ -384,6 +394,7 @@ export function getSelectedComponents(
       }
     } else {
       // This is a leaf product (only has materials) - add it directly, don't expand into materials
+      console.log(`    ✅ Adding leaf product "${linkedProd.name}" (only has materials)`);
       components.push({
         productId: linkedProd.id,
         productName: linkedProd.name,
