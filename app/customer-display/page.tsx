@@ -7,6 +7,7 @@ export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
 
   // Fix hydration error - only show time after mount
   useEffect(() => {
@@ -24,24 +25,26 @@ export default function CustomerDisplayPage() {
   // Listen for cart updates via Server-Sent Events (push-based, no polling)
   useEffect(() => {
     console.log('📺 Customer Display: Connecting to cart updates stream...');
+    setConnectionStatus('connecting');
 
     // Connect to SSE endpoint
     const eventSource = new EventSource('/api/cart/stream');
 
     eventSource.onopen = () => {
-      console.log('📺 Customer Display: Connected to cart stream');
+      console.log('📺 Customer Display: ✅ Connected to cart stream');
+      setConnectionStatus('connected');
     };
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('📺 Customer Display: Received event:', data.type);
+        console.log('📺 Customer Display: Received event:', data.type, new Date().toISOString());
 
         if (data.type === 'cart-update') {
           setCartItems(data.cart || []);
           console.log('📺 Customer Display: Updated cart with', data.cart?.length || 0, 'items');
         } else if (data.type === 'connected') {
-          console.log('📺 Customer Display: Connection confirmed');
+          console.log('📺 Customer Display: Connection confirmed by server');
           // Fetch initial cart state
           fetch('/api/cart/current')
             .then(res => res.json())
@@ -57,13 +60,16 @@ export default function CustomerDisplayPage() {
     };
 
     eventSource.onerror = (error) => {
-      console.error('📺 Customer Display: SSE connection error:', error);
+      console.error('📺 Customer Display: ❌ SSE connection error:', error);
+      console.log('📺 Customer Display: Ready state:', eventSource.readyState);
+      setConnectionStatus('disconnected');
       // EventSource will automatically attempt to reconnect
     };
 
     return () => {
-      console.log('📺 Customer Display: Disconnecting from cart stream');
+      console.log('📺 Customer Display: 🔌 Disconnecting from cart stream (component unmount)');
       eventSource.close();
+      setConnectionStatus('disconnected');
     };
   }, []);
 
@@ -94,6 +100,19 @@ export default function CustomerDisplayPage() {
             </div>
           </div>
           <div className="text-right">
+            {/* Connection Status Indicator */}
+            <div className="mb-2 flex items-center justify-end gap-2">
+              <div className={`w-2 h-2 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-green-500' :
+                connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                'bg-red-500'
+              }`} />
+              <span className="text-xs text-gray-500">
+                {connectionStatus === 'connected' ? 'Live' :
+                 connectionStatus === 'connecting' ? 'Connecting...' :
+                 'Disconnected'}
+              </span>
+            </div>
             {mounted && (
               <>
                 <p className="text-xl font-mono text-gray-800">
