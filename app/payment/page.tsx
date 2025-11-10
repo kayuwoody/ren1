@@ -19,6 +19,32 @@ export default function PaymentPage() {
   const totalDiscount = retailTotal - finalTotal;
   const hasDiscount = totalDiscount > 0;
 
+  // Set pending order on mount to keep customer display populated
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      fetch('/api/cart/current', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          setPendingOrder: true,
+          orderId: 'pending',  // Temporary ID until order is created
+          items: cartItems,
+        }),
+      }).catch(err => console.error('Failed to set pending order:', err));
+    }
+
+    // Cleanup: clear pending order if user navigates away without completing payment
+    return () => {
+      if (!order) {  // Only clear if no order was created
+        fetch('/api/cart/current', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ setPendingOrder: false }),
+        }).catch(err => console.error('Failed to clear pending order:', err));
+      }
+    };
+  }, []); // Run once on mount
+
   // Create order when payment method is selected
   const handlePaymentMethodSelect = async (method: "cash" | "bank_qr") => {
     setPaymentMethod(method);

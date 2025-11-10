@@ -355,12 +355,15 @@ export function getSelectedComponents(
 
     const componentQuantity = item.quantity * quantity;
 
-    // Check if this linked product has its own XOR groups or nested structure
+    // Check if this linked product has XOR groups or linked products (not just materials)
     const linkedRecipe = getProductRecipe(item.linkedProductId);
     const linkedHasXORGroups = linkedRecipe.some(r => r.selectionGroup);
+    const linkedHasProducts = linkedRecipe.some(r => r.itemType === 'product');
 
-    if (linkedHasXORGroups || linkedRecipe.length > 0) {
-      // This product has nested choices - recurse to get the actual selected items
+    // Only recurse if the linked product has XOR groups OR other products
+    // Don't recurse if it only has materials (leaf product from user's perspective)
+    if (linkedHasXORGroups || linkedHasProducts) {
+      // This product has nested choices/products - recurse to get the actual selected items
       const nestedComponents = getSelectedComponents(
         item.linkedProductId,
         selections,
@@ -380,7 +383,7 @@ export function getSelectedComponents(
         });
       }
     } else {
-      // This is a leaf product - add it directly
+      // This is a leaf product (only has materials) - add it directly, don't expand into materials
       components.push({
         productId: linkedProd.id,
         productName: linkedProd.name,
