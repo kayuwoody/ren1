@@ -39,12 +39,6 @@ const ProductListPage: React.FC = () => {
     setIsStaffMode(authToken === 'authenticated');
   }, []);
 
-  // Clear display freeze when returning to products (checkout abandoned)
-  useEffect(() => {
-    localStorage.removeItem('displayFrozen');
-    localStorage.removeItem('frozenCart');
-  }, []);
-
   const handleAddToCart = async (product: Product) => {
     setLoadingRecipe(true);
 

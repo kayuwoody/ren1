@@ -158,7 +158,10 @@ export function recordProductSale(
     if (bundleSelection && recipeItem.selectionGroup) {
       // Generate the uniqueKey for this selection group
       // At root level: "root:groupName"
-      // At nested levels: "productId:groupName"
+      // At nested levels: "currentProductId:groupName" (the product that owns this XOR group)
+      // NOTE: At nested levels, we need to find which linked product has this XOR group
+      // For items IN an XOR group, the linkedProductId represents one of the choices
+      // We need to use the ID of the product that HAS the XOR group (parent of the group items)
       const uniqueKey = depth === 0 ? `root:${recipeItem.selectionGroup}` : `${productId}:${recipeItem.selectionGroup}`;
 
       const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
@@ -167,10 +170,10 @@ export function recordProductSale(
       const isSelected = recipeItem.linkedProductId === selectedItemId;
 
       if (!isSelected) {
-        console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup})`);
+        console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
         return; // Skip this item - it wasn't selected
       } else {
-        console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup})`);
+        console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
       }
     }
 

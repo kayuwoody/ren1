@@ -135,10 +135,6 @@ export default function PaymentPage() {
       }),
     });
 
-    // Clear display freeze flag
-    localStorage.removeItem('displayFrozen');
-    localStorage.removeItem('frozenCart');
-
     // Show success and redirect to admin POS
     alert(`✅ Payment confirmed! Order #${order.id} sent to kitchen.`);
     router.push("/admin/pos");
