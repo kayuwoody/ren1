@@ -79,6 +79,17 @@ export default function PaymentPage() {
       }
 
       setOrder(data.order);
+
+      // Set pending order so customer display stays populated during payment
+      await fetch('/api/cart/current', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          setPendingOrder: true,
+          orderId: data.order.id,
+          items: cartItems,
+        }),
+      });
     } catch (err: any) {
       console.error("Order creation error:", err);
       setError(err.message);
@@ -88,7 +99,16 @@ export default function PaymentPage() {
     }
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async () => {
+    // Clear pending order so customer display returns to showing active cart
+    await fetch('/api/cart/current', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        setPendingOrder: false,
+      }),
+    });
+
     // Clear cart
     clearCart();
 
@@ -97,7 +117,16 @@ export default function PaymentPage() {
     router.push("/admin/pos");
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
+    // Clear pending order when payment is cancelled
+    await fetch('/api/cart/current', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        setPendingOrder: false,
+      }),
+    });
+
     setOrder(null);
     setPaymentMethod(null);
     setError(null);
