@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { broadcastCartUpdate } from '@/lib/sse/cartStreamManager';
 
 /**
  * Current Cart API
@@ -35,6 +36,10 @@ export async function POST(req: Request) {
     // Update cart
     if (body.cart !== undefined) {
       currentCart = body.cart || [];
+
+      // Broadcast update to all connected customer displays
+      broadcastCartUpdate(currentCart, false);
+
       return NextResponse.json({ success: true });
     }
 
@@ -46,10 +51,16 @@ export async function POST(req: Request) {
           items: body.items || []
         };
         console.log(`📋 Set pending order: ${body.orderId} with ${body.items?.length || 0} items`);
+
+        // Broadcast pending order to display
+        broadcastCartUpdate(pendingOrder.items, true);
       } else {
         // Clear pending order (when payment is complete)
         console.log(`✅ Cleared pending order: ${pendingOrder?.orderId}`);
         pendingOrder = null;
+
+        // Broadcast empty cart (payment complete)
+        broadcastCartUpdate(currentCart, false);
       }
       return NextResponse.json({ success: true });
     }

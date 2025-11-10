@@ -21,44 +21,50 @@ export default function CustomerDisplayPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Poll for cart updates from server (for cross-device sync)
+  // Listen for cart updates via Server-Sent Events (push-based, no polling)
   useEffect(() => {
-    const fetchCart = async () => {
+    console.log('📺 Customer Display: Connecting to cart updates stream...');
+
+    // Connect to SSE endpoint
+    const eventSource = new EventSource('/api/cart/stream');
+
+    eventSource.onopen = () => {
+      console.log('📺 Customer Display: Connected to cart stream');
+    };
+
+    eventSource.onmessage = (event) => {
       try {
-        // Check if display is frozen (during checkout)
-        const isFrozen = localStorage.getItem('displayFrozen') === 'true';
+        const data = JSON.parse(event.data);
+        console.log('📺 Customer Display: Received event:', data.type);
 
-        if (isFrozen) {
-          // Use frozen cart snapshot instead of fetching
-          const frozenCartJson = localStorage.getItem('frozenCart');
-          if (frozenCartJson) {
-            try {
-              const frozenCart = JSON.parse(frozenCartJson);
-              setCartItems(frozenCart);
-            } catch (err) {
-              console.error('Failed to parse frozen cart:', err);
-            }
-          }
-          return; // Don't fetch from API
-        }
-
-        // Normal polling when not frozen
-        const response = await fetch('/api/cart/current');
-        if (response.ok) {
-          const data = await response.json();
+        if (data.type === 'cart-update') {
           setCartItems(data.cart || []);
+          console.log('📺 Customer Display: Updated cart with', data.cart?.length || 0, 'items');
+        } else if (data.type === 'connected') {
+          console.log('📺 Customer Display: Connection confirmed');
+          // Fetch initial cart state
+          fetch('/api/cart/current')
+            .then(res => res.json())
+            .then(data => {
+              setCartItems(data.cart || []);
+              console.log('📺 Customer Display: Loaded initial cart with', data.cart?.length || 0, 'items');
+            })
+            .catch(err => console.error('Failed to fetch initial cart:', err));
         }
       } catch (err) {
-        console.error('Failed to fetch cart:', err);
+        console.error('📺 Customer Display: Failed to parse SSE message:', err);
       }
     };
 
-    // Fetch immediately
-    fetchCart();
+    eventSource.onerror = (error) => {
+      console.error('📺 Customer Display: SSE connection error:', error);
+      // EventSource will automatically attempt to reconnect
+    };
 
-    // Poll every 1 second for real-time updates
-    const interval = setInterval(fetchCart, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      console.log('📺 Customer Display: Disconnecting from cart stream');
+      eventSource.close();
+    };
   }, []);
 
   // Calculate totals

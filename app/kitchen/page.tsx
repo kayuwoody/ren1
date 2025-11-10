@@ -213,11 +213,44 @@ export default function KitchenDisplayPage() {
     };
   };
 
-  // Initial fetch and polling
+  // Initial fetch and SSE for real-time updates (no polling)
   useEffect(() => {
+    // Fetch initial orders
     fetchOrders();
-    const interval = setInterval(fetchOrders, 10000); // Poll every 10 seconds
-    return () => clearInterval(interval);
+
+    // Connect to SSE for push updates
+    console.log('🍳 Kitchen Display: Connecting to order updates stream...');
+    const eventSource = new EventSource('/api/kitchen/stream');
+
+    eventSource.onopen = () => {
+      console.log('🍳 Kitchen Display: Connected to order stream');
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('🍳 Kitchen Display: Received event:', data.type);
+
+        if (data.type === 'orders-updated') {
+          console.log('🍳 Kitchen Display: Orders updated, fetching latest...');
+          fetchOrders();
+        } else if (data.type === 'connected') {
+          console.log('🍳 Kitchen Display: Connection confirmed');
+        }
+      } catch (err) {
+        console.error('🍳 Kitchen Display: Failed to parse SSE message:', err);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('🍳 Kitchen Display: SSE connection error:', error);
+      // EventSource will automatically attempt to reconnect
+    };
+
+    return () => {
+      console.log('🍳 Kitchen Display: Disconnecting from order stream');
+      eventSource.close();
+    };
   }, []);
 
   // Loading state
