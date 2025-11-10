@@ -139,6 +139,19 @@ export async function GET(req: Request) {
         const bundleDisplayName = getMetaValue(item.meta_data, '_bundle_display_name');
         const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
 
+        // Get bundle components if available (stored at order creation time)
+        let components: Array<{ productId: string; productName: string; quantity: number }> | undefined;
+        if (isBundle) {
+          const componentsJson = getMetaValue(item.meta_data, '_bundle_components');
+          if (componentsJson) {
+            try {
+              components = JSON.parse(componentsJson);
+            } catch (e) {
+              console.warn(`  Failed to parse bundle components for item ${item.id}:`, e);
+            }
+          }
+        }
+
         return {
           id: item.id,
           name: displayName,
@@ -152,6 +165,7 @@ export async function GET(req: Request) {
           itemMargin,
           isBundle,
           baseProductName: getMetaValue(item.meta_data, '_bundle_base_product_name'),
+          components, // Include bundle components
         };
       }) || [];
 
