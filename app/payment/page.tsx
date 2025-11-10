@@ -27,23 +27,12 @@ export default function PaymentPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           setPendingOrder: true,
-          orderId: 'pending',  // Temporary ID until order is created
+          orderId: order?.id || 'pending',
           items: cartItems,
         }),
       }).catch(err => console.error('Failed to set pending order:', err));
     }
-
-    // Cleanup: clear pending order if user navigates away without completing payment
-    return () => {
-      if (!order) {  // Only clear if no order was created
-        fetch('/api/cart/current', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ setPendingOrder: false }),
-        }).catch(err => console.error('Failed to clear pending order:', err));
-      }
-    };
-  }, []); // Run once on mount
+  }, [cartItems, order]); // Re-run when cart or order changes
 
   // Create order when payment method is selected
   const handlePaymentMethodSelect = async (method: "cash" | "bank_qr") => {

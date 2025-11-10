@@ -398,11 +398,39 @@ export function getSelectedComponents(
       // 1. Has XOR groups (internal choices like "Hot vs Iced") - it's a complete product, show as-is
       // 2. Only has materials - it's a leaf product, show as-is
       // Either way, don't expand into components
+
+      let displayName = linkedProd.name;
+
+      // If product has XOR groups, include the selected variant in the name
+      if (linkedHasXORGroups) {
+        const selectedVariants: string[] = [];
+
+        // Find which XOR options were selected for this product
+        linkedRecipe.forEach(recipeItem => {
+          if (recipeItem.selectionGroup) {
+            const uniqueKey = depth === 0
+              ? `root:${recipeItem.selectionGroup}`
+              : `${item.linkedProductId}:${recipeItem.selectionGroup}`;
+
+            const selectedId = selections.selectedMandatory[uniqueKey];
+
+            if (selectedId === recipeItem.linkedProductId) {
+              selectedVariants.push(recipeItem.linkedProductName || '');
+            }
+          }
+        });
+
+        // Prepend selected variants to product name
+        if (selectedVariants.length > 0) {
+          displayName = `${selectedVariants.join(' ')} ${linkedProd.name}`;
+        }
+      }
+
       const reason = linkedHasXORGroups ? 'has internal XOR choices' : 'only has materials';
-      console.log(`    ✅ Adding complete product "${linkedProd.name}" (${reason})`);
+      console.log(`    ✅ Adding complete product "${displayName}" (${reason})`);
       components.push({
         productId: linkedProd.id,
-        productName: linkedProd.name,
+        productName: displayName,
         quantity: componentQuantity,
       });
     }
