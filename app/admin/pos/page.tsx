@@ -51,6 +51,7 @@ export default function POSPage() {
   const [discountValue, setDiscountValue] = useState("");
   const [discountReason, setDiscountReason] = useState("");
   const [cogsData, setCogsData] = useState<Record<number, { totalCOGS: number; breakdown: any[] }>>({});
+  const [expandedBundles, setExpandedBundles] = useState<Record<number, any[]>>({});
 
   useEffect(() => {
     // Check admin authentication
@@ -99,6 +100,49 @@ export default function POSPage() {
       fetchCogsForItems();
     } else {
       setCogsData({});
+    }
+  }, [cartItems]);
+
+  // Fetch expanded bundles for items with bundle configuration
+  useEffect(() => {
+    const fetchExpandedBundles = async () => {
+      const newExpanded: Record<number, any[]> = {};
+
+      for (let i = 0; i < cartItems.length; i++) {
+        const item = cartItems[i];
+
+        if (item.bundle) {
+          try {
+            const response = await fetch('/api/bundles/expand', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                wcProductId: item.bundle.baseProductId,
+                bundleSelection: {
+                  selectedMandatory: item.bundle.selectedMandatory,
+                  selectedOptional: item.bundle.selectedOptional,
+                },
+                quantity: item.quantity,
+              }),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              newExpanded[i] = data.components || [];
+            }
+          } catch (err) {
+            console.error(`Failed to fetch bundle expansion for ${item.name}:`, err);
+          }
+        }
+      }
+
+      setExpandedBundles(newExpanded);
+    };
+
+    if (cartItems.length > 0) {
+      fetchExpandedBundles();
+    } else {
+      setExpandedBundles({});
     }
   }, [cartItems]);
 
@@ -252,6 +296,7 @@ export default function POSPage() {
                     const itemCogs = cogsData[index]?.totalCOGS || 0;
                     const itemProfit = itemTotal - itemCogs;
                     const profitMargin = itemTotal > 0 ? (itemProfit / itemTotal) * 100 : 0;
+                    const expandedComponents = expandedBundles[index] || [];
 
                     return (
                       <div key={index} className="p-6 space-y-3">
@@ -271,6 +316,18 @@ export default function POSPage() {
                             <p className="text-sm text-gray-500">
                               Quantity: {item.quantity}
                             </p>
+
+                            {/* Show expanded components for bundles */}
+                            {expandedComponents.length > 0 && (
+                              <div className="mt-2 ml-4 space-y-1">
+                                {expandedComponents.map((component: any, idx: number) => (
+                                  <div key={idx} className="text-sm text-gray-600 flex items-start">
+                                    <span className="mr-2">→</span>
+                                    <span>{component.productName} × {component.quantity}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
 
                             {hasDiscount && item.discountReason && (
                               <div className="flex items-center gap-1 mt-1">
