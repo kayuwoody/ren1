@@ -12,6 +12,8 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [isStaffMode, setIsStaffMode] = useState(false);
   const [expandedBundles, setExpandedBundles] = useState<Record<number, any[]>>({});
+
+  console.log('🛒 CHECKOUT PAGE LOADED - cartItems:', cartItems.length, cartItems);
   const [discountModal, setDiscountModal] = useState<{
     isOpen: boolean;
     itemIndex: number | null;
@@ -35,6 +37,8 @@ export default function CheckoutPage() {
 
   // Fetch expanded bundles for items with bundle configuration
   useEffect(() => {
+    console.log('⚡ useEffect running - cartItems:', cartItems.length, cartItems);
+
     const fetchExpandedBundles = async () => {
       const newExpanded: Record<number, any[]> = {};
 
