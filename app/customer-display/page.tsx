@@ -7,7 +7,6 @@ export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
-  const [expandedBundles, setExpandedBundles] = useState<Record<number, any[]>>({});
 
   // Fix hydration error - only show time after mount
   useEffect(() => {
@@ -43,45 +42,6 @@ export default function CustomerDisplayPage() {
     const interval = setInterval(fetchCart, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  // Fetch expanded bundles for items with bundle configuration
-  useEffect(() => {
-    const fetchExpandedBundles = async () => {
-      const newExpanded: Record<number, any[]> = {};
-
-      for (const item of cartItems) {
-        if (item.bundle) {
-          try {
-            const response = await fetch('/api/bundles/expand', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                wcProductId: item.bundle.baseProductId,
-                bundleSelection: {
-                  selectedMandatory: item.bundle.selectedMandatory,
-                  selectedOptional: item.bundle.selectedOptional,
-                },
-                quantity: item.quantity,
-              }),
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              newExpanded[item.productId] = data.components || [];
-            }
-          } catch (err) {
-            console.error('Error fetching expanded bundle:', err);
-          }
-        }
-      }
-
-      setExpandedBundles(newExpanded);
-    };
-
-    if (cartItems.length > 0) {
-      fetchExpandedBundles();
-    }
-  }, [cartItems]);
 
   // Calculate totals
   const retailTotal = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
@@ -162,8 +122,8 @@ export default function CustomerDisplayPage() {
               const itemDiscount = itemRetailTotal - itemTotal;
               const hasItemDiscount = itemDiscount > 0;
 
-              // Get expanded components from state
-              const expandedComponents = expandedBundles[item.productId] || [];
+              // Get expanded components from cart item
+              const expandedComponents = item.components || [];
 
               return (
                 <div

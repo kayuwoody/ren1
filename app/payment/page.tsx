@@ -19,6 +19,21 @@ export default function PaymentPage() {
   const totalDiscount = retailTotal - finalTotal;
   const hasDiscount = totalDiscount > 0;
 
+  // Set pending order on mount to keep customer display populated
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      fetch('/api/cart/current', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          setPendingOrder: true,
+          orderId: order?.id || 'pending',
+          items: cartItems,
+        }),
+      }).catch(err => console.error('Failed to set pending order:', err));
+    }
+  }, [cartItems, order]); // Re-run when cart or order changes
+
   // Create order when payment method is selected
   const handlePaymentMethodSelect = async (method: "cash" | "bank_qr") => {
     setPaymentMethod(method);
@@ -55,6 +70,13 @@ export default function PaymentPage() {
                 { key: "_bundle_mandatory", value: JSON.stringify(item.bundle.selectedMandatory) },
                 { key: "_bundle_optional", value: JSON.stringify(item.bundle.selectedOptional) }
               );
+
+              // Store expanded components (already fetched at add-to-cart time)
+              if (item.components) {
+                meta_data.push(
+                  { key: "_bundle_components", value: JSON.stringify(item.components) }
+                );
+              }
             }
 
             return {

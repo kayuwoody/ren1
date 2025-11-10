@@ -15,6 +15,12 @@ interface OrderItem {
   itemCOGS: number;
   itemProfit: number;
   itemMargin: number;
+  isBundle?: boolean;
+  components?: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+  }>;
 }
 
 interface Order {
@@ -327,11 +333,23 @@ export default function DailySalesDetailPage() {
                           <tbody className="divide-y">
                             {order.items.map((item, idx) => {
                               const hasItemDiscount = item.retailPrice !== item.finalPrice;
+                              const components = item.components || [];
                               return (
                                 <tr key={idx} className="hover:bg-gray-50">
                                   <td className="px-4 py-3">
                                     <div>
                                       <p className="font-medium">{item.name}</p>
+                                      {/* Show expanded components */}
+                                      {components.length > 0 && (
+                                        <div className="mt-1 ml-3 space-y-0.5">
+                                          {components.map((component, cIdx) => (
+                                            <div key={cIdx} className="text-xs text-gray-600 flex items-start">
+                                              <span className="mr-1">→</span>
+                                              <span>{component.productName} × {component.quantity}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
                                       {item.discountReason && (
                                         <p className="text-xs text-green-600 mt-1">• {item.discountReason}</p>
                                       )}

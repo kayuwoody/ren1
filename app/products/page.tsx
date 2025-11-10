@@ -19,6 +19,7 @@ interface RecipeData {
   product: any;
   recipe: any;
   needsModal: boolean;
+  isCombo: boolean;
 }
 
 const ProductListPage: React.FC = () => {
@@ -58,7 +59,9 @@ const ProductListPage: React.FC = () => {
       if (data.success && data.needsModal) {
         // Product has mandatory selections or optional add-ons - show modal
         console.log(`✅ Showing modal for "${product.name}"`);
-        setModalData(data);
+        // Check if product is a combo (has 'combo' category)
+        const isCombo = product.categories.some(cat => cat.slug === 'combo');
+        setModalData({ ...data, isCombo });
       } else {
         // Simple product - add directly to cart
         console.log(`➡️  Adding "${product.name}" directly to cart (no modal needed)`);
@@ -89,14 +92,47 @@ const ProductListPage: React.FC = () => {
     }
   };
 
-  const handleModalAddToCart = (bundle: any) => {
+  const handleModalAddToCart = async (bundle: any) => {
     // Add bundle to cart
-    console.log(`🛒 Adding bundle to cart:`, {
+    console.log(`🛒 Adding to cart:`, {
       displayName: bundle.displayName,
       baseProductId: bundle.baseProduct.id,
+      isCombo: bundle.isCombo,
       selectedMandatory: bundle.selectedMandatory,
       selectedOptional: bundle.selectedOptional,
     });
+
+    // Only fetch components for combo products (not regular products with variants)
+    let components: Array<{ productId: string; productName: string; quantity: number }> | undefined;
+    if (bundle.isCombo) {
+      try {
+        console.log(`📦 Fetching bundle components for ${bundle.displayName}...`);
+        const response = await fetch('/api/bundles/expand', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            wcProductId: bundle.baseProduct.id,
+            bundleSelection: {
+              selectedMandatory: bundle.selectedMandatory,
+              selectedOptional: bundle.selectedOptional,
+            },
+            quantity: 1,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          components = data.components || [];
+          console.log(`✅ Fetched ${components.length} components:`, components);
+        } else {
+          console.warn(`⚠️ Failed to fetch components: ${response.status}`);
+        }
+      } catch (err) {
+        console.error(`❌ Error fetching bundle components:`, err);
+      }
+    } else {
+      console.log(`➡️  Not a combo - skipping component fetch`);
+    }
 
     addToCart({
       productId: bundle.baseProduct.id,
@@ -109,6 +145,7 @@ const ProductListPage: React.FC = () => {
         selectedMandatory: bundle.selectedMandatory,
         selectedOptional: bundle.selectedOptional,
       },
+      components, // Store components in cart item (only for combos)
     });
 
     setToast(`Added ${bundle.displayName} to cart`);
@@ -319,6 +356,7 @@ const ProductListPage: React.FC = () => {
           onClose={() => setModalData(null)}
           product={modalData.product}
           recipe={modalData.recipe}
+          isCombo={modalData.isCombo}
           onAddToCart={handleModalAddToCart}
         />
       )}

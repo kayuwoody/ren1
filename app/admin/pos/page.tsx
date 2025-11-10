@@ -252,6 +252,7 @@ export default function POSPage() {
                     const itemCogs = cogsData[index]?.totalCOGS || 0;
                     const itemProfit = itemTotal - itemCogs;
                     const profitMargin = itemTotal > 0 ? (itemProfit / itemTotal) * 100 : 0;
+                    const expandedComponents = item.components || [];
 
                     return (
                       <div key={index} className="p-6 space-y-3">
@@ -271,6 +272,18 @@ export default function POSPage() {
                             <p className="text-sm text-gray-500">
                               Quantity: {item.quantity}
                             </p>
+
+                            {/* Show expanded components for bundles */}
+                            {expandedComponents.length > 0 && (
+                              <div className="mt-2 ml-4 space-y-1">
+                                {expandedComponents.map((component: any, idx: number) => (
+                                  <div key={idx} className="text-sm text-gray-600 flex items-start">
+                                    <span className="mr-2">→</span>
+                                    <span>{component.productName} × {component.quantity}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
 
                             {hasDiscount && item.discountReason && (
                               <div className="flex items-center gap-1 mt-1">

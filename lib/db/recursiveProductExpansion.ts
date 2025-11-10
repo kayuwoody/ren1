@@ -355,12 +355,23 @@ export function getSelectedComponents(
 
     const componentQuantity = item.quantity * quantity;
 
-    // Check if this linked product has its own XOR groups or nested structure
+    // Check if this linked product has XOR groups or linked products (not just materials)
     const linkedRecipe = getProductRecipe(item.linkedProductId);
     const linkedHasXORGroups = linkedRecipe.some(r => r.selectionGroup);
+    const linkedHasProducts = linkedRecipe.some(r => r.itemType === 'product');
 
-    if (linkedHasXORGroups || linkedRecipe.length > 0) {
-      // This product has nested choices - recurse to get the actual selected items
+    console.log(`  🔍 Checking linked product "${linkedProd.name}" (depth=${depth}):`, {
+      hasXORGroups: linkedHasXORGroups,
+      hasProducts: linkedHasProducts,
+      recipeItems: linkedRecipe.map(r => `${r.itemType}:${r.linkedProductName || r.materialName}`)
+    });
+
+    // Only recurse if the product has OTHER products BUT NO XOR groups
+    // If it has XOR groups, it's a complete product with internal choices (like "Hot Americano") - don't expand
+    // If it only has materials, it's a leaf product - don't expand
+    if (linkedHasProducts && !linkedHasXORGroups) {
+      console.log(`    ↪️  Recursing into "${linkedProd.name}" (has nested products, no XOR)`);
+      // This product is a bundle of other products - recurse to get them
       const nestedComponents = getSelectedComponents(
         item.linkedProductId,
         selections,
@@ -368,11 +379,14 @@ export function getSelectedComponents(
         depth + 1
       );
 
+      console.log(`    ⬆️  Recursion returned ${nestedComponents.length} components:`, nestedComponents.map(c => c.productName));
+
       // If recursion found components, use those. Otherwise, use this product.
       if (nestedComponents.length > 0) {
         components.push(...nestedComponents);
       } else {
         // No nested components found, add this product as-is
+        console.log(`    ✅ Adding "${linkedProd.name}" (no nested components found)`);
         components.push({
           productId: linkedProd.id,
           productName: linkedProd.name,
@@ -380,10 +394,56 @@ export function getSelectedComponents(
         });
       }
     } else {
-      // This is a leaf product - add it directly
+      // This product either:
+      // 1. Has XOR groups (internal choices like "Hot vs Iced") - it's a complete product, show as-is
+      // 2. Only has materials - it's a leaf product, show as-is
+      // Either way, don't expand into components
+
+      let displayName = linkedProd.name;
+
+      // If product has XOR groups, include the selected variant in the name
+      if (linkedHasXORGroups) {
+        const selectedVariants: string[] = [];
+
+        console.log(`    🔎 Looking for selected variants for "${linkedProd.name}":`);
+        console.log(`       Available selections:`, selections.selectedMandatory);
+
+        // Find which XOR options were selected for this product
+        linkedRecipe.forEach(recipeItem => {
+          if (recipeItem.selectionGroup) {
+            // Use the product's ID to construct the key (component products have their XOR groups keyed by product ID)
+            const uniqueKey = `${item.linkedProductId}:${recipeItem.selectionGroup}`;
+
+            const selectedId = selections.selectedMandatory[uniqueKey];
+
+            console.log(`       Checking group "${recipeItem.selectionGroup}":`, {
+              uniqueKey,
+              selectedId,
+              recipeItemId: recipeItem.linkedProductId,
+              recipeItemName: recipeItem.linkedProductName,
+              matches: selectedId === recipeItem.linkedProductId
+            });
+
+            if (selectedId === recipeItem.linkedProductId) {
+              selectedVariants.push(recipeItem.linkedProductName || '');
+            }
+          }
+        });
+
+        // Prepend selected variants to product name
+        if (selectedVariants.length > 0) {
+          console.log(`       ✓ Found variants:`, selectedVariants);
+          displayName = `${selectedVariants.join(' ')} ${linkedProd.name}`;
+        } else {
+          console.log(`       ✗ No variants found`);
+        }
+      }
+
+      const reason = linkedHasXORGroups ? 'has internal XOR choices' : 'only has materials';
+      console.log(`    ✅ Adding complete product "${displayName}" (${reason})`);
       components.push({
         productId: linkedProd.id,
-        productName: linkedProd.name,
+        productName: displayName,
         quantity: componentQuantity,
       });
     }

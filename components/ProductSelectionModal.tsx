@@ -46,12 +46,14 @@ interface ProductSelectionModalProps {
   onClose: () => void;
   product: Product;
   recipe: RecipeConfig;
+  isCombo: boolean; // Whether this is a combo product (has 'combo' category)
   onAddToCart: (bundle: {
     displayName: string;
     baseProduct: Product;
     selectedMandatory: Record<string, string>; // groupName -> selectedItemId
     selectedOptional: string[]; // array of item IDs
     totalPrice: number;
+    isCombo: boolean; // Pass isCombo flag to handler
   }) => void;
 }
 
@@ -60,6 +62,7 @@ export default function ProductSelectionModal({
   onClose,
   product,
   recipe,
+  isCombo,
   onAddToCart,
 }: ProductSelectionModalProps) {
   // State for selections
@@ -112,23 +115,28 @@ export default function ProductSelectionModal({
     return total;
   };
 
-  // Build display name (e.g., "Blueberry Danish Hot Americano Wake up Wonder")
+  // Build display name
   const buildDisplayName = () => {
     const parts: string[] = [];
 
-    // Add selected mandatory modifiers (using uniqueKey)
-    recipe.mandatoryGroups.forEach((group) => {
-      const selectedId = mandatorySelections[group.uniqueKey];
-      const selectedItem = group.items.find((item) => item.id === selectedId);
-      if (selectedItem) {
-        parts.push(selectedItem.name);
-      }
-    });
+    // For combo products: use clean base name only (variants show in component breakdown)
+    // For regular products: include variant names in the product name
+    if (isCombo) {
+      // Combo product - just use base name (e.g., "✨ Wake-Up Wonder")
+      parts.push(product.name);
+    } else {
+      // Regular product - include selected variants in name (e.g., "Hot Latte")
+      recipe.mandatoryGroups.forEach((group) => {
+        const selectedId = mandatorySelections[group.uniqueKey];
+        const selectedItem = group.items.find((item) => item.id === selectedId);
+        if (selectedItem) {
+          parts.push(selectedItem.name);
+        }
+      });
+      parts.push(product.name);
+    }
 
-    // Add base product name
-    parts.push(product.name);
-
-    // Add selected optional items
+    // Add selected optional items (if any)
     recipe.optional.forEach((item) => {
       if (optionalSelections.has(item.id)) {
         parts.push(`+ ${item.name}`);
@@ -153,6 +161,7 @@ export default function ProductSelectionModal({
       selectedMandatory: mandatorySelections,
       selectedOptional: Array.from(optionalSelections),
       totalPrice: calculateTotal(),
+      isCombo, // Include isCombo flag
     });
 
     onClose();
