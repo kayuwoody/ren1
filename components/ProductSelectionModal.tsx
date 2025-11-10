@@ -112,23 +112,15 @@ export default function ProductSelectionModal({
     return total;
   };
 
-  // Build display name (e.g., "Blueberry Danish Hot Americano Wake up Wonder")
+  // Build display name - just the base product name
+  // Variant selections (like "Hot" or "Iced") will show in the component breakdown
   const buildDisplayName = () => {
     const parts: string[] = [];
 
-    // Add selected mandatory modifiers (using uniqueKey)
-    recipe.mandatoryGroups.forEach((group) => {
-      const selectedId = mandatorySelections[group.uniqueKey];
-      const selectedItem = group.items.find((item) => item.id === selectedId);
-      if (selectedItem) {
-        parts.push(selectedItem.name);
-      }
-    });
-
-    // Add base product name
+    // Just use base product name (e.g., "✨ Wake-Up Wonder")
     parts.push(product.name);
 
-    // Add selected optional items
+    // Add selected optional items (if any)
     recipe.optional.forEach((item) => {
       if (optionalSelections.has(item.id)) {
         parts.push(`+ ${item.name}`);

@@ -411,9 +411,8 @@ export function getSelectedComponents(
         // Find which XOR options were selected for this product
         linkedRecipe.forEach(recipeItem => {
           if (recipeItem.selectionGroup) {
-            const uniqueKey = depth === 0
-              ? `root:${recipeItem.selectionGroup}`
-              : `${item.linkedProductId}:${recipeItem.selectionGroup}`;
+            // Use the product's ID to construct the key (component products have their XOR groups keyed by product ID)
+            const uniqueKey = `${item.linkedProductId}:${recipeItem.selectionGroup}`;
 
             const selectedId = selections.selectedMandatory[uniqueKey];
 
