@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -342,6 +342,17 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-semibold">Loyalty Points</h2>
                 </div>
                 <p className="text-gray-600">Manage customer loyalty points and rewards</p>
+              </Link>
+
+              <Link
+                href="/admin/promo-generator"
+                className="bg-gradient-to-br from-pink-500 to-purple-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Sparkles className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Promo Generator</h2>
+                </div>
+                <p className="text-pink-50">Create playful promo images for combos</p>
               </Link>
             </div>
           </div>
