@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getProductRecipe } from './recipeService';
 import { getMaterial, updateMaterialStock } from './materialService';
 import { getProduct, getProductByWcId } from './productService';
+import { wcApi } from '../wooClient';
 
 // Ensure database is initialized
 initDatabase();
@@ -32,7 +33,7 @@ export interface InventoryConsumption {
  * This automatically deducts materials from stock based on the product's recipe
  * Recursively processes linked products to deduct all materials in the chain
  */
-export function recordProductSale(
+export async function recordProductSale(
   orderId: string,
   wcProductId: string | number,
   productName: string,
@@ -44,7 +45,7 @@ export function recordProductSale(
   },
   depth: number = 0,
   parentChain: string = ''
-): InventoryConsumption[] {
+): Promise<InventoryConsumption[]> {
   const consumptions: InventoryConsumption[] = [];
   const indent = '  '.repeat(depth);
 
@@ -148,17 +149,20 @@ export function recordProductSale(
   }
 
   // Process each recipe item
-  recipe.forEach(recipeItem => {
+  for (const recipeItem of recipe) {
     // Skip optional items (add-ons that weren't necessarily used)
     if (recipeItem.isOptional) {
-      return;
+      continue;
     }
 
     // Handle bundle selection filtering (works at all depths with unified selection format)
     if (bundleSelection && recipeItem.selectionGroup) {
       // Generate the uniqueKey for this selection group
       // At root level: "root:groupName"
-      // At nested levels: "productId:groupName"
+      // At nested levels: "currentProductId:groupName" (the product that owns this XOR group)
+      // NOTE: At nested levels, we need to find which linked product has this XOR group
+      // For items IN an XOR group, the linkedProductId represents one of the choices
+      // We need to use the ID of the product that HAS the XOR group (parent of the group items)
       const uniqueKey = depth === 0 ? `root:${recipeItem.selectionGroup}` : `${productId}:${recipeItem.selectionGroup}`;
 
       const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
@@ -167,10 +171,10 @@ export function recordProductSale(
       const isSelected = recipeItem.linkedProductId === selectedItemId;
 
       if (!isSelected) {
-        console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup})`);
-        return; // Skip this item - it wasn't selected
+        console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
+        continue; // Skip this item - it wasn't selected
       } else {
-        console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup})`);
+        console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
       }
     }
 
@@ -297,9 +301,14 @@ export function recordProductSale(
         console.log(`${indent}      💾 Stored linked product (visibility only): ${recipeItem.linkedProductName} x${quantityConsumed}`);
         consumptions.push(linkedProductConsumption);
 
+        // Deduct WooCommerce inventory for ALL linked products
+        // These are component products that WooCommerce doesn't automatically deduct
+        // (Only the root product inventory is handled by WooCommerce when the order is created)
+        await deductWooProductStock(linkedProduct.wcId, quantityConsumed, linkedProduct.name);
+
         // Then recursively process the linked product's materials
         // Pass bundleSelection through so nested XOR choices are respected
-        const linkedConsumptions = recordProductSale(
+        const linkedConsumptions = await recordProductSale(
           orderId,
           linkedProduct.wcId,
           linkedProduct.name,
@@ -314,7 +323,7 @@ export function recordProductSale(
         console.warn(`${indent}      ⚠️  Could not find linked product for recursive processing`);
       }
     }
-  });
+  }
 
   if (depth === 0) {
     console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
@@ -346,6 +355,43 @@ function deductMaterialStock(materialId: string, quantity: number): void {
   }
 
   updateMaterialStock(materialId, newStock);
+}
+
+/**
+ * Deduct WooCommerce product stock (for linked products in combos)
+ * When a combo contains finished products (like Danish), we need to update WooCommerce inventory
+ */
+async function deductWooProductStock(wcProductId: number, quantity: number, productName: string): Promise<void> {
+  try {
+    // Fetch current product from WooCommerce
+    const response = await wcApi.get(`products/${wcProductId}`);
+    const product = response.data;
+
+    // Check if product manages stock
+    if (!product.manage_stock) {
+      console.log(`   ℹ️  Product "${productName}" does not manage stock in WooCommerce - skipping inventory update`);
+      return;
+    }
+
+    const currentStock = product.stock_quantity || 0;
+    const newStock = currentStock - quantity;
+
+    console.log(`   📦 WooCommerce Inventory: ${productName} (${currentStock} → ${newStock})`);
+
+    // Update WooCommerce product stock
+    await wcApi.put(`products/${wcProductId}`, {
+      stock_quantity: newStock
+    });
+
+    // Log warnings
+    if (newStock < 0) {
+      console.warn(`   ⚠️  WooCommerce: ${productName} stock went negative: ${newStock}`);
+    }
+
+  } catch (error: any) {
+    console.error(`   ❌ Failed to update WooCommerce stock for ${productName}:`, error.message);
+    // Don't fail the whole operation if WooCommerce update fails
+  }
 }
 
 /**

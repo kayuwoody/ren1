@@ -81,6 +81,10 @@ export default function DailySalesDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setData(data);
+
+        // Expand all orders by default
+        const allOrderIds = new Set(data.orders.map((order: Order) => order.id));
+        setExpandedOrders(allOrderIds);
       }
     } catch (err) {
       console.error('Failed to fetch daily sales:', err);

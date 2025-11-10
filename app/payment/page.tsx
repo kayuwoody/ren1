@@ -122,17 +122,18 @@ export default function PaymentPage() {
   };
 
   const handlePaymentSuccess = async () => {
-    // Clear pending order so customer display returns to showing active cart
+    // Clear cart locally
+    clearCart();
+
+    // Clear pending order and cart on server (broadcasts empty cart to customer display)
     await fetch('/api/cart/current', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        cart: [], // Explicitly clear server-side cart
         setPendingOrder: false,
       }),
     });
-
-    // Clear cart
-    clearCart();
 
     // Show success and redirect to admin POS
     alert(`✅ Payment confirmed! Order #${order.id} sent to kitchen.`);

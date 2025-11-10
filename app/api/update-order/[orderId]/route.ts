@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { getWooOrder, updateWooOrder } from '@/lib/orderService';
 import { cookies } from 'next/headers';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { broadcastOrderUpdate } from '@/lib/sse/orderStreamManager';
 
 export async function PATCH(
   req: Request,
@@ -69,6 +70,9 @@ export async function PATCH(
 
     // 4) Perform the update in one go
     const updated = await updateWooOrder(orderId, patchPayload);
+
+    // Broadcast order update to kitchen displays whenever status changes
+    broadcastOrderUpdate();
 
     // 4b) If order just moved to processing, record inventory consumption
     if (body.status === 'processing' && existing.status !== 'processing') {
