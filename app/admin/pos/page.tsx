@@ -51,7 +51,6 @@ export default function POSPage() {
   const [discountValue, setDiscountValue] = useState("");
   const [discountReason, setDiscountReason] = useState("");
   const [cogsData, setCogsData] = useState<Record<number, { totalCOGS: number; breakdown: any[] }>>({});
-  const [expandedBundles, setExpandedBundles] = useState<Record<number, any[]>>({});
 
   useEffect(() => {
     // Check admin authentication
@@ -100,49 +99,6 @@ export default function POSPage() {
       fetchCogsForItems();
     } else {
       setCogsData({});
-    }
-  }, [cartItems]);
-
-  // Fetch expanded bundles for items with bundle configuration
-  useEffect(() => {
-    const fetchExpandedBundles = async () => {
-      const newExpanded: Record<number, any[]> = {};
-
-      for (let i = 0; i < cartItems.length; i++) {
-        const item = cartItems[i];
-
-        if (item.bundle) {
-          try {
-            const response = await fetch('/api/bundles/expand', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                wcProductId: item.bundle.baseProductId,
-                bundleSelection: {
-                  selectedMandatory: item.bundle.selectedMandatory,
-                  selectedOptional: item.bundle.selectedOptional,
-                },
-                quantity: item.quantity,
-              }),
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              newExpanded[i] = data.components || [];
-            }
-          } catch (err) {
-            console.error(`Failed to fetch bundle expansion for ${item.name}:`, err);
-          }
-        }
-      }
-
-      setExpandedBundles(newExpanded);
-    };
-
-    if (cartItems.length > 0) {
-      fetchExpandedBundles();
-    } else {
-      setExpandedBundles({});
     }
   }, [cartItems]);
 
@@ -296,7 +252,7 @@ export default function POSPage() {
                     const itemCogs = cogsData[index]?.totalCOGS || 0;
                     const itemProfit = itemTotal - itemCogs;
                     const profitMargin = itemTotal > 0 ? (itemProfit / itemTotal) * 100 : 0;
-                    const expandedComponents = expandedBundles[index] || [];
+                    const expandedComponents = item.components || [];
 
                     return (
                       <div key={index} className="p-6 space-y-3">

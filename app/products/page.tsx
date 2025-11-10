@@ -89,7 +89,7 @@ const ProductListPage: React.FC = () => {
     }
   };
 
-  const handleModalAddToCart = (bundle: any) => {
+  const handleModalAddToCart = async (bundle: any) => {
     // Add bundle to cart
     console.log(`🛒 Adding bundle to cart:`, {
       displayName: bundle.displayName,
@@ -97,6 +97,34 @@ const ProductListPage: React.FC = () => {
       selectedMandatory: bundle.selectedMandatory,
       selectedOptional: bundle.selectedOptional,
     });
+
+    // Fetch expanded components once at add time
+    let components: Array<{ productId: string; productName: string; quantity: number }> | undefined;
+    try {
+      console.log(`📦 Fetching bundle components for ${bundle.displayName}...`);
+      const response = await fetch('/api/bundles/expand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wcProductId: bundle.baseProduct.id,
+          bundleSelection: {
+            selectedMandatory: bundle.selectedMandatory,
+            selectedOptional: bundle.selectedOptional,
+          },
+          quantity: 1,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        components = data.components || [];
+        console.log(`✅ Fetched ${components.length} components:`, components);
+      } else {
+        console.warn(`⚠️ Failed to fetch components: ${response.status}`);
+      }
+    } catch (err) {
+      console.error(`❌ Error fetching bundle components:`, err);
+    }
 
     addToCart({
       productId: bundle.baseProduct.id,
@@ -109,6 +137,7 @@ const ProductListPage: React.FC = () => {
         selectedMandatory: bundle.selectedMandatory,
         selectedOptional: bundle.selectedOptional,
       },
+      components, // Store components in cart item
     });
 
     setToast(`Added ${bundle.displayName} to cart`);

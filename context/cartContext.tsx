@@ -16,6 +16,11 @@ export interface CartItem {
     selectedMandatory: Record<string, string>; // groupName -> selectedItemId
     selectedOptional: string[]; // array of item IDs
   };
+  components?: Array<{        // Optional: expanded bundle components (fetched once at add time)
+    productId: string;
+    productName: string;
+    quantity: number;
+  }>;
 }
 
 interface CartContextType {
