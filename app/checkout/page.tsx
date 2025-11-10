@@ -32,6 +32,15 @@ export default function CheckoutPage() {
     setIsStaffMode(authToken === 'authenticated');
   }, []);
 
+  // Freeze customer display when entering checkout
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      // Store frozen cart state and set freeze flag
+      localStorage.setItem('displayFrozen', 'true');
+      localStorage.setItem('frozenCart', JSON.stringify(cartItems));
+    }
+  }, []); // Run once on mount
+
   // Calculate totals
   const retailTotal = cartItems.reduce(
     (sum, item) => sum + item.retailPrice * item.quantity,

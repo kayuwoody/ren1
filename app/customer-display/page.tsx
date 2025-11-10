@@ -25,6 +25,24 @@ export default function CustomerDisplayPage() {
   useEffect(() => {
     const fetchCart = async () => {
       try {
+        // Check if display is frozen (during checkout)
+        const isFrozen = localStorage.getItem('displayFrozen') === 'true';
+
+        if (isFrozen) {
+          // Use frozen cart snapshot instead of fetching
+          const frozenCartJson = localStorage.getItem('frozenCart');
+          if (frozenCartJson) {
+            try {
+              const frozenCart = JSON.parse(frozenCartJson);
+              setCartItems(frozenCart);
+            } catch (err) {
+              console.error('Failed to parse frozen cart:', err);
+            }
+          }
+          return; // Don't fetch from API
+        }
+
+        // Normal polling when not frozen
         const response = await fetch('/api/cart/current');
         if (response.ok) {
           const data = await response.json();

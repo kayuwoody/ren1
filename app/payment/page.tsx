@@ -131,6 +131,10 @@ export default function PaymentPage() {
       }),
     });
 
+    // Clear display freeze flag
+    localStorage.removeItem('displayFrozen');
+    localStorage.removeItem('frozenCart');
+
     // Clear cart
     clearCart();
 
