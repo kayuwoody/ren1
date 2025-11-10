@@ -149,10 +149,10 @@ export async function recordProductSale(
   }
 
   // Process each recipe item
-  recipe.forEach(recipeItem => {
+  for (const recipeItem of recipe) {
     // Skip optional items (add-ons that weren't necessarily used)
     if (recipeItem.isOptional) {
-      return;
+      continue;
     }
 
     // Handle bundle selection filtering (works at all depths with unified selection format)
@@ -172,7 +172,7 @@ export async function recordProductSale(
 
       if (!isSelected) {
         console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
-        return; // Skip this item - it wasn't selected
+        continue; // Skip this item - it wasn't selected
       } else {
         console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
       }
@@ -323,7 +323,7 @@ export async function recordProductSale(
         console.warn(`${indent}      ⚠️  Could not find linked product for recursive processing`);
       }
     }
-  });
+  }
 
   if (depth === 0) {
     console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
