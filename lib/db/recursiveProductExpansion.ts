@@ -405,6 +405,9 @@ export function getSelectedComponents(
       if (linkedHasXORGroups) {
         const selectedVariants: string[] = [];
 
+        console.log(`    🔎 Looking for selected variants for "${linkedProd.name}":`);
+        console.log(`       Available selections:`, selections.selectedMandatory);
+
         // Find which XOR options were selected for this product
         linkedRecipe.forEach(recipeItem => {
           if (recipeItem.selectionGroup) {
@@ -414,6 +417,14 @@ export function getSelectedComponents(
 
             const selectedId = selections.selectedMandatory[uniqueKey];
 
+            console.log(`       Checking group "${recipeItem.selectionGroup}":`, {
+              uniqueKey,
+              selectedId,
+              recipeItemId: recipeItem.linkedProductId,
+              recipeItemName: recipeItem.linkedProductName,
+              matches: selectedId === recipeItem.linkedProductId
+            });
+
             if (selectedId === recipeItem.linkedProductId) {
               selectedVariants.push(recipeItem.linkedProductName || '');
             }
@@ -422,7 +433,10 @@ export function getSelectedComponents(
 
         // Prepend selected variants to product name
         if (selectedVariants.length > 0) {
+          console.log(`       ✓ Found variants:`, selectedVariants);
           displayName = `${selectedVariants.join(' ')} ${linkedProd.name}`;
+        } else {
+          console.log(`       ✗ No variants found`);
         }
       }
 
