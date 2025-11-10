@@ -39,18 +39,39 @@ export default function PromoGeneratorPage() {
 
   async function loadComboProducts() {
     try {
-      const res = await fetch('/api/products');
+      // Force sync from WooCommerce to get full category data
+      const res = await fetch('/api/products?force_sync=true');
       const data = await res.json();
 
+      // Handle both array response and {products: []} response
+      const products = Array.isArray(data) ? data : (data.products || []);
+
+      console.log('📦 Loaded products:', products.length);
+
       // Filter combo products only
-      const combos = data.products.filter((p: Product) =>
-        p.categories.some((cat) => cat.slug === 'combo')
-      );
+      const combos = products.filter((p: Product) => {
+        // Check if product has categories array
+        if (!p.categories || !Array.isArray(p.categories)) {
+          return false;
+        }
+
+        const isCombo = p.categories.some((cat) => cat.slug === 'combo');
+        if (isCombo) {
+          console.log('✅ Found combo:', p.name, p.categories.map(c => c.slug));
+        }
+        return isCombo;
+      });
+
+      console.log(`🎨 Found ${combos.length} combo products`);
+
+      if (combos.length === 0) {
+        alert('⚠️ No combo products found. Make sure your products have the "combo" category in WooCommerce.');
+      }
 
       setProducts(combos);
     } catch (err) {
       console.error('Failed to load products:', err);
-      alert('Failed to load combo products');
+      alert('Failed to load combo products. Check console for details.');
     } finally {
       setLoading(false);
     }
