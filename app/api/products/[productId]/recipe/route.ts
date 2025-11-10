@@ -60,6 +60,10 @@ export async function GET(
     // Determine if modal is needed
     const needsModal = xorGroups.length > 0 || optionalItems.length > 0;
 
+    // Determine if this is a combo product (has linked products, not just materials)
+    const hasLinkedProducts = rootRecipe.some(item => item.itemType === 'product');
+    const isCombo = hasLinkedProducts;
+
     console.log(`\n📊 Flattened recipe for modal:`);
     console.log(`  XOR Groups: ${xorGroups.length}`);
     xorGroups.forEach(g => {
@@ -67,7 +71,8 @@ export async function GET(
     });
     console.log(`  Optional: ${optionalItems.length}`);
     console.log(`  Mandatory individual: ${mandatoryIndividual.length}`);
-    console.log(`  ✅ needsModal: ${needsModal}\n`);
+    console.log(`  ✅ needsModal: ${needsModal}`);
+    console.log(`  🎁 isCombo: ${isCombo}\n`);
 
     return NextResponse.json({
       success: true,
@@ -101,6 +106,7 @@ export async function GET(
         optional: optionalItems,
       },
       needsModal,
+      isCombo, // Flag indicating if this is a combo product
     });
   } catch (error) {
     return handleApiError(error, '/api/products/[productId]/recipe');
