@@ -32,10 +32,29 @@ export async function GET(
     // Flatten ALL choices from ALL nesting levels
     const { xorGroups, optionalItems } = flattenAllChoices(product.id);
 
-    // Also get mandatory individual items at root level (for display purposes)
+    // Get mandatory individual items at root level (for display purposes)
+    // BUT exclude any that have nested XOR groups (those are already shown in the flattened groups)
     const rootRecipe = getProductRecipe(product.id);
+
+    // Find which products have nested XOR groups
+    const productsWithNestedXORs = new Set<string>();
+    rootRecipe.forEach(item => {
+      if (item.itemType === 'product' && item.linkedProductId && !item.selectionGroup && !item.isOptional) {
+        // Check if this linked product has XOR groups
+        const nestedResult = flattenAllChoices(item.linkedProductId, 1);
+        if (nestedResult.xorGroups.length > 0) {
+          productsWithNestedXORs.add(item.linkedProductId);
+        }
+      }
+    });
+
+    // Only include mandatory individuals that DON'T have nested XOR groups
     const mandatoryIndividual = rootRecipe.filter(
-      item => !item.isOptional && !item.selectionGroup && item.itemType === 'product'
+      item =>
+        !item.isOptional &&
+        !item.selectionGroup &&
+        item.itemType === 'product' &&
+        !productsWithNestedXORs.has(item.linkedProductId || '')
     );
 
     // Determine if modal is needed

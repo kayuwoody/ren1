@@ -304,19 +304,26 @@ export function calculateCOGSWithSelections(
 }
 
 /**
- * Get the selected product components for display (depth 1 only)
- * Based on user's selections, returns what products make up this bundle
+ * Get the selected product components for display
+ * Recursively follows the selection tree to get the actual selected leaf products
+ *
+ * Example: If "Wake up Wonder" → "Americano" → "Hot Americano" (selected),
+ * this returns "Hot Americano", not "Americano"
  */
 export function getSelectedComponents(
   productId: string,
   selections: UnifiedBundleSelection,
-  quantity: number = 1
+  quantity: number = 1,
+  depth: number = 0
 ): Array<{ productId: string; productName: string; quantity: number }> {
   const product = getProduct(productId);
   if (!product) return [];
 
   const recipe = getProductRecipe(productId);
   const components: Array<{ productId: string; productName: string; quantity: number }> = [];
+
+  // Group recipe items to check for XOR groups
+  const hasXORGroups = recipe.some(item => item.selectionGroup);
 
   recipe.forEach(item => {
     // Skip optional items unless selected
@@ -326,26 +333,59 @@ export function getSelectedComponents(
       }
     }
 
-    // Handle XOR groups
+    // Handle XOR groups at this level
     if (item.selectionGroup) {
-      const uniqueKey = `root:${item.selectionGroup}`;
+      const uniqueKey = depth === 0 ? `root:${item.selectionGroup}` : `${productId}:${item.selectionGroup}`;
       const selectedId = selections.selectedMandatory[uniqueKey];
 
       if (selectedId !== item.linkedProductId) {
-        return;
+        return; // This item wasn't selected in the XOR group
       }
     }
 
-    // Add only linked products (not materials)
-    if (item.itemType === 'product' && item.linkedProductId) {
-      const linkedProd = getProduct(item.linkedProductId);
-      if (linkedProd) {
+    // Only process linked products (not materials)
+    if (item.itemType !== 'product' || !item.linkedProductId) {
+      return;
+    }
+
+    const linkedProd = getProduct(item.linkedProductId);
+    if (!linkedProd) {
+      return;
+    }
+
+    const componentQuantity = item.quantity * quantity;
+
+    // Check if this linked product has its own XOR groups or nested structure
+    const linkedRecipe = getProductRecipe(item.linkedProductId);
+    const linkedHasXORGroups = linkedRecipe.some(r => r.selectionGroup);
+
+    if (linkedHasXORGroups || linkedRecipe.length > 0) {
+      // This product has nested choices - recurse to get the actual selected items
+      const nestedComponents = getSelectedComponents(
+        item.linkedProductId,
+        selections,
+        componentQuantity,
+        depth + 1
+      );
+
+      // If recursion found components, use those. Otherwise, use this product.
+      if (nestedComponents.length > 0) {
+        components.push(...nestedComponents);
+      } else {
+        // No nested components found, add this product as-is
         components.push({
           productId: linkedProd.id,
           productName: linkedProd.name,
-          quantity: item.quantity * quantity,
+          quantity: componentQuantity,
         });
       }
+    } else {
+      // This is a leaf product - add it directly
+      components.push({
+        productId: linkedProd.id,
+        productName: linkedProd.name,
+        quantity: componentQuantity,
+      });
     }
   });
 
