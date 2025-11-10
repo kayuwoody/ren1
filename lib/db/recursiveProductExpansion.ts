@@ -366,11 +366,12 @@ export function getSelectedComponents(
       recipeItems: linkedRecipe.map(r => `${r.itemType}:${r.linkedProductName || r.materialName}`)
     });
 
-    // Only recurse if the linked product has XOR groups OR other products
-    // Don't recurse if it only has materials (leaf product from user's perspective)
-    if (linkedHasXORGroups || linkedHasProducts) {
-      console.log(`    ↪️  Recursing into "${linkedProd.name}"`);
-      // This product has nested choices/products - recurse to get the actual selected items
+    // Only recurse if the product has OTHER products BUT NO XOR groups
+    // If it has XOR groups, it's a complete product with internal choices (like "Hot Americano") - don't expand
+    // If it only has materials, it's a leaf product - don't expand
+    if (linkedHasProducts && !linkedHasXORGroups) {
+      console.log(`    ↪️  Recursing into "${linkedProd.name}" (has nested products, no XOR)`);
+      // This product is a bundle of other products - recurse to get them
       const nestedComponents = getSelectedComponents(
         item.linkedProductId,
         selections,
@@ -393,8 +394,12 @@ export function getSelectedComponents(
         });
       }
     } else {
-      // This is a leaf product (only has materials) - add it directly, don't expand into materials
-      console.log(`    ✅ Adding leaf product "${linkedProd.name}" (only has materials)`);
+      // This product either:
+      // 1. Has XOR groups (internal choices like "Hot vs Iced") - it's a complete product, show as-is
+      // 2. Only has materials - it's a leaf product, show as-is
+      // Either way, don't expand into components
+      const reason = linkedHasXORGroups ? 'has internal XOR choices' : 'only has materials';
+      console.log(`    ✅ Adding complete product "${linkedProd.name}" (${reason})`);
       components.push({
         productId: linkedProd.id,
         productName: linkedProd.name,
