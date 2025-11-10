@@ -184,11 +184,11 @@ Total COGS = RM 7.00 (all materials shown, not just "Espresso: RM 1.20")
 ---
 
 ### 5. Inventory Consumption Recording
-**File:** `lib/db/inventoryConsumptionService.ts` (lines 35-264)
+**File:** `lib/db/inventoryConsumptionService.ts` (lines 35-328)
 
 **Critical Function:**
 ```typescript
-export function recordProductSale(
+export async function recordProductSale(  // ⚠️ NOW ASYNC!
   orderId: string,
   wcProductId: string | number,
   productName: string,
@@ -200,20 +200,22 @@ export function recordProductSale(
   },
   depth: number = 0,                     // CRITICAL: Recursive depth
   parentChain: string = ''
-)
+): Promise<InventoryConsumption[]>       // ⚠️ Returns Promise!
 ```
 
 **Why Critical:**
 - **MUST recursively deduct materials from stock** for nested products
 - **MUST filter by bundle selection** (XOR groups like Hot vs Iced)
+- **MUST deduct WooCommerce inventory for linked products in combos** (NEW!)
 - Records consumption history for COGS reporting
-- Deducts materials from inventory
+- Deducts materials from local inventory
 
 **Dependencies:**
 - `getProductByWcId()` - Find product
 - `getProductRecipe()` - Get recipe
-- `deductMaterialStock()` - Update inventory
-- **Recursively calls itself** for linked products (lines 242-252)
+- `deductMaterialStock()` - Update local material inventory
+- `deductWooProductStock()` - Update WooCommerce product inventory (NEW!)
+- **Recursively calls itself** for linked products (lines 307-321)
 
 **XOR Filtering Logic (lines 158-171):**
 ```typescript
@@ -246,6 +248,52 @@ if (depth === 0 && bundleSelection && recipeItem.selectionGroup) {
 - Remove bundleSelection handling (breaks XOR logic)
 - Skip deductMaterialStock() calls
 - Remove XOR filtering (causes wrong materials to be deducted)
+- **Make it synchronous again** - it MUST be async for WooCommerce API calls
+- **Remove await when calling** - always use `await recordProductSale(...)`
+
+---
+
+### 5b. WooCommerce Inventory Deduction (NEW)
+**File:** `lib/db/inventoryConsumptionService.ts` (lines 355-386)
+
+**Critical Function:**
+```typescript
+async function deductWooProductStock(
+  wcProductId: number,
+  quantity: number,
+  productName: string
+): Promise<void>
+```
+
+**Why Critical:**
+- When a combo is sold (e.g., Wake-Up Wonder), WooCommerce only deducts combo inventory
+- Component products (Danish, Americano) must be manually deducted via API
+- Without this, component inventory never decreases in WooCommerce
+
+**How It Works:**
+1. Fetch product from WooCommerce API
+2. Check if product `manage_stock` is enabled
+3. Calculate new stock: `current - quantity`
+4. Update via `wcApi.put()`
+5. Log warnings if stock goes negative
+
+**Called From:**
+- `recordProductSale()` at line 307 for all linked products
+
+**Last Working Commit:** `bd54bc5` (Add WooCommerce inventory deduction)
+
+**Test Scenario:**
+1. Sell 1 Wake-Up Wonder combo (contains Danish + Americano)
+2. Check WooCommerce admin inventory:
+   - Wake-Up Wonder: -1 (automatic)
+   - Danish: -1 (via our API) ← NEW
+   - Americano: -1 (via our API) ← NEW
+3. Verify server logs show: `📦 WooCommerce Inventory: 🍇 Blueberry Danish (10 → 9)`
+
+**⚠️ NEVER:**
+- Remove API calls to WooCommerce
+- Make this synchronous (breaks recordProductSale)
+- Skip the `manage_stock` check (breaks products that don't track inventory)
 
 ---
 
@@ -494,6 +542,11 @@ Before modifying code in this file:
 
 ---
 
-**Last Updated:** Session 011CUuTiUmBCgpKEL4iJdCow
+**Last Updated:** Session 011CUyHhvr99aAQihXBa6wU3
 **Maintainer:** User (business logic owner)
 **Purpose:** Prevent accidental breakage of critical money/inventory functions
+
+**Key Changes This Session:**
+- Made `recordProductSale()` async to support WooCommerce API calls
+- Added `deductWooProductStock()` for combo component inventory
+- Updated all callers to use `await recordProductSale(...)`

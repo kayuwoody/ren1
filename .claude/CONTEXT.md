@@ -15,12 +15,24 @@ Coffee shop POS (Next.js 14, TypeScript, WooCommerce API, SQLite). Currency: RM 
 - **Storage**: `item.components` array in cart, `_bundle_components` in order metadata
 - **Result**: ~99% reduction in API calls
 
-### SSE Push Updates (Latest)
+### SSE Push Updates (Replaces Polling)
 - **Replaced polling**: Customer display (was 60 req/min) and kitchen display (was 6 req/min) now use SSE
 - **Endpoints**: `/api/cart/stream` (cart), `/api/kitchen/stream` (orders)
 - **Managers**: `lib/sse/cartStreamManager.ts`, `lib/sse/orderStreamManager.ts`
 - **Broadcasts**: Cart updates → `broadcastCartUpdate()`, Order updates → `broadcastOrderUpdate()`
 - **Result**: Zero polling, instant push updates across devices on network
+
+### WooCommerce Inventory for Combo Components
+- **Problem**: Danish/Americano inventory not decreasing when sold as part of Wake-Up Wonder combo
+- **Solution**: Added `deductWooProductStock()` - updates WooCommerce inventory via API for all linked products
+- **Function**: `recordProductSale()` is now **async** (important!)
+- **Flow**: Combo sold → WooCommerce deducts combo → Our code deducts component products (Danish, Americano, etc.)
+- **Location**: `lib/db/inventoryConsumptionService.ts:355-386`
+
+### UI Improvements
+- **Admin Dashboard**: Removed redundant POS button, added Daily Sales shortcut (green button, first in Analytics)
+- **Daily Sales**: Orders expand by default instead of collapsed
+- **Customer Display**: Connection status indicator (green=live, yellow=connecting, red=disconnected)
 
 ## Critical Rules (READ FIRST)
 
@@ -39,10 +51,11 @@ const value = getMetaValue(order.meta_data, '_key', 'default');
 
 ### 2. NEVER Modify Without Approval
 **File**: `.claude/CRITICAL_FUNCTIONS.md` - Lists money/inventory functions with recursion
-- Inventory consumption: `recordProductSale()` - recursive, filters by bundle selection
+- Inventory consumption: `recordProductSale()` - **ASYNC**, recursive, filters by bundle selection, updates WooCommerce
 - COGS calculation: `calculateProductCOGS()` - recursive, filters by bundle selection
 - Order line items: `app/payment/page.tsx:34-67` - discount + bundle metadata
 - Check git history first: `git log --all -S "function_name" -- file_path`
+- **IMPORTANT**: Always await `recordProductSale()` - it's async now!
 
 ### 3. Bundle Component Display Pattern
 ```typescript
