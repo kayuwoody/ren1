@@ -188,7 +188,7 @@ export default function CustomerDisplayPage() {
                       {/* Show expanded components */}
                       {expandedComponents.length > 0 && (
                         <div className="mt-2 ml-12 space-y-1">
-                          {expandedComponents.map((component, idx) => (
+                          {expandedComponents.map((component: any, idx: number) => (
                             <div key={idx} className="text-base text-gray-600 flex items-start">
                               <span className="mr-2">→</span>
                               <span>{component.productName} × {component.quantity}</span>
