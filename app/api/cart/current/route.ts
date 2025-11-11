@@ -33,17 +33,17 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
+    let cartUpdated = false;
+    let pendingOrderUpdated = false;
+
     // Update cart
     if (body.cart !== undefined) {
       currentCart = body.cart || [];
-
-      // Broadcast update to all connected customer displays
-      broadcastCartUpdate(currentCart, false);
-
-      return NextResponse.json({ success: true });
+      cartUpdated = true;
+      console.log(`🛒 Updated cart with ${currentCart.length} items`);
     }
 
-    // Set pending order (when checkout creates an order)
+    // Set/clear pending order
     if (body.setPendingOrder !== undefined) {
       if (body.setPendingOrder) {
         pendingOrder = {
@@ -54,14 +54,25 @@ export async function POST(req: Request) {
 
         // Broadcast pending order to display
         broadcastCartUpdate(pendingOrder.items, true);
+        pendingOrderUpdated = true;
       } else {
         // Clear pending order (when payment is complete)
         console.log(`✅ Cleared pending order: ${pendingOrder?.orderId}`);
         pendingOrder = null;
-
-        // Broadcast empty cart (payment complete)
-        broadcastCartUpdate(currentCart, false);
+        pendingOrderUpdated = true;
       }
+    }
+
+    // Broadcast cart update if cart was updated and no pending order update occurred
+    // (if pending order was updated, we already broadcast in the pending order logic)
+    if (cartUpdated && !pendingOrderUpdated) {
+      broadcastCartUpdate(currentCart, false);
+    } else if (cartUpdated && pendingOrderUpdated && !body.setPendingOrder) {
+      // Special case: both cart cleared and pending order cleared (payment complete)
+      broadcastCartUpdate(currentCart, false);
+    }
+
+    if (cartUpdated || pendingOrderUpdated) {
       return NextResponse.json({ success: true });
     }
 

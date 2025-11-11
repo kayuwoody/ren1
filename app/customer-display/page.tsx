@@ -86,25 +86,14 @@ export default function CustomerDisplayPage() {
       <div className="mb-4 border-b border-gray-200 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="relative w-36 h-36">
+            <div className="relative h-36 w-auto">
               <Image
-                src="/co mascot.png"
-                alt="Coffee Oasis Mascot"
-                fill
+                src="/co line mascot.png"
+                alt="Coffee Oasis"
+                width={800}
+                height={144}
                 className="object-contain"
               />
-            </div>
-            <div>
-              <div className="relative h-24 w-auto">
-                <Image
-                  src="/co title.png"
-                  alt="Coffee Oasis"
-                  width={600}
-                  height={96}
-                  className="object-contain"
-                />
-              </div>
-              <p className="text-sm text-gray-600 mt-4">Your Order</p>
             </div>
           </div>
           <div className="text-right">
@@ -141,6 +130,11 @@ export default function CustomerDisplayPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Your Order Text */}
+      <div className="mb-4">
+        <p className="text-2xl font-semibold text-gray-800">Your Order</p>
       </div>
 
       {/* Items List */}
