@@ -38,6 +38,23 @@ export async function POST(req: Request) {
 
     // Update cart
     if (body.cart !== undefined) {
+      // IMPORTANT: If cart is being updated with new items (not empty),
+      // clear any stale pending order to prevent display from showing old order
+      if (body.cart.length > 0 && pendingOrder !== null && body.setPendingOrder === undefined) {
+        console.log(`🧹 Auto-clearing stale pending order (${pendingOrder.orderId}) due to new cart items`);
+
+        // First, broadcast empty cart to force display to reset
+        broadcastCartUpdate([], false);
+        console.log(`📺 Sent empty cart to reset display`);
+
+        // Clear the pending order
+        pendingOrder = null;
+        pendingOrderUpdated = true;
+
+        // Small delay to ensure empty cart is processed first
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
       currentCart = body.cart || [];
       cartUpdated = true;
       console.log(`🛒 Updated cart with ${currentCart.length} items`);

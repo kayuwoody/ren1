@@ -365,7 +365,7 @@ async function deductWooProductStock(wcProductId: number, quantity: number, prod
   try {
     // Fetch current product from WooCommerce
     const response = await wcApi.get(`products/${wcProductId}`);
-    const product = response.data;
+    const product = (response as any).data;
 
     // Check if product manages stock
     if (!product.manage_stock) {

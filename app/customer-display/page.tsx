@@ -24,51 +24,81 @@ export default function CustomerDisplayPage() {
 
   // Listen for cart updates via Server-Sent Events (push-based, no polling)
   useEffect(() => {
-    console.log('📺 Customer Display: Connecting to cart updates stream...');
-    setConnectionStatus('connecting');
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let isManualClose = false;
 
-    // Connect to SSE endpoint
-    const eventSource = new EventSource('/api/cart/stream');
+    const connect = () => {
+      console.log('📺 Customer Display: Connecting to cart updates stream...');
+      setConnectionStatus('connecting');
 
-    eventSource.onopen = () => {
-      console.log('📺 Customer Display: ✅ Connected to cart stream');
-      setConnectionStatus('connected');
-    };
+      // Connect to SSE endpoint
+      eventSource = new EventSource('/api/cart/stream');
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log('📺 Customer Display: Received event:', data.type, new Date().toISOString());
+      eventSource.onopen = () => {
+        console.log('📺 Customer Display: ✅ Connected to cart stream');
+        setConnectionStatus('connected');
+      };
 
-        if (data.type === 'cart-update') {
-          setCartItems(data.cart || []);
-          console.log('📺 Customer Display: Updated cart with', data.cart?.length || 0, 'items');
-        } else if (data.type === 'connected') {
-          console.log('📺 Customer Display: Connection confirmed by server');
-          // Fetch initial cart state
-          fetch('/api/cart/current')
-            .then(res => res.json())
-            .then(data => {
-              setCartItems(data.cart || []);
-              console.log('📺 Customer Display: Loaded initial cart with', data.cart?.length || 0, 'items');
-            })
-            .catch(err => console.error('Failed to fetch initial cart:', err));
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('📺 Customer Display: Received event:', data.type, new Date().toISOString());
+
+          if (data.type === 'cart-update') {
+            setCartItems(data.cart || []);
+            console.log('📺 Customer Display: Updated cart with', data.cart?.length || 0, 'items');
+          } else if (data.type === 'connected') {
+            console.log('📺 Customer Display: Connection confirmed by server');
+            // Fetch initial cart state
+            fetch('/api/cart/current')
+              .then(res => res.json())
+              .then(data => {
+                setCartItems(data.cart || []);
+                console.log('📺 Customer Display: Loaded initial cart with', data.cart?.length || 0, 'items');
+              })
+              .catch(err => console.error('Failed to fetch initial cart:', err));
+          }
+        } catch (err) {
+          console.error('📺 Customer Display: Failed to parse SSE message:', err);
         }
-      } catch (err) {
-        console.error('📺 Customer Display: Failed to parse SSE message:', err);
-      }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('📺 Customer Display: ❌ SSE connection error:', error);
+        console.log('📺 Customer Display: Ready state:', eventSource?.readyState);
+        setConnectionStatus('disconnected');
+
+        // Close the failed connection
+        if (eventSource) {
+          eventSource.close();
+        }
+
+        // Only reconnect if not manually closed
+        if (!isManualClose) {
+          console.log('📺 Customer Display: Will attempt reconnect in 3 seconds...');
+          reconnectTimeout = setTimeout(() => {
+            connect();
+          }, 3000);
+        }
+      };
     };
 
-    eventSource.onerror = (error) => {
-      console.error('📺 Customer Display: ❌ SSE connection error:', error);
-      console.log('📺 Customer Display: Ready state:', eventSource.readyState);
-      setConnectionStatus('disconnected');
-      // EventSource will automatically attempt to reconnect
-    };
+    // Initial connection
+    connect();
 
     return () => {
       console.log('📺 Customer Display: 🔌 Disconnecting from cart stream (component unmount)');
-      eventSource.close();
+      isManualClose = true;
+
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+
+      if (eventSource) {
+        eventSource.close();
+      }
+
       setConnectionStatus('disconnected');
     };
   }, []);
@@ -190,7 +220,7 @@ export default function CustomerDisplayPage() {
                       {/* Show expanded components */}
                       {expandedComponents.length > 0 && (
                         <div className="mt-2 ml-12 space-y-1">
-                          {expandedComponents.map((component, idx) => (
+                          {expandedComponents.map((component: any, idx: number) => (
                             <div key={idx} className="text-base text-gray-600 flex items-start">
                               <span className="mr-2">→</span>
                               <span>{component.productName} × {component.quantity}</span>

@@ -64,7 +64,7 @@ export async function POST(req: Request) {
         }
 
         // Record consumption
-        const consumptions = recordProductSale(
+        const consumptions = await recordProductSale(
           String(orderId),
           String(product_id),
           name,

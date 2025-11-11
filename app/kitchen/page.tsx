@@ -311,32 +311,32 @@ export default function KitchenDisplayPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-500 mx-auto mb-4"></div>
-          <p className="text-gray-300 text-xl">Loading kitchen display...</p>
+          <p className="text-gray-700 text-xl">Loading kitchen display...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 p-3">
+    <div className="min-h-screen bg-white p-3">
       {/* Header */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push("/admin/orders")}
-              className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition"
+              className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition"
             >
-              <span className="text-white text-2xl">←</span>
+              <span className="text-gray-900 text-2xl">←</span>
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-white">
+              <h1 className="text-2xl font-bold text-gray-900">
                 🍳 Kitchen Display
               </h1>
-              <p className="text-gray-400 text-sm">
+              <p className="text-gray-600 text-sm">
                 {orders.length} order{orders.length !== 1 ? "s" : ""} in progress
               </p>
             </div>
@@ -344,11 +344,11 @@ export default function KitchenDisplayPage() {
           <div className="text-right">
             <button
               onClick={fetchOrders}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition text-sm"
+              className="px-4 py-2 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300 transition text-sm"
             >
               🔄 Refresh
             </button>
-            <p className="text-gray-500 text-sm mt-2">
+            <p className="text-gray-600 text-sm mt-2">
               Auto-refresh: 10s
             </p>
           </div>
@@ -357,8 +357,8 @@ export default function KitchenDisplayPage() {
 
       {/* Error Display */}
       {error && (
-        <div className="mb-6 bg-red-900 border-2 border-red-500 rounded-lg p-4">
-          <p className="text-red-200 text-lg">⚠️ {error}</p>
+        <div className="mb-6 bg-red-50 border-2 border-red-500 rounded-lg p-4">
+          <p className="text-red-700 text-lg">⚠️ {error}</p>
         </div>
       )}
 
@@ -367,8 +367,8 @@ export default function KitchenDisplayPage() {
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
             <p className="text-6xl mb-4">✅</p>
-            <p className="text-2xl text-gray-400">All caught up!</p>
-            <p className="text-gray-500 mt-2">No orders to prepare right now</p>
+            <p className="text-2xl text-gray-700">All caught up!</p>
+            <p className="text-gray-600 mt-2">No orders to prepare right now</p>
           </div>
         </div>
       ) : (
@@ -389,16 +389,16 @@ export default function KitchenDisplayPage() {
             return (
               <div
                 key={order.id}
-                className={`bg-gray-800 rounded-lg border-2 ${borderColor} p-3 shadow-lg`}
+                className={`bg-gray-50 rounded-lg border-2 ${borderColor} p-3 shadow-lg`}
               >
                 {/* Order Number */}
                 <div className="mb-2">
-                  <h2 className="text-3xl font-bold text-white mb-1">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-1">
                     #{order.number}
                   </h2>
                   <div className="flex items-center justify-between">
-                    <p className="text-gray-400 text-sm">Order ID: {order.id}</p>
-                    <p className="text-blue-400 text-sm font-semibold">
+                    <p className="text-gray-600 text-sm">Order ID: {order.id}</p>
+                    <p className="text-blue-600 text-sm font-semibold">
                       🕐 {getOrderAge(order)}m old
                     </p>
                   </div>
@@ -408,23 +408,23 @@ export default function KitchenDisplayPage() {
                 {timerInfo ? (
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-gray-300 text-sm font-medium">
+                      <span className="text-gray-700 text-sm font-medium">
                         {timerInfo.isOverdue ? "OVERDUE" : "Time Remaining"}
                       </span>
                       <span
                         className={`text-2xl font-bold ${
                           timerInfo.statusColor === "green"
-                            ? "text-green-400"
+                            ? "text-green-600"
                             : timerInfo.statusColor === "yellow"
-                            ? "text-yellow-400"
-                            : "text-red-400"
+                            ? "text-yellow-600"
+                            : "text-red-600"
                         }`}
                       >
                         {timerInfo.isOverdue ? "+" : ""}
                         {Math.abs(timerInfo.remainingMinutes)}m
                       </span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-3">
+                    <div className="w-full bg-gray-200 rounded-full h-3">
                       <div
                         className={`h-3 rounded-full transition-all ${
                           timerInfo.statusColor === "green"
@@ -436,13 +436,13 @@ export default function KitchenDisplayPage() {
                         style={{ width: `${Math.min(100, timerInfo.progress)}%` }}
                       ></div>
                     </div>
-                    <p className="text-gray-500 text-xs mt-1">
+                    <p className="text-gray-600 text-xs mt-1">
                       Started {timerInfo.elapsedMinutes}m ago
                     </p>
                   </div>
                 ) : (
-                  <div className="mb-4 bg-yellow-900 border border-yellow-600 rounded p-2">
-                    <p className="text-yellow-300 text-xs">
+                  <div className="mb-4 bg-yellow-50 border border-yellow-500 rounded p-2">
+                    <p className="text-yellow-700 text-xs">
                       ⚠️ No timer set for this order
                     </p>
                   </div>
@@ -451,10 +451,10 @@ export default function KitchenDisplayPage() {
                 {/* Items */}
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-gray-400 text-sm font-semibold uppercase">
+                    <h3 className="text-gray-700 text-sm font-semibold uppercase">
                       Items to Prepare
                     </h3>
-                    <p className="text-gray-500 text-xs italic">
+                    <p className="text-gray-600 text-xs italic">
                       👆 Click to mark in progress
                     </p>
                   </div>
@@ -474,22 +474,22 @@ export default function KitchenDisplayPage() {
                           onClick={() => toggleItemInProgress(order.id, item.id)}
                           className={`rounded-lg p-3 cursor-pointer transition-all ${
                             isInProgress
-                              ? "bg-blue-600 ring-2 ring-blue-400"
-                              : "bg-gray-700 hover:bg-gray-600"
+                              ? "bg-blue-100 ring-2 ring-blue-400 border border-blue-300"
+                              : "bg-white hover:bg-gray-100 border border-gray-300"
                           }`}
                           title="Click to mark as in progress"
                         >
                           <div className="flex items-start gap-3">
                             <span className={`font-bold text-xl px-3 py-2 rounded min-w-[3.5rem] text-center flex-shrink-0 ${
                               isInProgress
-                                ? "bg-blue-800 text-blue-100"
+                                ? "bg-blue-500 text-white"
                                 : "bg-green-600 text-white"
                             }`}>
                               {isInProgress ? "👨‍🍳" : `${item.quantity}×`}
                             </span>
                             <div className="flex-1 min-w-0">
                               <p className={`text-lg font-semibold leading-tight ${
-                                isInProgress ? "text-blue-50" : "text-white"
+                                isInProgress ? "text-blue-900" : "text-gray-900"
                               }`}>
                                 {item.name}
                               </p>
@@ -497,7 +497,7 @@ export default function KitchenDisplayPage() {
                               {/* Item SKU if available */}
                               {item.sku && (
                                 <p className={`text-xs mt-1 ${
-                                  isInProgress ? "text-blue-200" : "text-gray-400"
+                                  isInProgress ? "text-blue-700" : "text-gray-600"
                                 }`}>
                                   SKU: {item.sku}
                                 </p>
@@ -512,11 +512,11 @@ export default function KitchenDisplayPage() {
 
                                     return (
                                       <div key={idx} className="text-sm">
-                                        <span className={isInProgress ? "text-blue-200" : "text-yellow-400"}>
+                                        <span className={isInProgress ? "text-blue-700" : "text-yellow-700"}>
                                           ▸ {meta.display_key || meta.key}:
                                         </span>
                                         <span className={`ml-1 ${
-                                          isInProgress ? "text-blue-50" : "text-white"
+                                          isInProgress ? "text-blue-900" : "text-gray-900"
                                         }`}>
                                           {typeof meta.display_value !== 'undefined' ? meta.display_value : meta.value}
                                         </span>
@@ -528,7 +528,7 @@ export default function KitchenDisplayPage() {
 
                               {/* Price for reference */}
                               <p className={`text-xs mt-2 ${
-                                isInProgress ? "text-blue-200" : "text-gray-400"
+                                isInProgress ? "text-blue-700" : "text-gray-600"
                               }`}>
                                 RM {parseFloat(item.total).toFixed(2)}
                               </p>
@@ -542,22 +542,22 @@ export default function KitchenDisplayPage() {
 
                 {/* Order Notes/Special Instructions */}
                 {order.customer_note && (
-                  <div className="mb-4 bg-yellow-900 border-2 border-yellow-500 rounded-lg p-3">
-                    <h4 className="text-yellow-300 text-xs font-semibold uppercase mb-1 flex items-center gap-1">
+                  <div className="mb-4 bg-yellow-50 border-2 border-yellow-500 rounded-lg p-3">
+                    <h4 className="text-yellow-800 text-xs font-semibold uppercase mb-1 flex items-center gap-1">
                       <span>📝</span>
                       <span>Special Instructions</span>
                     </h4>
-                    <p className="text-yellow-100 text-sm font-medium">
+                    <p className="text-yellow-900 text-sm font-medium">
                       {order.customer_note}
                     </p>
                   </div>
                 )}
 
                 {/* Order Total */}
-                <div className="mb-4 bg-gray-700 rounded-lg p-3">
+                <div className="mb-4 bg-gray-100 rounded-lg p-3 border border-gray-300">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-400 text-sm">Order Total</span>
-                    <span className="text-white text-xl font-bold">
+                    <span className="text-gray-700 text-sm">Order Total</span>
+                    <span className="text-gray-900 text-xl font-bold">
                       RM {parseFloat(order.total).toFixed(2)}
                     </span>
                   </div>
@@ -570,7 +570,7 @@ export default function KitchenDisplayPage() {
                     disabled={isUpdating}
                     className={`py-3 rounded-lg font-bold text-base transition-all ${
                       isUpdating
-                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                         : "bg-green-600 text-white hover:bg-green-500 active:scale-95"
                     }`}
                   >
@@ -584,7 +584,7 @@ export default function KitchenDisplayPage() {
                     disabled={isUpdating}
                     className={`py-3 rounded-lg font-bold text-base transition-all ${
                       isUpdating
-                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                         : "bg-blue-600 text-white hover:bg-blue-500 active:scale-95"
                     }`}
                   >

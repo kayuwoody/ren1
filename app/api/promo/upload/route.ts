@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
-import wooClient from '@/lib/wooClient';
+import { wcApi } from '@/lib/wooClient';
 
 /**
  * Upload promo image to WooCommerce media library
@@ -26,14 +26,13 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Upload to WooCommerce media library
-    const mediaResponse = await wooClient.post('media', buffer, {
-      headers: {
-        'Content-Type': file.type,
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
+    // Note: The WooCommerce client handles file uploads with just endpoint and data
+    const mediaResponse = await wcApi.post('media', {
+      file: buffer,
+      title: filename,
     });
 
-    const media = mediaResponse.data;
+    const media = (mediaResponse as any).data;
 
     console.log('✅ Promo image uploaded to WooCommerce:', {
       id: media.id,
@@ -44,7 +43,7 @@ export async function POST(req: Request) {
     // If productId provided, associate image with product
     if (productId) {
       try {
-        await wooClient.put(`products/${productId}`, {
+        await wcApi.put(`products/${productId}`, {
           images: [
             {
               id: media.id,
