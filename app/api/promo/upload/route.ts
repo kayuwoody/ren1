@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
-import wooClient from '@/lib/wooClient';
+import { wcApi } from '@/lib/wooClient';
 
 /**
  * Upload promo image to WooCommerce media library
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Upload to WooCommerce media library
-    const mediaResponse = await wooClient.post('media', buffer, {
+    const mediaResponse = await wcApi.post('media', buffer, {
       headers: {
         'Content-Type': file.type,
         'Content-Disposition': `attachment; filename="${filename}"`,
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     // If productId provided, associate image with product
     if (productId) {
       try {
-        await wooClient.put(`products/${productId}`, {
+        await wcApi.put(`products/${productId}`, {
           images: [
             {
               id: media.id,

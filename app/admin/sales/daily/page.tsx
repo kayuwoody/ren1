@@ -83,7 +83,7 @@ export default function DailySalesDetailPage() {
         setData(data);
 
         // Expand all orders by default
-        const allOrderIds = new Set(data.orders.map((order: Order) => order.id));
+        const allOrderIds = new Set<number>(data.orders.map((order: Order) => order.id));
         setExpandedOrders(allOrderIds);
       }
     } catch (err) {
