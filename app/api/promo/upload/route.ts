@@ -26,14 +26,13 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Upload to WooCommerce media library
-    const mediaResponse = await wcApi.post('media', buffer, {
-      headers: {
-        'Content-Type': file.type,
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
+    // Note: The WooCommerce client handles file uploads with just endpoint and data
+    const mediaResponse = await wcApi.post('media', {
+      file: buffer,
+      title: filename,
     });
 
-    const media = mediaResponse.data;
+    const media = (mediaResponse as any).data;
 
     console.log('✅ Promo image uploaded to WooCommerce:', {
       id: media.id,
