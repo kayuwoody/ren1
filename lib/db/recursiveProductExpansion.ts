@@ -1,5 +1,5 @@
 import { getProduct, getProductByWcId } from './productService';
-import { getProductRecipe, RecipeItem } from './recipeService';
+import { getProductRecipe, ProductRecipeItem } from './recipeService';
 
 /**
  * Represents a flattened XOR group from any nesting level
@@ -84,9 +84,9 @@ export function flattenAllChoices(
   console.log(`${indent}🔍 Flattening choices for: ${product.name} (depth ${depth})`);
 
   // Group recipe items by selection group
-  const groupedBySelection: Record<string, RecipeItem[]> = {};
-  const mandatoryIndividual: RecipeItem[] = [];
-  const optional: RecipeItem[] = [];
+  const groupedBySelection: Record<string, ProductRecipeItem[]> = {};
+  const mandatoryIndividual: ProductRecipeItem[] = [];
+  const optional: ProductRecipeItem[] = [];
 
   recipe.forEach((item) => {
     if (item.isOptional) {
@@ -126,7 +126,7 @@ export function flattenAllChoices(
           return {
             id: item.linkedProductId!,
             name: item.linkedProductName || linkedProd?.name || 'Unknown',
-            priceAdjustment: item.priceAdjustment || 0,
+            priceAdjustment: (item as any).priceAdjustment || 0,
           };
         }),
     });
@@ -141,7 +141,7 @@ export function flattenAllChoices(
       optionalItems.push({
         id: item.linkedProductId,
         name: item.linkedProductName || linkedProd?.name || 'Unknown',
-        priceAdjustment: item.priceAdjustment || 0,
+        priceAdjustment: (item as any).priceAdjustment || 0,
         parentProductId: depth === 0 ? undefined : product.id,
         parentProductName: depth === 0 ? undefined : product.name,
       });
@@ -234,7 +234,7 @@ export function calculatePriceWithSelections(
 
     // Add price adjustment and recurse if needed
     if (item.itemType === 'product' && item.linkedProductId) {
-      totalPrice += (item.priceAdjustment || 0) * quantity;
+      totalPrice += ((item as any).priceAdjustment || 0) * quantity;
 
       // Recurse to get nested prices
       const nestedPrice = calculatePriceWithSelections(
