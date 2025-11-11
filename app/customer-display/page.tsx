@@ -88,14 +88,22 @@ export default function CustomerDisplayPage() {
           <div className="flex items-center gap-3">
             <div className="relative w-12 h-12">
               <Image
-                src="/mascot.jpg"
+                src="/co mascot.png"
                 alt="Coffee Oasis Mascot"
                 fill
                 className="object-contain"
               />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">Coffee Oasis</h1>
+              <div className="relative h-8 w-auto">
+                <Image
+                  src="/co title.png"
+                  alt="Coffee Oasis"
+                  width={200}
+                  height={32}
+                  className="object-contain"
+                />
+              </div>
               <p className="text-sm text-gray-600">Your Order</p>
             </div>
           </div>
@@ -140,9 +148,9 @@ export default function CustomerDisplayPage() {
         {cartItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full">
             <div className="text-center">
-              <div className="relative w-32 h-32 mx-auto mb-4">
+              <div className="relative w-48 h-48 mx-auto mb-4">
                 <Image
-                  src="/mascot.jpg"
+                  src="/co mascot.png"
                   alt="Coffee Oasis Mascot"
                   fill
                   className="object-contain"
