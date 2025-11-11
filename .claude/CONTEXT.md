@@ -6,9 +6,17 @@ Coffee shop POS (Next.js 14, TypeScript, WooCommerce API, SQLite). Currency: RM 
 ## Current Branch
 `claude/bundle-expansion-fix-011CUyHhvr99aAQihXBa6wU3`
 
-## Recently Completed (Session 011CUyHhvr99aAQihXBa6wU3)
+## Recently Completed
 
-### Bundle Component Optimization
+### Promo Image Generator (Session 011CUyHhvr99aAQihXBa6wU3)
+- **Feature**: Automated promo image generation for combo products
+- **Style**: Playful, cutesy kawaii aesthetic matching chibi unicorn mascot
+- **Formats**: Menu board (1920×1080), Instagram (1080×1080), Locker display (1080×1920)
+- **Tech**: Client-side Canvas API (no server dependencies), WooCommerce media library integration
+- **Location**: `/admin/promo-generator`
+- **Documentation**: See `.claude/PROMO_GENERATOR.md`
+
+### Bundle Component Optimization (Session 011CUyHhvr99aAQihXBa6wU3)
 - **Problem**: Bundle components fetched repeatedly (60+ API calls/min), regular products showing component breakdown incorrectly
 - **Solution**: Fetch once at add-to-cart, store in cart/order metadata. Only combo products show breakdown.
 - **Detection**: `product.categories.some(cat => cat.slug === 'combo')` → fetch components
@@ -91,6 +99,7 @@ lib/
     orderStreamManager.ts    ← SSE manager for order updates
   orderService.ts
   wooClient.ts
+  promoImageGenerator.ts     ← Promo image generation (Canvas API)
 
 app/api/
   cart/
@@ -98,12 +107,14 @@ app/api/
     stream/route.ts     ← SSE endpoint for customer display
   kitchen/stream/route.ts  ← SSE endpoint for kitchen display
   update-order/[orderId]/route.ts  ← Broadcasts order updates
+  promo/upload/route.ts  ← Upload promo images to WooCommerce
 
 app/
   customer-display/page.tsx  ← Listens to SSE (no polling)
   kitchen/page.tsx           ← Listens to SSE (no polling)
   products/page.tsx          ← Checks isCombo, fetches components once
   payment/page.tsx           ← Stores components in order metadata
+  admin/promo-generator/page.tsx  ← Generate promo images for combos
 
 context/cartContext.tsx  ← CartItem.components field
 components/ProductSelectionModal.tsx  ← isCombo prop, buildDisplayName()

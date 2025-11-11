@@ -30,9 +30,61 @@ export default function KitchenDisplayPage() {
   const [error, setError] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
 
+  // Track which items are being worked on (kitchen staff can click to mark)
+  const [itemsInProgress, setItemsInProgress] = useState<Set<string>>(new Set());
+
   // Track previous order IDs to detect new orders
   const previousOrderIds = useRef<Set<number>>(new Set());
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Load items in progress from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('kitchen_items_in_progress');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setItemsInProgress(new Set(parsed));
+      } catch (err) {
+        console.error('Failed to load items in progress:', err);
+      }
+    }
+  }, []);
+
+  // Save items in progress to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(
+      'kitchen_items_in_progress',
+      JSON.stringify(Array.from(itemsInProgress))
+    );
+  }, [itemsInProgress]);
+
+  // Toggle item in progress state
+  const toggleItemInProgress = (orderId: number, itemId: number) => {
+    const key = `${orderId}-${itemId}`;
+    setItemsInProgress((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  // Clear in-progress items for a specific order
+  const clearOrderItems = (orderId: number) => {
+    setItemsInProgress((prev) => {
+      const next = new Set(prev);
+      // Remove all items for this order
+      Array.from(next).forEach((key) => {
+        if (key.startsWith(`${orderId}-`)) {
+          next.delete(key);
+        }
+      });
+      return next;
+    });
+  };
 
   // Fetch processing orders (ALL orders, not user-filtered)
   const fetchOrders = async () => {
@@ -125,6 +177,9 @@ export default function KitchenDisplayPage() {
       if (!response.ok) {
         throw new Error("Failed to update order");
       }
+
+      // Clear in-progress items for this order
+      clearOrderItems(orderId);
 
       // Refresh orders immediately
       await fetchOrders();
@@ -395,32 +450,55 @@ export default function KitchenDisplayPage() {
 
                 {/* Items */}
                 <div className="mb-4">
-                  <h3 className="text-gray-400 text-sm font-semibold mb-2 uppercase">
-                    Items to Prepare
-                  </h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-gray-400 text-sm font-semibold uppercase">
+                      Items to Prepare
+                    </h3>
+                    <p className="text-gray-500 text-xs italic">
+                      👆 Click to mark in progress
+                    </p>
+                  </div>
                   <ul className="space-y-3">
                     {order.line_items.map((item) => {
                       // Extract special notes or customizations from item metadata
                       const itemMeta = item.meta_data || [];
                       const hasCustomizations = itemMeta.length > 0;
 
+                      // Check if this item is being worked on
+                      const itemKey = `${order.id}-${item.id}`;
+                      const isInProgress = itemsInProgress.has(itemKey);
+
                       return (
                         <li
                           key={item.id}
-                          className="bg-gray-700 rounded-lg p-3"
+                          onClick={() => toggleItemInProgress(order.id, item.id)}
+                          className={`rounded-lg p-3 cursor-pointer transition-all ${
+                            isInProgress
+                              ? "bg-blue-600 ring-2 ring-blue-400"
+                              : "bg-gray-700 hover:bg-gray-600"
+                          }`}
+                          title="Click to mark as in progress"
                         >
                           <div className="flex items-start gap-3">
-                            <span className="bg-green-600 text-white font-bold text-xl px-3 py-2 rounded min-w-[3.5rem] text-center flex-shrink-0">
-                              {item.quantity}×
+                            <span className={`font-bold text-xl px-3 py-2 rounded min-w-[3.5rem] text-center flex-shrink-0 ${
+                              isInProgress
+                                ? "bg-blue-800 text-blue-100"
+                                : "bg-green-600 text-white"
+                            }`}>
+                              {isInProgress ? "👨‍🍳" : `${item.quantity}×`}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-white text-lg font-semibold leading-tight">
+                              <p className={`text-lg font-semibold leading-tight ${
+                                isInProgress ? "text-blue-50" : "text-white"
+                              }`}>
                                 {item.name}
                               </p>
 
                               {/* Item SKU if available */}
                               {item.sku && (
-                                <p className="text-gray-400 text-xs mt-1">
+                                <p className={`text-xs mt-1 ${
+                                  isInProgress ? "text-blue-200" : "text-gray-400"
+                                }`}>
                                   SKU: {item.sku}
                                 </p>
                               )}
@@ -434,10 +512,12 @@ export default function KitchenDisplayPage() {
 
                                     return (
                                       <div key={idx} className="text-sm">
-                                        <span className="text-yellow-400">
+                                        <span className={isInProgress ? "text-blue-200" : "text-yellow-400"}>
                                           ▸ {meta.display_key || meta.key}:
                                         </span>
-                                        <span className="text-white ml-1">
+                                        <span className={`ml-1 ${
+                                          isInProgress ? "text-blue-50" : "text-white"
+                                        }`}>
                                           {typeof meta.display_value !== 'undefined' ? meta.display_value : meta.value}
                                         </span>
                                       </div>
@@ -447,7 +527,9 @@ export default function KitchenDisplayPage() {
                               )}
 
                               {/* Price for reference */}
-                              <p className="text-gray-400 text-xs mt-2">
+                              <p className={`text-xs mt-2 ${
+                                isInProgress ? "text-blue-200" : "text-gray-400"
+                              }`}>
                                 RM {parseFloat(item.total).toFixed(2)}
                               </p>
                             </div>
