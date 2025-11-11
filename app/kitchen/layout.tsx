@@ -1,23 +1,23 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Customer Display - Coffee Oasis',
-  description: 'Customer-facing order display',
-  manifest: '/manifest-customer-display.json',
-  themeColor: '#3b82f6',
+  title: 'Kitchen Display - Coffee Oasis',
+  description: 'Kitchen order display system',
+  manifest: '/manifest-kitchen-display.json',
+  themeColor: '#10b981',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Customer Display',
+    title: 'Kitchen Display',
   },
 };
 
-export default function CustomerDisplayLayout({
+export default function KitchenDisplayLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // No HeaderNav for customer display - clean, distraction-free view
+  // No HeaderNav for kitchen display - clean, distraction-free view
   return <>{children}</>;
 }

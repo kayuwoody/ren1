@@ -1,0 +1,24 @@
+{
+  "name": "Coffee Oasis - Customer Display",
+  "short_name": "Customer Display",
+  "description": "Coffee Oasis customer-facing order display",
+  "start_url": "/customer-display",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/co mascot.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/co mascot.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
