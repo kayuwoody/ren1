@@ -62,7 +62,7 @@ export async function getPosCustomerId(): Promise<number> {
 
     console.log(`✅ POS customer found: ID ${cachedPosCustomerId} (${POS_EMAIL})`);
 
-    return cachedPosCustomerId;
+    return posCustomer.id;
   } catch (err: any) {
     console.error('❌ Failed to fetch POS customer:', err);
     throw new Error(`Could not find POS customer: ${err.message}`);
