@@ -4,7 +4,7 @@
   "description": "Coffee Oasis kitchen order display system",
   "start_url": "/kitchen",
   "display": "standalone",
-  "orientation": "landscape",
+  "orientation": "any",
   "background_color": "#1f2937",
   "theme_color": "#10b981",
   "scope": "/kitchen",
