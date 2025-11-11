@@ -3,10 +3,11 @@
   "short_name": "Customer Display",
   "description": "Coffee Oasis customer-facing order display",
   "start_url": "/customer-display",
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "landscape",
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
+  "scope": "/customer-display",
   "icons": [
     {
       "src": "/co mascot.png",

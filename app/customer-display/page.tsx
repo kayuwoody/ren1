@@ -8,6 +8,15 @@ export default function CustomerDisplayPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [isStandalone, setIsStandalone] = useState(true);
+
+  // Check if running in standalone/kiosk mode
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                      (window.navigator as any).standalone === true ||
+                      document.referrer.includes('android-app://');
+    setIsStandalone(standalone);
+  }, []);
 
   // Fix hydration error - only show time after mount
   useEffect(() => {
@@ -82,6 +91,23 @@ export default function CustomerDisplayPage() {
 
   return (
     <div className="min-h-screen bg-white p-4 flex flex-col">
+      {/* Install Banner - only show when not in standalone mode */}
+      {!isStandalone && (
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-900 p-4 mb-4 rounded">
+          <div className="flex items-center">
+            <div className="flex-1">
+              <p className="font-bold text-lg">⚠️ Not in Kiosk Mode</p>
+              <p className="text-sm mt-1">
+                For kiosk mode: Tap menu (⋮) → <strong>"Add to Home screen"</strong> → Open the installed app
+              </p>
+              <p className="text-xs mt-1 opacity-75">
+                Android: Menu → Add to Home screen | iPad: Share → Add to Home Screen
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-4 border-b border-gray-200 pb-3">
         <div className="flex items-center justify-between">

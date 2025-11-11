@@ -3,10 +3,11 @@
   "short_name": "Kitchen Display",
   "description": "Coffee Oasis kitchen order display system",
   "start_url": "/kitchen",
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "landscape",
   "background_color": "#1f2937",
   "theme_color": "#10b981",
+  "scope": "/kitchen",
   "icons": [
     {
       "src": "/co mascot.png",
