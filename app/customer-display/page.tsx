@@ -94,17 +94,14 @@ export default function CustomerDisplayPage() {
                 className="object-contain"
               />
             </div>
-            <div>
-              <div className="relative h-24 w-auto">
-                <Image
-                  src="/co title.png"
-                  alt="Coffee Oasis"
-                  width={600}
-                  height={96}
-                  className="object-contain"
-                />
-              </div>
-              <p className="text-sm text-gray-600 mt-4">Your Order</p>
+            <div className="relative h-24 w-auto">
+              <Image
+                src="/co title.png"
+                alt="Coffee Oasis"
+                width={600}
+                height={96}
+                className="object-contain"
+              />
             </div>
           </div>
           <div className="text-right">
@@ -141,6 +138,11 @@ export default function CustomerDisplayPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Your Order Text */}
+      <div className="mb-4">
+        <p className="text-lg text-gray-600">Your Order</p>
       </div>
 
       {/* Items List */}
