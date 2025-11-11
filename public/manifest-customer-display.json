@@ -4,7 +4,7 @@
   "description": "Coffee Oasis customer-facing order display",
   "start_url": "/customer-display",
   "display": "standalone",
-  "orientation": "landscape",
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
   "scope": "/customer-display",
