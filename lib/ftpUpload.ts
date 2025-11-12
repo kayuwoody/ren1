@@ -62,10 +62,11 @@ export async function uploadReceiptHTML(orderId: string | number, htmlContent: s
     const filename = `order-${orderId}.html`;
     const remotePath = `${config.receiptsPath}/${filename}`;
 
-    // Convert HTML string to buffer
-    const buffer = Buffer.from(htmlContent, 'utf-8');
+    // Convert HTML string to readable stream
+    const { Readable } = require('stream');
+    const stream = Readable.from([htmlContent]);
 
-    await client.uploadFrom(buffer, remotePath);
+    await client.uploadFrom(stream, remotePath);
     console.log(`✅ Uploaded receipt: ${remotePath}`);
 
     // Construct public URL
