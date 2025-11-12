@@ -209,26 +209,17 @@ export class ThermalPrinter {
     await this.sendCommand(encoder.encode(alignRight('TOTAL:', `RM ${total.toFixed(2)}`) + '\n\n'));
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
 
-    // e-Invoice compliance
+    // Digital receipt access
     await this.sendCommand(encoder.encode('--------------------------------\n'));
-    await this.sendCommand(encoder.encode('e-INVOICE INFORMATION\n'));
+    await this.sendCommand(encoder.encode('DIGITAL RECEIPT\n'));
     await this.sendCommand(encoder.encode('--------------------------------\n\n'));
 
-    // Calculate QR code expiration (3rd day of next month)
-    const now = new Date(order.date_created);
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 3);
-    const expiryDate = nextMonth.toLocaleDateString('en-MY', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    await this.sendCommand(encoder.encode('Scan QR code to view your\n'));
+    await this.sendCommand(encoder.encode('receipt online\n\n'));
 
-    await this.sendCommand(encoder.encode('Scan QR code to generate\n'));
-    await this.sendCommand(encoder.encode('official e-Invoice via\n'));
-    await this.sendCommand(encoder.encode('LHDN e-Invoice Platform\n\n'));
-
-    // Generate QR code URL (adjust to your actual LHDN platform URL)
-    const qrData = `https://einvoice.hasil.gov.my/generate?receipt=${order.id}&date=${now.toISOString()}`;
+    // Generate QR code with actual receipt URL
+    const receiptUrl = `https://coffee-oasis.com.my/orders/${order.id}/receipt`;
+    const qrData = receiptUrl;
 
     // Center align for QR code
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
@@ -239,8 +230,7 @@ export class ThermalPrinter {
     // Left align
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x00])); // Left
 
-    await this.sendCommand(encoder.encode(`\nQR Code Valid Until:\n`));
-    await this.sendCommand(encoder.encode(`${expiryDate}\n\n`));
+    await this.sendCommand(encoder.encode(`\n${receiptUrl}\n\n`));
 
     await this.sendCommand(encoder.encode('--------------------------------\n'));
 
