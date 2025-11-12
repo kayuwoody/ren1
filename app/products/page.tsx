@@ -213,7 +213,7 @@ const ProductListPage: React.FC = () => {
     });
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
+    <div className="w-full p-4">
       {/* Staff Mode Banner */}
       {isStaffMode && (
         <div className="mb-6 bg-blue-600 text-white rounded-lg p-4 shadow-lg">
@@ -292,8 +292,8 @@ const ProductListPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Responsive grid: 3 col mobile, 4 cols tablet, 5 cols desktop */}
-      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      {/* Dynamic responsive grid - min 2 cols on mobile, scales up automatically */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
         {filteredProducts.map(product => {
           const isOutOfStock = product.manage_stock && (product.stock_quantity ?? 0) === 0;
           return (
@@ -334,6 +334,12 @@ const ProductListPage: React.FC = () => {
               {product.categories.length > 0 && (
                 <p className="text-xs text-gray-500 mb-1">
                   {product.categories[0].name}
+                </p>
+              )}
+              {/* Stock quantity - show for products that manage stock */}
+              {product.manage_stock && product.stock_quantity !== null && (
+                <p className="text-xs text-gray-600 mb-1">
+                  Stock: <span className="font-semibold">{product.stock_quantity}</span>
                 </p>
               )}
               <p className="text-lg font-bold text-green-700">RM {parseFloat(product.price).toFixed(2)}</p>

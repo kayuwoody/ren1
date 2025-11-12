@@ -37,6 +37,7 @@ export async function GET(req: Request) {
         price: product.basePrice.toString(),
         regular_price: product.basePrice.toString(),
         stock_quantity: product.stockQuantity,
+        manage_stock: product.stockQuantity !== null && product.stockQuantity !== undefined,
         images: product.imageUrl ? [{ src: product.imageUrl }] : [],
         categories: [{ slug: product.category, name: product.category }],
         // Add any other fields your frontend expects
@@ -109,6 +110,7 @@ export async function GET(req: Request) {
           price: product.basePrice.toString(),
           regular_price: product.basePrice.toString(),
           stock_quantity: product.stockQuantity,
+          manage_stock: product.stockQuantity !== null && product.stockQuantity !== undefined,
           images: product.imageUrl ? [{ src: product.imageUrl }] : [],
           categories: [{ slug: product.category, name: product.category }],
         }));

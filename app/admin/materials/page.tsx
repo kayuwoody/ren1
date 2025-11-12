@@ -81,7 +81,7 @@ export default function MaterialsPage() {
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-4 mb-6">
-            <Link href="/admin/costs" className="text-blue-600 hover:text-blue-800">
+            <Link href="/admin" className="text-blue-600 hover:text-blue-800">
               <ArrowLeft className="w-6 h-6" />
             </Link>
             <h1 className="text-3xl font-bold">Materials & Ingredients</h1>
@@ -100,7 +100,7 @@ export default function MaterialsPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Link href="/admin/costs" className="text-blue-600 hover:text-blue-800">
+            <Link href="/admin" className="text-blue-600 hover:text-blue-800">
               <ArrowLeft className="w-6 h-6" />
             </Link>
             <h1 className="text-3xl font-bold">Materials & Ingredients</h1>
