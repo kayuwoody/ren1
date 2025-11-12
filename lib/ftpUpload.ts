@@ -50,6 +50,14 @@ export async function uploadReceiptHTML(orderId: string | number, htmlContent: s
 
     console.log('✅ Connected to FTP server');
 
+    // Check current working directory
+    const cwd = await client.pwd();
+    console.log(`📁 Current directory: ${cwd}`);
+
+    // List files in current directory for debugging
+    const list = await client.list();
+    console.log('📂 Files in current directory:', list.map(f => f.name).join(', '));
+
     // Ensure receipts directory exists
     try {
       await client.ensureDir(config.receiptsPath);
