@@ -116,12 +116,11 @@ export default function CustomerDisplayPage() {
       <div className="mb-4 border-b border-gray-200 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="relative h-36 w-auto">
+            <div className="relative h-32 w-32">
               <Image
-                src="/co line mascot.png"
+                src="/circle mascot2.jfif"
                 alt="Coffee Oasis"
-                width={800}
-                height={144}
+                fill
                 className="object-contain"
               />
             </div>
