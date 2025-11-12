@@ -178,7 +178,7 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     basePrice: parseFloat(wcProduct.price) || 0,
     supplierCost, // Preserve existing supplierCost (local field)
     unitCost, // Preserve existing unitCost from recipes
-    stockQuantity: wcProduct.stock_quantity || 0,
+    stockQuantity: wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0, // Only track if WC manages stock
     imageUrl: wcProduct.images?.[0]?.src,
   });
 
