@@ -127,14 +127,33 @@ export class ThermalPrinter {
       const bundleDisplayName = this.getItemMeta(item, '_bundle_display_name');
       const bundleComponents = this.getItemMeta(item, '_bundle_components');
       const discountReason = this.getItemMeta(item, '_discount_reason');
+      const retailPrice = this.getItemMeta(item, '_retail_price');
 
       const displayName = this.stripIcons(isBundle && bundleDisplayName ? bundleDisplayName : item.name);
-      const itemPrice = `RM ${parseFloat(item.total).toFixed(2)}`;
+      const finalPrice = parseFloat(item.total);
+      const originalPrice = retailPrice ? parseFloat(retailPrice) : finalPrice;
+      const hasDiscount = originalPrice > finalPrice;
 
-      // Print main item with price aligned right
+      // Print main item
       const itemLine = `${item.quantity}x ${displayName}`;
-      const padding = 32 - itemLine.length - itemPrice.length;
-      await this.sendCommand(encoder.encode(`${itemLine}${' '.repeat(Math.max(1, padding))}${itemPrice}\n`));
+
+      if (hasDiscount) {
+        // Show original price (crossed out conceptually)
+        const originalPriceStr = `RM ${originalPrice.toFixed(2)}`;
+        const padding1 = 32 - itemLine.length - originalPriceStr.length;
+        await this.sendCommand(encoder.encode(`${itemLine}${' '.repeat(Math.max(1, padding1))}${originalPriceStr}\n`));
+
+        // Show discount reason and final price
+        const discountLine = `  ${this.stripIcons(discountReason || 'Discount')}`;
+        const finalPriceStr = `RM ${finalPrice.toFixed(2)}`;
+        const padding2 = 32 - discountLine.length - finalPriceStr.length;
+        await this.sendCommand(encoder.encode(`${discountLine}${' '.repeat(Math.max(1, padding2))}${finalPriceStr}\n`));
+      } else {
+        // No discount, show normal price
+        const itemPrice = `RM ${finalPrice.toFixed(2)}`;
+        const padding = 32 - itemLine.length - itemPrice.length;
+        await this.sendCommand(encoder.encode(`${itemLine}${' '.repeat(Math.max(1, padding))}${itemPrice}\n`));
+      }
 
       // Print bundle components if it's a combo
       if (isBundle && bundleComponents) {
@@ -152,11 +171,6 @@ export class ThermalPrinter {
         } catch (e) {
           console.error('Failed to parse bundle components:', e);
         }
-      }
-
-      // Print discount if applicable
-      if (discountReason) {
-        await this.sendCommand(encoder.encode(`  (${this.stripIcons(discountReason)})\n`));
       }
 
       await this.sendCommand(encoder.encode('\n'));
