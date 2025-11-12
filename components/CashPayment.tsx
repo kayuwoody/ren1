@@ -77,8 +77,21 @@ export default function CashPayment({
       setOrder(updatedOrder);
       setPaymentConfirmed(true);
 
-      // Auto-generate PDF receipt in background
-      window.open(`/orders/${orderID}/receipt`, '_blank');
+      // Generate static receipt and upload to hosting
+      fetch('/api/receipts/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: orderID }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            console.log(`✅ Static receipt generated: ${data.receiptUrl}`);
+            // Open the static receipt
+            window.open(data.receiptUrl, '_blank');
+          }
+        })
+        .catch(err => console.error('Failed to generate static receipt:', err));
 
       console.log(`✅ Order #${orderID} marked as paid (${paymentMethod})`);
     } catch (err: any) {
