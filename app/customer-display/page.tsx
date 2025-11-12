@@ -118,7 +118,7 @@ export default function CustomerDisplayPage() {
           <div className="flex items-center gap-3">
             <div className="relative h-32 w-32">
               <Image
-                src="/new circle mascot.jpg"
+                src="/co line mascot.png"
                 alt="Coffee Oasis"
                 fill
                 className="object-contain"
