@@ -60,7 +60,7 @@ const ProductListPage: React.FC = () => {
         // Product has mandatory selections or optional add-ons - show modal
         console.log(`✅ Showing modal for "${product.name}"`);
         // Check if product is a combo (has 'combo' category)
-        const isCombo = product.categories.some(cat => cat.slug === 'combo');
+        const isCombo = (product.categories || []).some(cat => cat.slug === 'combo');
         setModalData({ ...data, isCombo });
       } else {
         // Simple product - add directly to cart
@@ -201,7 +201,7 @@ const ProductListPage: React.FC = () => {
     .filter(product => {
       // Category filter
       const categoryMatch = selectedCategory === "all" ||
-        product.categories.some(cat => cat.slug === selectedCategory);
+        (product.categories || []).some(cat => cat.slug === selectedCategory);
 
       // Stock filter
       const stockMatch = !showInStockOnly ||
@@ -211,8 +211,8 @@ const ProductListPage: React.FC = () => {
     })
     .sort((a, b) => {
       // Sort by category name, then by product name
-      const aCat = a.categories[0]?.name || 'zzz';
-      const bCat = b.categories[0]?.name || 'zzz';
+      const aCat = (a.categories || [])[0]?.name || 'zzz';
+      const bCat = (b.categories || [])[0]?.name || 'zzz';
       if (aCat !== bCat) {
         return aCat.localeCompare(bCat);
       }
@@ -338,7 +338,7 @@ const ProductListPage: React.FC = () => {
             <div className="p-3">
               <h3 className="font-semibold text-gray-900 mb-1 line-clamp-1">{product.name}</h3>
               {/* Category tag */}
-              {product.categories.length > 0 && (
+              {product.categories && product.categories.length > 0 && (
                 <p className="text-xs text-gray-500 mb-1">
                   {product.categories[0].name}
                 </p>
