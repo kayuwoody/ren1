@@ -41,6 +41,14 @@ export default function PaymentPage() {
     setError(null);
 
     try {
+      // Calculate total discount across all items
+      const totalDiscount = cartItems.reduce((sum, item) => {
+        if (item.discountReason) {
+          return sum + ((item.retailPrice - item.finalPrice) * item.quantity);
+        }
+        return sum;
+      }, 0);
+
       // Create order in WooCommerce
       const response = await fetch("/api/orders/create-with-payment", {
         method: "POST",
@@ -87,6 +95,9 @@ export default function PaymentPage() {
               meta_data,
             };
           }),
+          meta_data: totalDiscount > 0 ? [
+            { key: "_total_discount", value: totalDiscount.toFixed(2) }
+          ] : [],
           billing: {
             first_name: "Walk-in Customer",
             email: "pos@coffee-oasis.com.my",
