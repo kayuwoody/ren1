@@ -58,13 +58,20 @@ export async function uploadReceiptHTML(orderId: string | number, htmlContent: s
     const list = await client.list();
     console.log('📂 Files in current directory:', list.map(f => f.name).join(', '));
 
-    // Ensure receipts directory exists and navigate into it
+    // Ensure receipts directory exists
     try {
       await client.ensureDir(config.receiptsPath);
       console.log(`✅ Ensured directory exists: ${config.receiptsPath}`);
     } catch (err) {
       console.warn(`⚠️ Could not ensure directory: ${err}`);
     }
+
+    // Verify we're in the receipts directory
+    const cwdBeforeUpload = await client.pwd();
+    console.log(`📍 Current directory before upload: ${cwdBeforeUpload}`);
+
+    const filesBeforeUpload = await client.list();
+    console.log(`📋 Files before upload:`, filesBeforeUpload.map(f => f.name).join(', ') || '(empty)');
 
     // Upload file (just filename since we're already in receipts directory)
     const filename = `order-${orderId}.html`;
@@ -73,8 +80,25 @@ export async function uploadReceiptHTML(orderId: string | number, htmlContent: s
     const { Readable } = require('stream');
     const stream = Readable.from([htmlContent]);
 
+    console.log(`📤 Attempting to upload: ${filename} (${htmlContent.length} bytes)`);
     await client.uploadFrom(stream, filename);
-    console.log(`✅ Uploaded receipt: ${config.receiptsPath}/${filename}`);
+    console.log(`✅ Upload command completed for: ${filename}`);
+
+    // Verify upload - check current directory and list files
+    const cwdAfterUpload = await client.pwd();
+    console.log(`📍 Current directory after upload: ${cwdAfterUpload}`);
+
+    const filesAfterUpload = await client.list();
+    console.log(`📋 Files after upload:`, filesAfterUpload.map(f => `${f.name} (${f.size} bytes)`).join(', '));
+
+    // Check if our file exists
+    const uploadedFile = filesAfterUpload.find(f => f.name === filename);
+    if (uploadedFile) {
+      console.log(`✅ Verified file exists: ${filename} (${uploadedFile.size} bytes)`);
+    } else {
+      console.error(`❌ WARNING: File not found in directory listing after upload!`);
+      console.log(`📋 Full directory listing:`, filesAfterUpload);
+    }
 
     // Construct public URL
     const receiptDomain = process.env.NEXT_PUBLIC_RECEIPT_DOMAIN || 'coffee-oasis.com.my';
