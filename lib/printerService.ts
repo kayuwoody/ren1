@@ -129,9 +129,12 @@ export class ThermalPrinter {
       const discountReason = this.getItemMeta(item, '_discount_reason');
 
       const displayName = this.stripIcons(isBundle && bundleDisplayName ? bundleDisplayName : item.name);
+      const itemPrice = `RM ${parseFloat(item.total).toFixed(2)}`;
 
-      // Print main item
-      await this.sendCommand(encoder.encode(`${item.quantity}x ${displayName}\n`));
+      // Print main item with price aligned right
+      const itemLine = `${item.quantity}x ${displayName}`;
+      const padding = 32 - itemLine.length - itemPrice.length;
+      await this.sendCommand(encoder.encode(`${itemLine}${' '.repeat(Math.max(1, padding))}${itemPrice}\n`));
 
       // Print bundle components if it's a combo
       if (isBundle && bundleComponents) {
@@ -156,34 +159,40 @@ export class ThermalPrinter {
         await this.sendCommand(encoder.encode(`  (${this.stripIcons(discountReason)})\n`));
       }
 
-      await this.sendCommand(encoder.encode(`  RM ${parseFloat(item.total).toFixed(2)}\n\n`));
+      await this.sendCommand(encoder.encode('\n'));
     }
 
     await this.sendCommand(encoder.encode('--------------------------------\n'));
 
-    // Calculate tax breakdown (assuming 6% SST in Malaysia, adjust as needed)
+    // Calculate totals
     const total = parseFloat(order.total);
-    const taxRate = 0.06; // 6% SST
-    const subtotalBeforeTax = total / (1 + taxRate);
-    const taxAmount = total - subtotalBeforeTax;
-
-    // Subtotal before tax
-    await this.sendCommand(encoder.encode(`Subtotal:     RM ${subtotalBeforeTax.toFixed(2)}\n`));
-    await this.sendCommand(encoder.encode(`Tax (6% SST): RM ${taxAmount.toFixed(2)}\n`));
-
-    // Discount info if applicable
-    const retailTotal = this.getOrderMeta(order, '_retail_total');
     const totalDiscount = this.getOrderMeta(order, '_total_discount');
+    const discountAmount = totalDiscount ? parseFloat(totalDiscount) : 0;
+    const subtotalBeforeDiscount = total + discountAmount;
 
-    if (totalDiscount && parseFloat(totalDiscount) > 0) {
-      await this.sendCommand(encoder.encode(`Discount:    -RM ${parseFloat(totalDiscount).toFixed(2)}\n`));
+    // Helper function to align right
+    const alignRight = (label: string, value: string, width: number = 32): string => {
+      const line = `${label}${value}`;
+      const padding = width - line.length;
+      return `${label}${' '.repeat(Math.max(1, padding))}${value}`;
+    };
+
+    // Subtotal
+    await this.sendCommand(encoder.encode(alignRight('Subtotal:', `RM ${subtotalBeforeDiscount.toFixed(2)}`) + '\n'));
+
+    // Total Saved (if there's a discount)
+    if (discountAmount > 0) {
+      await this.sendCommand(encoder.encode(alignRight('Total Saved:', `-RM ${discountAmount.toFixed(2)}`) + '\n'));
     }
+
+    // Tax (waived)
+    await this.sendCommand(encoder.encode(alignRight('Tax (6% SST):', 'Waived') + '\n'));
 
     await this.sendCommand(encoder.encode('--------------------------------\n'));
 
     // Bold total
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x01])); // Bold ON
-    await this.sendCommand(encoder.encode(`TOTAL:        RM ${total.toFixed(2)}\n\n`));
+    await this.sendCommand(encoder.encode(alignRight('TOTAL:', `RM ${total.toFixed(2)}`) + '\n\n'));
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
 
     // e-Invoice compliance
