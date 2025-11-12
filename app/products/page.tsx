@@ -336,8 +336,8 @@ const ProductListPage: React.FC = () => {
                   {product.categories[0].name}
                 </p>
               )}
-              {/* Stock quantity - show for products that manage stock */}
-              {product.manage_stock && product.stock_quantity !== null && (
+              {/* Stock quantity - show when available */}
+              {product.stock_quantity !== null && product.stock_quantity !== undefined && (
                 <p className="text-xs text-gray-600 mb-1">
                   Stock: <span className="font-semibold">{product.stock_quantity}</span>
                 </p>
