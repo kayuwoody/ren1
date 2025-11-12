@@ -95,12 +95,14 @@ export class ThermalPrinter {
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
 
     await this.sendCommand(encoder.encode('COFFEE OASIS\n'));
-    await this.sendCommand(encoder.encode(`Order #${order.id}\n`));
+    await this.sendCommand(encoder.encode(`Receipt #${order.id}\n`));
     await this.sendCommand(encoder.encode(`${new Date(order.date_created).toLocaleString('en-MY')}\n\n`));
 
     // Regular + Left
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x00])); // Left
+
+    await this.sendCommand(encoder.encode('--------------------------------\n'));
 
     // Items with bundle support
     for (const item of order.line_items) {
@@ -123,7 +125,8 @@ export class ThermalPrinter {
 
           if (Array.isArray(components) && components.length > 0) {
             for (const component of components) {
-              await this.sendCommand(encoder.encode(`  + ${component.name}\n`));
+              const componentName = component.productName || component.name || 'Unknown';
+              await this.sendCommand(encoder.encode(`  + ${componentName}\n`));
             }
           }
         } catch (e) {
@@ -139,20 +142,67 @@ export class ThermalPrinter {
       await this.sendCommand(encoder.encode(`  RM ${parseFloat(item.total).toFixed(2)}\n\n`));
     }
 
-    // Total with discount info
+    await this.sendCommand(encoder.encode('--------------------------------\n'));
+
+    // Calculate tax breakdown (assuming 6% SST in Malaysia, adjust as needed)
+    const total = parseFloat(order.total);
+    const taxRate = 0.06; // 6% SST
+    const subtotalBeforeTax = total / (1 + taxRate);
+    const taxAmount = total - subtotalBeforeTax;
+
+    // Subtotal before tax
+    await this.sendCommand(encoder.encode(`Subtotal:     RM ${subtotalBeforeTax.toFixed(2)}\n`));
+    await this.sendCommand(encoder.encode(`Tax (6% SST): RM ${taxAmount.toFixed(2)}\n`));
+
+    // Discount info if applicable
     const retailTotal = this.getOrderMeta(order, '_retail_total');
     const totalDiscount = this.getOrderMeta(order, '_total_discount');
 
     if (totalDiscount && parseFloat(totalDiscount) > 0) {
-      await this.sendCommand(encoder.encode(`Retail Total: RM ${parseFloat(retailTotal).toFixed(2)}\n`));
-      await this.sendCommand(encoder.encode(`Discount: -RM ${parseFloat(totalDiscount).toFixed(2)}\n`));
-      await this.sendCommand(encoder.encode('--------------------------------\n'));
+      await this.sendCommand(encoder.encode(`Discount:    -RM ${parseFloat(totalDiscount).toFixed(2)}\n`));
     }
+
+    await this.sendCommand(encoder.encode('--------------------------------\n'));
 
     // Bold total
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x01])); // Bold ON
-    await this.sendCommand(encoder.encode(`TOTAL: RM ${parseFloat(order.total).toFixed(2)}\n`));
+    await this.sendCommand(encoder.encode(`TOTAL:        RM ${total.toFixed(2)}\n\n`));
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
+
+    // e-Invoice compliance
+    await this.sendCommand(encoder.encode('--------------------------------\n'));
+    await this.sendCommand(encoder.encode('e-INVOICE INFORMATION\n'));
+    await this.sendCommand(encoder.encode('--------------------------------\n\n'));
+
+    // Calculate QR code expiration (3rd day of next month)
+    const now = new Date(order.date_created);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 3);
+    const expiryDate = nextMonth.toLocaleDateString('en-MY', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+
+    await this.sendCommand(encoder.encode('Scan QR code to generate\n'));
+    await this.sendCommand(encoder.encode('official e-Invoice via\n'));
+    await this.sendCommand(encoder.encode('LHDN e-Invoice Platform\n\n'));
+
+    // Generate QR code URL (adjust to your actual LHDN platform URL)
+    const qrData = `https://einvoice.hasil.gov.my/generate?receipt=${order.id}&date=${now.toISOString()}`;
+
+    // Center align for QR code
+    await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
+
+    // QR Code command (ESC/POS QR code)
+    await this.printQRCode(qrData);
+
+    // Left align
+    await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x00])); // Left
+
+    await this.sendCommand(encoder.encode(`\nQR Code Valid Until:\n`));
+    await this.sendCommand(encoder.encode(`${expiryDate}\n\n`));
+
+    await this.sendCommand(encoder.encode('--------------------------------\n'));
 
     // Thank you (centered)
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
@@ -164,6 +214,42 @@ export class ThermalPrinter {
     await this.sendCommand(new Uint8Array([0x1D, 0x56, 0x00])); // Cut paper
 
     console.log('✅ Receipt printed');
+  }
+
+  /**
+   * Print QR code using ESC/POS commands
+   */
+  private async printQRCode(data: string): Promise<void> {
+    const encoder = new TextEncoder();
+    const qrData = encoder.encode(data);
+    const qrLength = qrData.length;
+
+    // QR Code: Model 2, Size 6, Error correction level M
+    // Store QR code data
+    await this.sendCommand(new Uint8Array([
+      0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00 // QR model
+    ]));
+
+    await this.sendCommand(new Uint8Array([
+      0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x06 // QR size (6)
+    ]));
+
+    await this.sendCommand(new Uint8Array([
+      0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31 // Error correction M
+    ]));
+
+    // Store data
+    const pL = (qrLength + 3) & 0xFF;
+    const pH = ((qrLength + 3) >> 8) & 0xFF;
+    const storeCmd = new Uint8Array(qrLength + 8);
+    storeCmd.set([0x1D, 0x28, 0x6B, pL, pH, 0x31, 0x50, 0x30]);
+    storeCmd.set(qrData, 8);
+    await this.sendCommand(storeCmd);
+
+    // Print QR code
+    await this.sendCommand(new Uint8Array([
+      0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30
+    ]));
   }
 
   /**
@@ -209,7 +295,8 @@ export class ThermalPrinter {
 
           if (Array.isArray(components) && components.length > 0) {
             for (const component of components) {
-              await this.sendCommand(encoder.encode(`  + ${component.name}\n`));
+              const componentName = component.productName || component.name || 'Unknown';
+              await this.sendCommand(encoder.encode(`  + ${componentName}\n`));
             }
           }
         } catch (e) {
