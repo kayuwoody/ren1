@@ -58,7 +58,7 @@ export async function uploadReceiptHTML(orderId: string | number, htmlContent: s
     const list = await client.list();
     console.log('📂 Files in current directory:', list.map(f => f.name).join(', '));
 
-    // Ensure receipts directory exists
+    // Ensure receipts directory exists and navigate into it
     try {
       await client.ensureDir(config.receiptsPath);
       console.log(`✅ Ensured directory exists: ${config.receiptsPath}`);
@@ -66,16 +66,15 @@ export async function uploadReceiptHTML(orderId: string | number, htmlContent: s
       console.warn(`⚠️ Could not ensure directory: ${err}`);
     }
 
-    // Upload file
+    // Upload file (just filename since we're already in receipts directory)
     const filename = `order-${orderId}.html`;
-    const remotePath = `${config.receiptsPath}/${filename}`;
 
     // Convert HTML string to readable stream
     const { Readable } = require('stream');
     const stream = Readable.from([htmlContent]);
 
-    await client.uploadFrom(stream, remotePath);
-    console.log(`✅ Uploaded receipt: ${remotePath}`);
+    await client.uploadFrom(stream, filename);
+    console.log(`✅ Uploaded receipt: ${config.receiptsPath}/${filename}`);
 
     // Construct public URL
     const receiptDomain = process.env.NEXT_PUBLIC_RECEIPT_DOMAIN || 'coffee-oasis.com.my';
