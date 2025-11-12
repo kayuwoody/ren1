@@ -68,6 +68,23 @@ export class ThermalPrinter {
   }
 
   /**
+   * Strip emojis and special unicode characters for thermal printing
+   * Thermal printers only support basic ASCII characters
+   */
+  private stripIcons(text: string): string {
+    // Remove emojis and special unicode characters
+    return text
+      .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Emojis
+      .replace(/[\u{2600}-\u{26FF}]/gu, '')   // Miscellaneous symbols
+      .replace(/[\u{2700}-\u{27BF}]/gu, '')   // Dingbats
+      .replace(/[\u{1F600}-\u{1F64F}]/gu, '') // Emoticons
+      .replace(/[\u{1F680}-\u{1F6FF}]/gu, '') // Transport symbols
+      .replace(/[\u{1F900}-\u{1F9FF}]/gu, '') // Supplemental symbols
+      .replace(/[\u{2000}-\u{206F}]/gu, '')   // General punctuation
+      .trim();
+  }
+
+  /**
    * Helper to get metadata from order item
    */
   private getItemMeta(item: any, key: string): any {
@@ -111,7 +128,7 @@ export class ThermalPrinter {
       const bundleComponents = this.getItemMeta(item, '_bundle_components');
       const discountReason = this.getItemMeta(item, '_discount_reason');
 
-      const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+      const displayName = this.stripIcons(isBundle && bundleDisplayName ? bundleDisplayName : item.name);
 
       // Print main item
       await this.sendCommand(encoder.encode(`${item.quantity}x ${displayName}\n`));
@@ -125,7 +142,7 @@ export class ThermalPrinter {
 
           if (Array.isArray(components) && components.length > 0) {
             for (const component of components) {
-              const componentName = component.productName || component.name || 'Unknown';
+              const componentName = this.stripIcons(component.productName || component.name || 'Unknown');
               await this.sendCommand(encoder.encode(`  + ${componentName}\n`));
             }
           }
@@ -136,7 +153,7 @@ export class ThermalPrinter {
 
       // Print discount if applicable
       if (discountReason) {
-        await this.sendCommand(encoder.encode(`  (${discountReason})\n`));
+        await this.sendCommand(encoder.encode(`  (${this.stripIcons(discountReason)})\n`));
       }
 
       await this.sendCommand(encoder.encode(`  RM ${parseFloat(item.total).toFixed(2)}\n\n`));
@@ -279,7 +296,7 @@ export class ThermalPrinter {
       const bundleDisplayName = this.getItemMeta(item, '_bundle_display_name');
       const bundleComponents = this.getItemMeta(item, '_bundle_components');
 
-      const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+      const displayName = this.stripIcons(isBundle && bundleDisplayName ? bundleDisplayName : item.name);
 
       // Bold item name
       await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x01])); // Bold ON
@@ -295,7 +312,7 @@ export class ThermalPrinter {
 
           if (Array.isArray(components) && components.length > 0) {
             for (const component of components) {
-              const componentName = component.productName || component.name || 'Unknown';
+              const componentName = this.stripIcons(component.productName || component.name || 'Unknown');
               await this.sendCommand(encoder.encode(`  + ${componentName}\n`));
             }
           }
