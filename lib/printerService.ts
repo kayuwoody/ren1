@@ -134,25 +134,23 @@ export class ThermalPrinter {
       const originalPrice = retailPrice ? parseFloat(retailPrice) : finalPrice;
       const hasDiscount = originalPrice > finalPrice;
 
-      // Print main item
-      const itemLine = `${item.quantity}x ${displayName}`;
+      // Print main item name
+      await this.sendCommand(encoder.encode(`${item.quantity}x ${displayName}\n`));
 
       if (hasDiscount) {
-        // Show original price (crossed out conceptually)
+        // Show original price on separate line, right-aligned
         const originalPriceStr = `RM ${originalPrice.toFixed(2)}`;
-        const padding1 = 32 - itemLine.length - originalPriceStr.length;
-        await this.sendCommand(encoder.encode(`${itemLine}${' '.repeat(Math.max(1, padding1))}${originalPriceStr}\n`));
+        await this.sendCommand(encoder.encode(`${' '.repeat(32 - originalPriceStr.length)}${originalPriceStr}\n`));
 
-        // Show discount reason and final price
-        const discountLine = `  ${this.stripIcons(discountReason || 'Discount')}`;
+        // Show discount reason and final price, right-aligned
+        const discountLabel = `  ${this.stripIcons(discountReason || 'Discount')}`;
         const finalPriceStr = `RM ${finalPrice.toFixed(2)}`;
-        const padding2 = 32 - discountLine.length - finalPriceStr.length;
-        await this.sendCommand(encoder.encode(`${discountLine}${' '.repeat(Math.max(1, padding2))}${finalPriceStr}\n`));
+        const padding = Math.max(1, 32 - discountLabel.length - finalPriceStr.length);
+        await this.sendCommand(encoder.encode(`${discountLabel}${' '.repeat(padding)}${finalPriceStr}\n`));
       } else {
-        // No discount, show normal price
+        // No discount, show price on separate line, right-aligned
         const itemPrice = `RM ${finalPrice.toFixed(2)}`;
-        const padding = 32 - itemLine.length - itemPrice.length;
-        await this.sendCommand(encoder.encode(`${itemLine}${' '.repeat(Math.max(1, padding))}${itemPrice}\n`));
+        await this.sendCommand(encoder.encode(`${' '.repeat(32 - itemPrice.length)}${itemPrice}\n`));
       }
 
       // Print bundle components if it's a combo
@@ -179,10 +177,10 @@ export class ThermalPrinter {
     await this.sendCommand(encoder.encode('--------------------------------\n'));
 
     // Calculate totals
-    const total = parseFloat(order.total);
+    const finalTotal = parseFloat(order.total);
     const totalDiscount = this.getOrderMeta(order, '_total_discount');
     const discountAmount = totalDiscount ? parseFloat(totalDiscount) : 0;
-    const subtotalBeforeDiscount = total + discountAmount;
+    const totalBeforeDiscount = finalTotal + discountAmount;
 
     // Helper function to align right
     const alignRight = (label: string, value: string, width: number = 32): string => {
@@ -191,22 +189,25 @@ export class ThermalPrinter {
       return `${label}${' '.repeat(Math.max(1, padding))}${value}`;
     };
 
-    // Subtotal
-    await this.sendCommand(encoder.encode(alignRight('Subtotal:', `RM ${subtotalBeforeDiscount.toFixed(2)}`) + '\n'));
+    // Total (original price)
+    await this.sendCommand(encoder.encode(alignRight('Total:', `RM ${totalBeforeDiscount.toFixed(2)}`) + '\n'));
 
-    // Total Saved (if there's a discount)
+    // Discount (amount saved)
     if (discountAmount > 0) {
-      await this.sendCommand(encoder.encode(alignRight('Total Saved:', `-RM ${discountAmount.toFixed(2)}`) + '\n'));
+      await this.sendCommand(encoder.encode(alignRight('Discount:', `-RM ${discountAmount.toFixed(2)}`) + '\n'));
     }
+
+    // Subtotal (after discount)
+    await this.sendCommand(encoder.encode(alignRight('Subtotal:', `RM ${finalTotal.toFixed(2)}`) + '\n'));
 
     // Tax (waived)
     await this.sendCommand(encoder.encode(alignRight('Tax (6% SST):', 'Waived') + '\n'));
 
     await this.sendCommand(encoder.encode('--------------------------------\n'));
 
-    // Bold total
+    // Bold TOTAL (final amount to pay)
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x01])); // Bold ON
-    await this.sendCommand(encoder.encode(alignRight('TOTAL:', `RM ${total.toFixed(2)}`) + '\n\n'));
+    await this.sendCommand(encoder.encode(alignRight('TOTAL:', `RM ${finalTotal.toFixed(2)}`) + '\n\n'));
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
 
     // Digital receipt access
