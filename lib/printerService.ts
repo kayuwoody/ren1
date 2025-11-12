@@ -219,7 +219,9 @@ export class ThermalPrinter {
     await this.sendCommand(encoder.encode('receipt online\n\n'));
 
     // Generate QR code with actual receipt URL
-    const receiptUrl = `https://coffee-oasis.com.my/orders/${order.id}/receipt`;
+    // Use environment variable for receipt domain (subdomain while WordPress is on main domain)
+    const receiptDomain = process.env.NEXT_PUBLIC_RECEIPT_DOMAIN || 'coffee-oasis.com.my';
+    const receiptUrl = `https://${receiptDomain}/orders/${order.id}/receipt`;
     const qrData = receiptUrl;
 
     // Center align for QR code
