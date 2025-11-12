@@ -153,12 +153,10 @@ const ProductListPage: React.FC = () => {
   };
 
   useEffect(() => {
-    // Check for force_sync parameter in URL
-    const searchParams = new URLSearchParams(window.location.search);
-    const forceSync = searchParams.get('force_sync') === 'true';
-    const apiUrl = forceSync ? "/api/products?force_sync=true" : "/api/products";
+    // Always force sync on page load to get fresh stock levels
+    const apiUrl = "/api/products?force_sync=true";
 
-    console.log(`🔍 Fetching products (force_sync=${forceSync})...`);
+    console.log(`🔍 Fetching products with fresh stock data...`);
 
     fetch(apiUrl)
       .then(res => res.json())
