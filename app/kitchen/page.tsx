@@ -311,32 +311,32 @@ export default function KitchenDisplayPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex items-center justify-center bg-gray-800">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-500 mx-auto mb-4"></div>
-          <p className="text-gray-700 text-xl">Loading kitchen display...</p>
+          <p className="text-gray-200 text-xl">Loading kitchen display...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white p-3">
+    <div className="min-h-screen bg-gray-800 p-3">
       {/* Header */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push("/admin/orders")}
-              className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition"
+              className="p-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition"
             >
-              <span className="text-gray-900 text-2xl">←</span>
+              <span className="text-white text-2xl">←</span>
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-white">
                 🍳 Kitchen Display
               </h1>
-              <p className="text-gray-600 text-sm">
+              <p className="text-gray-300 text-sm">
                 {orders.length} order{orders.length !== 1 ? "s" : ""} in progress
               </p>
             </div>
@@ -344,11 +344,11 @@ export default function KitchenDisplayPage() {
           <div className="text-right">
             <button
               onClick={fetchOrders}
-              className="px-4 py-2 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300 transition text-sm"
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition text-sm"
             >
               🔄 Refresh
             </button>
-            <p className="text-gray-600 text-sm mt-2">
+            <p className="text-gray-300 text-sm mt-2">
               Auto-refresh: 10s
             </p>
           </div>
@@ -367,8 +367,8 @@ export default function KitchenDisplayPage() {
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
             <p className="text-6xl mb-4">✅</p>
-            <p className="text-2xl text-gray-700">All caught up!</p>
-            <p className="text-gray-600 mt-2">No orders to prepare right now</p>
+            <p className="text-2xl text-white">All caught up!</p>
+            <p className="text-gray-300 mt-2">No orders to prepare right now</p>
           </div>
         </div>
       ) : (
