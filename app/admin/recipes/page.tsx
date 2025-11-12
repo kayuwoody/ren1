@@ -12,6 +12,8 @@ interface Product {
   supplierCost: number;
   unitCost: number;
   comboPriceOverride?: number;
+  stockQuantity?: number | null;
+  manageStock?: boolean;
 }
 
 interface Material {
@@ -374,7 +376,7 @@ export default function RecipesPage() {
       <div className="bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <Link href="/admin/costs" className="p-2 hover:bg-gray-100 rounded-lg transition">
+            <Link href="/admin" className="p-2 hover:bg-gray-100 rounded-lg transition">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
@@ -434,6 +436,18 @@ export default function RecipesPage() {
                       <span className="text-gray-600">COGS: </span>
                       <span className="font-semibold">RM {product.unitCost.toFixed(2)}</span>
                     </div>
+                    {product.manageStock && product.stockQuantity !== null && (
+                      <div className="text-sm mt-1">
+                        <span className="text-gray-600">Stock: </span>
+                        <span className={`font-semibold ${
+                          product.stockQuantity === 0 ? 'text-red-600' :
+                          product.stockQuantity < 10 ? 'text-yellow-600' :
+                          'text-green-600'
+                        }`}>
+                          {product.stockQuantity}
+                        </span>
+                      </div>
+                    )}
                   </button>
                 ))}
               </div>
