@@ -93,6 +93,8 @@ export default function RecipesPage() {
       setSyncing(true);
       const res = await fetch('/api/admin/products');
       const data = await res.json();
+      console.log('📦 Fetched products:', data.products?.length || 0);
+      console.log('📦 Sample product with stock:', data.products?.find((p: any) => p.manageStock));
       setProducts(data.products || []);
       setFilteredProducts(data.products || []);
     } catch (error) {

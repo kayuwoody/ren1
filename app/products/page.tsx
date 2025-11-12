@@ -213,7 +213,7 @@ const ProductListPage: React.FC = () => {
     });
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
+    <div className="w-full p-4">
       {/* Staff Mode Banner */}
       {isStaffMode && (
         <div className="mb-6 bg-blue-600 text-white rounded-lg p-4 shadow-lg">
