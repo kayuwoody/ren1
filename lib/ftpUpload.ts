@@ -123,6 +123,14 @@ Options -Indexes
     await client.uploadFrom(stream, filename);
     console.log(`✅ Upload command completed for: ${filename}`);
 
+    // Set file permissions to 644 (readable by web server)
+    try {
+      await client.send(`SITE CHMOD 644 ${filename}`);
+      console.log(`✅ Set permissions to 644 for ${filename}`);
+    } catch (err) {
+      console.warn('⚠️ Could not set permissions (not critical):', err);
+    }
+
     // Verify upload - check current directory and list files
     const cwdAfterUpload = await client.pwd();
     console.log(`📍 Current directory after upload: ${cwdAfterUpload}`);
