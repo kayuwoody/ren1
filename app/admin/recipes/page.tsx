@@ -438,7 +438,7 @@ export default function RecipesPage() {
                       <span className="text-gray-600">COGS: </span>
                       <span className="font-semibold">RM {product.unitCost.toFixed(2)}</span>
                     </div>
-                    {product.manageStock && product.stockQuantity !== null && (
+                    {product.manageStock && product.stockQuantity !== null && product.stockQuantity !== undefined && (
                       <div className="text-sm mt-1">
                         <span className="text-gray-600">Stock: </span>
                         <span className={`font-semibold ${

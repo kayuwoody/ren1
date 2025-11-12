@@ -165,6 +165,21 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Migration: Add manageStock column to Product table if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const hasManageStock = tableInfo.some((col: any) => col.name === 'manageStock');
+
+    if (tableInfo.length > 0 && !hasManageStock) {
+      console.log('🔄 Adding manageStock column to Product table...');
+      db.exec(`ALTER TABLE Product ADD COLUMN manageStock INTEGER NOT NULL DEFAULT 0`);
+      console.log('✅ manageStock column added');
+      console.log('📝 Note: Stores whether WooCommerce is tracking inventory for this product');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
   // Material Price History (audit trail for cost changes)
   db.exec(`
     CREATE TABLE IF NOT EXISTS MaterialPriceHistory (

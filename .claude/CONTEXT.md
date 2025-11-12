@@ -4,9 +4,40 @@
 Coffee shop POS (Next.js 14, TypeScript, WooCommerce API, SQLite). Currency: RM (Malaysian Ringgit).
 
 ## Current Branch
-`claude/bundle-expansion-fix-011CUyHhvr99aAQihXBa6wU3`
+`claude/read-claude-docs-011CV322pbHjdvxk3YcqjKk6`
 
 ## Recently Completed
+
+### Thermal Printer & Receipt Enhancements (Session 011CV322pbHjdvxk3YcqjKk6)
+- **Feature**: Enhanced thermal printer receipts with professional formatting
+- **Changes**:
+  - Icon/emoji stripping for ASCII-only thermal printers (fixes garbled output)
+  - Right-aligned prices on separate lines for better readability
+  - Fixed bundle component display (was showing "+ undefined")
+  - Clear total breakdown: Total → Discount → Subtotal → Tax (Waived) → TOTAL
+  - Digital receipt QR code linking to actual receipt URL
+  - Tax display: "Tax (6% SST): Waived"
+- **Files**: `lib/printerService.ts`, `components/CashPayment.tsx`
+
+### Payment Confirmation Flow Simplification (Session 011CV322pbHjdvxk3YcqjKk6)
+- **Changes**: Streamlined post-payment experience
+  - Auto-generates PDF receipt on payment confirmation (no modal)
+  - Removed redundant "View & Print Receipt" button
+  - Optional thermal printer buttons (receipt + kitchen)
+  - Simplified UI focused on next order workflow
+- **File**: `components/CashPayment.tsx`
+
+### Stock Display Implementation (Session 011CV322pbHjdvxk3YcqjKk6)
+- **Feature**: Display real-time WooCommerce stock levels
+- **Database**: Added `manageStock` column to Product table
+- **Display**: Shows stock on products page and recipes admin page
+- **Logic**: Only displays if WooCommerce is tracking inventory (`manage_stock: true`)
+- **Files**: `lib/db/init.ts`, `lib/db/productService.ts`, `app/api/products/route.ts`, `app/products/page.tsx`, `app/admin/recipes/page.tsx`
+
+### Production Architecture Notes (Session 011CV322pbHjdvxk3YcqjKk6)
+- **Setup**: POS runs locally (`localhost`), connects to cloud WooCommerce
+- **Receipt URLs**: Always use production domain (`https://coffee-oasis.com.my/orders/{id}/receipt`)
+- **Environment**: Fixed `wooApi.ts` to properly check `NEXT_PUBLIC_WC_API_URL` fallback chain
 
 ### Promo Image Generator (Session 011CUyHhvr99aAQihXBa6wU3)
 - **Feature**: Automated promo image generation for combo products

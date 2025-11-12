@@ -5,7 +5,7 @@ let wooInstance: any = null;
 
 function getWooApi() {
   if (!wooInstance) {
-    const url = process.env.NEXT_PUBLIC_WC_URL || process.env.WC_API_URL;
+    const url = process.env.NEXT_PUBLIC_WC_API_URL || process.env.WC_API_URL || process.env.WC_STORE_URL;
     const consumerKey = process.env.NEXT_PUBLIC_WC_CONSUMER_KEY || process.env.WC_CONSUMER_KEY;
     const consumerSecret = process.env.NEXT_PUBLIC_WC_CONSUMER_SECRET || process.env.WC_CONSUMER_SECRET;
 

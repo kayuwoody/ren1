@@ -573,5 +573,163 @@ This guide is a concise reference. The full docs have:
 
 ---
 
-**Last Updated:** Session 011CUuTiUmBCgpKEL4iJdCow (Major bug fixes + UI enhancements + Bundle COGS fixes)
+## Recent Changes (Session 011CV322pbHjdvxk3YcqjKk6)
+
+### Thermal Printer Receipt Enhancements
+
+**1. Icon/Emoji Stripping for Thermal Printers** ✅
+- **File:** `lib/printerService.ts:74-85`
+- **Issue:** Emojis and unicode characters caused garbled output on thermal printers
+- **Fix:** Added `stripIcons()` function to remove all non-ASCII characters
+- **Applied to:** Product names, bundle component names, discount reasons
+- **Why:** Thermal printers only support basic ASCII characters
+- **Code:**
+  ```typescript
+  private stripIcons(text: string): string {
+    return text
+      .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Emojis
+      .replace(/[\u{2600}-\u{26FF}]/gu, '')   // Miscellaneous symbols
+      .replace(/[\u{2700}-\u{27BF}]/gu, '')   // Dingbats
+      // ... more unicode ranges
+      .trim();
+  }
+  ```
+
+**2. Bundle Component Display Fix** ✅
+- **File:** `lib/printerService.ts:148, 212`
+- **Issue:** Bundle components showed as "+ undefined" on receipts
+- **Root Cause:** Accessing `component.name` when property is `component.productName`
+- **Fix:** Changed to `component.productName || component.name || 'Unknown'`
+- **Impact:** Combo products now show correct component names (e.g., "+ Dark Mane Americano")
+
+**3. Price Alignment Enhancement** ✅
+- **File:** `lib/printerService.ts:121-154`
+- **Issue:** Long product names pushed prices off alignment on receipts
+- **Fix:** Put prices on separate lines, fully right-aligned with padding
+- **Logic:**
+  - Print item name: `1x Wake-Up Wonder`
+  - Next line, right-aligned: `RM 10.00` (original) or `RM 8.00` (discounted)
+  - If discounted, show discount label indented: `  Student Discount    RM 8.00`
+- **Code:**
+  ```typescript
+  await this.sendCommand(encoder.encode(`${item.quantity}x ${displayName}\n`));
+
+  if (hasDiscount) {
+    const originalPriceStr = `RM ${originalPrice.toFixed(2)}`;
+    await this.sendCommand(encoder.encode(`${' '.repeat(32 - originalPriceStr.length)}${originalPriceStr}\n`));
+
+    const discountLabel = `  ${this.stripIcons(discountReason || 'Discount')}`;
+    const finalPriceStr = `RM ${finalPrice.toFixed(2)}`;
+    const padding = Math.max(1, 32 - discountLabel.length - finalPriceStr.length);
+    await this.sendCommand(encoder.encode(`${discountLabel}${' '.repeat(padding)}${finalPriceStr}\n`));
+  } else {
+    const itemPrice = `RM ${finalPrice.toFixed(2)}`;
+    await this.sendCommand(encoder.encode(`${' '.repeat(32 - itemPrice.length)}${itemPrice}\n`));
+  }
+  ```
+
+**4. Receipt Totals Reordering** ✅
+- **File:** `lib/printerService.ts:162-211`
+- **Change:** Reordered totals section for clarity
+- **New order:**
+  1. Total (original price before discounts)
+  2. Discount (amount saved, shown as `-RM X.XX`)
+  3. Subtotal (after discount)
+  4. Tax (6% SST): Waived
+  5. **TOTAL** (bold, final amount to pay)
+- **Why:** Shows customers exactly how much they saved
+
+**5. Digital Receipt QR Code** ✅
+- **File:** `lib/printerService.ts:196-234`
+- **Change:** Added QR code section with actual receipt URL
+- **URL format:** `https://coffee-oasis.com.my/orders/{orderId}/receipt`
+- **Features:**
+  - ESC/POS QR code generation
+  - Centered QR code with Model 2, Size 6, Error correction M
+  - URL printed below QR code for manual access
+  - Section header: "DIGITAL RECEIPT"
+- **Why:** Customer-friendly receipt access without e-Invoice compliance (not yet required)
+
+**6. Tax Display** ✅
+- **File:** `lib/printerService.ts:187`
+- **Added:** Tax line showing "Tax (6% SST): Waived"
+- **Why:** Transparency for customers, prepared for future when SST applies
+
+### Payment Confirmation Flow Simplification
+
+**7. Auto-Generate PDF Receipt** ✅
+- **File:** `components/CashPayment.tsx:76-81`
+- **Change:** Automatically opens PDF receipt in new tab after payment confirmed
+- **Removed:** "View & Print Receipt" modal/button (redundant)
+- **Code:**
+  ```typescript
+  setPaymentConfirmed(true);
+  window.open(`/orders/${orderID}/receipt`, '_blank');
+  ```
+
+**8. Optional Thermal Printing** ✅
+- **File:** `components/CashPayment.tsx:172-201`
+- **Change:** Thermal printer buttons marked as optional
+- **UI:** Green checkmark, "PDF receipt generated" message, optional BT print buttons
+- **Flow:** Confirm payment → PDF opens → Optional thermal print → Continue to next order
+
+### Stock Display Implementation
+
+**9. Database Schema: manageStock Column** ✅
+- **File:** `lib/db/init.ts:168-181`
+- **Migration:** Added `manageStock INTEGER NOT NULL DEFAULT 0` column to Product table
+- **Purpose:** Store whether WooCommerce is tracking inventory for each product
+- **Why:** Not all products have inventory tracking enabled (e.g., services, digital items)
+
+**10. Product Service: Stock Tracking** ✅
+- **File:** `lib/db/productService.ts:17, 97, 110, 133, 182`
+- **Changes:**
+  - Added `manageStock: boolean` to Product interface
+  - Store `manage_stock` value from WooCommerce during sync
+  - Only populate `stockQuantity` if `manage_stock` is true
+- **Logic:** `stockQuantity: wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0`
+
+**11. Products API: Return Actual manageStock** ✅
+- **File:** `app/api/products/route.ts`
+- **Fix:** Changed from hardcoded `manage_stock: false` to actual `product.manageStock`
+- **Impact:** Products page now receives correct inventory tracking status
+
+**12. Products Page: Stock Display** ✅
+- **File:** `app/products/page.tsx`
+- **Added:** Stock level display with color coding
+  - Green: Stock ≥ 10
+  - Yellow: Stock < 10
+  - Red: Stock = 0
+- **Conditional:** Only shows if `product.manage_stock && product.stock_quantity !== null && product.stock_quantity !== undefined`
+
+**13. Recipes Page: Stock Display** ✅
+- **File:** `app/admin/recipes/page.tsx:441-452`
+- **Added:** Same stock display as products page
+- **Fix:** Added undefined check to prevent TypeScript build error
+- **Conditional:** `product.manageStock && product.stockQuantity !== null && product.stockQuantity !== undefined`
+
+### Environment & Architecture
+
+**14. WooCommerce API Environment Variables** ✅
+- **File:** `lib/wooApi.ts:8-10`
+- **Fix:** Proper fallback chain for environment variables
+- **Order:** `NEXT_PUBLIC_WC_API_URL` → `WC_API_URL` → `WC_STORE_URL`
+- **Why:** Different env vars for client-side vs server-side API calls
+
+**15. Production Architecture Documentation** ✅
+- **Setup:** POS runs locally on `localhost:3000`, connects to cloud WooCommerce
+- **Receipt URLs:** Always use production domain for QR codes (even in dev mode)
+- **Reason:** Customers need to access receipts from any device, not just local network
+
+### Build Fixes
+
+**16. TypeScript: Undefined Check** ✅
+- **File:** `app/admin/recipes/page.tsx:441`
+- **Error:** `'product.stockQuantity' is possibly 'undefined'`
+- **Fix:** Added `product.stockQuantity !== undefined` to conditional
+- **Impact:** Production build now succeeds without type errors
+
+---
+
+**Last Updated:** Session 011CV322pbHjdvxk3YcqjKk6 (Thermal printer enhancements + Stock display + Payment flow simplification)
 **For questions:** Ask the user - they know the business logic best!
