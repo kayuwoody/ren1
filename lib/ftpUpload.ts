@@ -73,6 +73,45 @@ export async function uploadReceiptHTML(orderId: string | number, htmlContent: s
     const filesBeforeUpload = await client.list();
     console.log(`📋 Files before upload:`, filesBeforeUpload.map(f => f.name).join(', ') || '(empty)');
 
+    // Create .htaccess to bypass WordPress routing (if it doesn't exist)
+    try {
+      const hasHtaccess = filesBeforeUpload.some(f => f.name === '.htaccess');
+
+      if (!hasHtaccess) {
+        console.log('📝 Creating .htaccess to bypass WordPress routing...');
+
+        const htaccessContent = `# Allow direct access to receipt files
+# Bypass WordPress routing for this directory
+<IfModule mod_rewrite.c>
+RewriteEngine Off
+</IfModule>
+
+# Set proper MIME type for HTML files
+<IfModule mod_mime.c>
+AddType text/html .html
+</IfModule>
+
+# Allow access to all files
+<IfModule mod_authz_core.c>
+Require all granted
+</IfModule>
+
+# Disable directory browsing
+Options -Indexes
+`;
+
+        const { Readable } = require('stream');
+        const htaccessStream = Readable.from([htaccessContent]);
+        await client.uploadFrom(htaccessStream, '.htaccess');
+        console.log('✅ .htaccess created successfully');
+      } else {
+        console.log('✅ .htaccess already exists');
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not create .htaccess:', err);
+      // Don't fail the entire upload if .htaccess creation fails
+    }
+
     // Upload file (just filename since we're already in receipts directory)
     const filename = `order-${orderId}.html`;
 
