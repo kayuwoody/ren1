@@ -336,6 +336,12 @@ const ProductListPage: React.FC = () => {
                   {product.categories[0].name}
                 </p>
               )}
+              {/* Stock quantity - show for products that manage stock */}
+              {product.manage_stock && product.stock_quantity !== null && (
+                <p className="text-xs text-gray-600 mb-1">
+                  Stock: <span className="font-semibold">{product.stock_quantity}</span>
+                </p>
+              )}
               <p className="text-lg font-bold text-green-700">RM {parseFloat(product.price).toFixed(2)}</p>
               <button
                 className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
