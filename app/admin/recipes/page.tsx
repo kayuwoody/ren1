@@ -374,7 +374,7 @@ export default function RecipesPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="px-6 py-4">
           <div className="flex items-center gap-4">
             <Link href="/admin" className="p-2 hover:bg-gray-100 rounded-lg transition">
               <ArrowLeft className="w-5 h-5" />
@@ -392,7 +392,7 @@ export default function RecipesPage() {
 
       <div className="flex h-[calc(100vh-120px)]">
         {/* Product List Sidebar */}
-        <div className="w-80 bg-white border-r flex flex-col">
+        <div className="w-96 bg-white border-r flex flex-col">
           <div className="p-4 border-b space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
