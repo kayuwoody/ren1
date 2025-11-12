@@ -58,6 +58,25 @@ export async function uploadReceiptHTML(orderId: string | number, htmlContent: s
     const list = await client.list();
     console.log('📂 Files in current directory:', list.map(f => f.name).join(', '));
 
+    // Navigate to parent directory of receipts and check what exists there
+    const parentPath = config.receiptsPath.substring(0, config.receiptsPath.lastIndexOf('/'));
+    console.log(`🔍 Checking parent directory: ${parentPath}`);
+
+    try {
+      await client.cd(parentPath);
+      const parentDir = await client.pwd();
+      console.log(`📍 Parent directory: ${parentDir}`);
+
+      const parentFiles = await client.list();
+      console.log(`📂 Files in parent directory:`, parentFiles.map(f => `${f.name} (${f.type})`).join(', '));
+
+      // Check if receipts folder already exists
+      const receiptsExists = parentFiles.some(f => f.name === 'receipts' && f.type === 2); // type 2 = directory
+      console.log(`📋 Receipts folder exists: ${receiptsExists ? 'YES' : 'NO'}`);
+    } catch (err) {
+      console.warn(`⚠️ Could not navigate to parent directory:`, err);
+    }
+
     // Ensure receipts directory exists
     try {
       await client.ensureDir(config.receiptsPath);
