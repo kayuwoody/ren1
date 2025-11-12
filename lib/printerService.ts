@@ -384,6 +384,8 @@ export class ThermalPrinter {
 export class PrinterManager {
   private receiptPrinter: ThermalPrinter | null = null;
   private kitchenPrinter: ThermalPrinter | null = null;
+  private receiptDevice: any = null;
+  private kitchenDevice: any = null;
 
   /**
    * Get receipt printer (Standard thermal - ESC/POS)
@@ -408,15 +410,98 @@ export class PrinterManager {
   /**
    * Save printer configuration
    */
-  savePrinterConfig(type: 'receipt' | 'kitchen', deviceId: string): void {
-    localStorage.setItem(`printer_${type}`, deviceId);
+  savePrinterConfig(type: 'receipt' | 'kitchen', deviceId: string, deviceName: string): void {
+    localStorage.setItem(`printer_${type}_id`, deviceId);
+    localStorage.setItem(`printer_${type}_name`, deviceName);
   }
 
   /**
-   * Get saved configuration
+   * Get saved device info
+   */
+  getSavedDeviceInfo(type: 'receipt' | 'kitchen'): { id: string; name: string } | null {
+    const id = localStorage.getItem(`printer_${type}_id`);
+    const name = localStorage.getItem(`printer_${type}_name`);
+    if (id && name) {
+      return { id, name };
+    }
+    return null;
+  }
+
+  /**
+   * Get cached device (if still connected)
+   */
+  getCachedDevice(type: 'receipt' | 'kitchen'): any {
+    return type === 'receipt' ? this.receiptDevice : this.kitchenDevice;
+  }
+
+  /**
+   * Set cached device
+   */
+  setCachedDevice(type: 'receipt' | 'kitchen', device: any): void {
+    if (type === 'receipt') {
+      this.receiptDevice = device;
+    } else {
+      this.kitchenDevice = device;
+    }
+  }
+
+  /**
+   * Try to auto-reconnect to previously paired devices
+   * Call this on app startup or when entering printer settings
+   */
+  async autoReconnect(): Promise<{ receipt: any | null; kitchen: any | null }> {
+    const results = { receipt: null as any, kitchen: null as any };
+
+    if (!this.isBluetoothSupported()) {
+      return results;
+    }
+
+    try {
+      // Modern Web Bluetooth API allows getting previously authorized devices
+      if ('getDevices' in (navigator as any).bluetooth) {
+        const devices = await (navigator as any).bluetooth.getDevices();
+        console.log(`🔍 Found ${devices.length} previously authorized Bluetooth device(s)`);
+
+        const receiptInfo = this.getSavedDeviceInfo('receipt');
+        const kitchenInfo = this.getSavedDeviceInfo('kitchen');
+
+        for (const device of devices) {
+          // Match receipt printer
+          if (receiptInfo && device.id === receiptInfo.id) {
+            console.log(`✅ Found receipt printer: ${device.name}`);
+            this.receiptDevice = device;
+            results.receipt = device;
+          }
+
+          // Match kitchen printer
+          if (kitchenInfo && device.id === kitchenInfo.id) {
+            console.log(`✅ Found kitchen printer: ${device.name}`);
+            this.kitchenDevice = device;
+            results.kitchen = device;
+          }
+        }
+
+        if (results.receipt) {
+          console.log('✅ Receipt printer auto-reconnected');
+        }
+        if (results.kitchen) {
+          console.log('✅ Kitchen printer auto-reconnected');
+        }
+      } else {
+        console.log('ℹ️ Bluetooth getDevices() not available - manual pairing required');
+      }
+    } catch (err) {
+      console.error('⚠️ Auto-reconnect failed:', err);
+    }
+
+    return results;
+  }
+
+  /**
+   * Get saved configuration (legacy support)
    */
   getPrinterConfig(type: 'receipt' | 'kitchen'): string | null {
-    return localStorage.getItem(`printer_${type}`);
+    return localStorage.getItem(`printer_${type}_id`);
   }
 
   /**
