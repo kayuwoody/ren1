@@ -45,6 +45,17 @@ export async function GET(req: Request) {
       };
     });
 
+    // Debug: Log stock info
+    const productsWithStock = transformedProducts.filter(p => p.manageStock);
+    console.log(`📊 Products with stock tracking: ${productsWithStock.length}/${transformedProducts.length}`);
+    if (productsWithStock.length > 0) {
+      console.log(`📊 Sample stock data:`, {
+        name: productsWithStock[0].name,
+        manageStock: productsWithStock[0].manageStock,
+        stockQuantity: productsWithStock[0].stockQuantity
+      });
+    }
+
     return NextResponse.json({ products: transformedProducts });
   } catch (error) {
     return handleApiError(error, '/api/admin/products');
