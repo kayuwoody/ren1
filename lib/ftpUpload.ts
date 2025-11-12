@@ -14,14 +14,22 @@ interface FTPConfig {
 }
 
 function getFTPConfig(): FTPConfig {
-  const host = process.env.FTP_HOST;
-  const user = process.env.FTP_USER;
-  const password = process.env.FTP_PASSWORD;
-  const receiptsPath = process.env.FTP_RECEIPTS_PATH || '/public_html/receipts';
+  const host = process.env.FTP_HOST?.trim();
+  const user = process.env.FTP_USER?.trim();
+  const password = process.env.FTP_PASSWORD?.trim();
+  const receiptsPath = process.env.FTP_RECEIPTS_PATH?.trim() || '/public_html/receipts';
 
   if (!host || !user || !password) {
     throw new Error('FTP credentials not configured. Check FTP_HOST, FTP_USER, and FTP_PASSWORD in .env.local');
   }
+
+  // Log credentials (sanitized) for debugging
+  console.log('📡 FTP Config:', {
+    host,
+    user,
+    passwordLength: password.length,
+    receiptsPath
+  });
 
   return { host, user, password, receiptsPath };
 }
