@@ -14,6 +14,7 @@ export interface Product {
   supplierCost: number;
   unitCost: number;
   stockQuantity: number;
+  manageStock: boolean;
   comboPriceOverride?: number;
   imageUrl?: string;
   createdAt: string;
@@ -94,7 +95,7 @@ export function upsertProduct(
     const stmt = db.prepare(`
       UPDATE Product
       SET wcId = ?, name = ?, sku = ?, category = ?, basePrice = ?,
-          supplierCost = ?, unitCost = ?, stockQuantity = ?, imageUrl = ?, updatedAt = ?
+          supplierCost = ?, unitCost = ?, stockQuantity = ?, manageStock = ?, imageUrl = ?, updatedAt = ?
       WHERE id = ?
     `);
 
@@ -107,6 +108,7 @@ export function upsertProduct(
       product.supplierCost,
       product.unitCost,
       product.stockQuantity,
+      product.manageStock ? 1 : 0,
       product.imageUrl || null,
       now,
       id
@@ -115,8 +117,8 @@ export function upsertProduct(
     // Insert new product
     const stmt = db.prepare(`
       INSERT INTO Product (id, wcId, name, sku, category, basePrice, supplierCost, unitCost,
-                          stockQuantity, imageUrl, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          stockQuantity, manageStock, imageUrl, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -129,6 +131,7 @@ export function upsertProduct(
       product.supplierCost,
       product.unitCost,
       product.stockQuantity,
+      product.manageStock ? 1 : 0,
       product.imageUrl || null,
       now,
       now
@@ -179,6 +182,7 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     supplierCost, // Preserve existing supplierCost (local field)
     unitCost, // Preserve existing unitCost from recipes
     stockQuantity: wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0, // Only track if WC manages stock
+    manageStock: wcProduct.manage_stock ?? false, // Store whether WooCommerce tracks inventory
     imageUrl: wcProduct.images?.[0]?.src,
   });
 

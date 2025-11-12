@@ -153,10 +153,19 @@ const ProductListPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetch("/api/products")
+    // Check for force_sync parameter in URL
+    const searchParams = new URLSearchParams(window.location.search);
+    const forceSync = searchParams.get('force_sync') === 'true';
+    const apiUrl = forceSync ? "/api/products?force_sync=true" : "/api/products";
+
+    console.log(`🔍 Fetching products (force_sync=${forceSync})...`);
+
+    fetch(apiUrl)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
+          console.log(`✅ Received ${data.length} products from API`);
+          console.log('📊 Sample product:', data[0]);
           setProducts(data);
         } else {
           setError("API returned non-array data");
@@ -336,10 +345,14 @@ const ProductListPage: React.FC = () => {
                   {product.categories[0].name}
                 </p>
               )}
-              {/* Stock quantity - show when available */}
-              {product.stock_quantity !== null && product.stock_quantity !== undefined && product.stock_quantity !== 0 && (
+              {/* Stock quantity - only show for products that track inventory */}
+              {product.manage_stock && product.stock_quantity !== null && product.stock_quantity !== undefined && (
                 <p className="text-xs text-gray-600 mb-1">
-                  Stock: <span className="font-semibold">{product.stock_quantity}</span>
+                  Stock: <span className={`font-semibold ${
+                    product.stock_quantity === 0 ? 'text-red-600' :
+                    product.stock_quantity < 10 ? 'text-yellow-600' :
+                    'text-green-600'
+                  }`}>{product.stock_quantity}</span>
                 </p>
               )}
               <p className="text-lg font-bold text-green-700">RM {parseFloat(product.price).toFixed(2)}</p>
