@@ -68,9 +68,25 @@ export class ThermalPrinter {
   }
 
   /**
+   * Helper to get metadata from order item
+   */
+  private getItemMeta(item: any, key: string): any {
+    return item.meta_data?.find((m: any) => m.key === key)?.value;
+  }
+
+  /**
+   * Helper to get metadata from order
+   */
+  private getOrderMeta(order: any, key: string): any {
+    return order.meta_data?.find((m: any) => m.key === key)?.value;
+  }
+
+  /**
    * Print receipt (full customer receipt)
    */
   async printReceipt(order: any): Promise<void> {
+    const encoder = new TextEncoder();
+
     // Initialize printer
     await this.sendCommand(new Uint8Array([0x1B, 0x40])); // ESC @
 
@@ -78,7 +94,6 @@ export class ThermalPrinter {
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x01])); // Bold ON
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
 
-    const encoder = new TextEncoder();
     await this.sendCommand(encoder.encode('COFFEE OASIS\n'));
     await this.sendCommand(encoder.encode(`Order #${order.id}\n`));
     await this.sendCommand(encoder.encode(`${new Date(order.date_created).toLocaleString('en-MY')}\n\n`));
@@ -87,21 +102,62 @@ export class ThermalPrinter {
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x00])); // Left
 
-    // Items
+    // Items with bundle support
     for (const item of order.line_items) {
-      await this.sendCommand(encoder.encode(`${item.quantity}x ${item.name}\n`));
-      await this.sendCommand(encoder.encode(`  RM ${item.total}\n`));
+      const isBundle = this.getItemMeta(item, '_is_bundle') === 'true';
+      const bundleDisplayName = this.getItemMeta(item, '_bundle_display_name');
+      const bundleComponents = this.getItemMeta(item, '_bundle_components');
+      const discountReason = this.getItemMeta(item, '_discount_reason');
+
+      const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+
+      // Print main item
+      await this.sendCommand(encoder.encode(`${item.quantity}x ${displayName}\n`));
+
+      // Print bundle components if it's a combo
+      if (isBundle && bundleComponents) {
+        try {
+          const components = typeof bundleComponents === 'string'
+            ? JSON.parse(bundleComponents)
+            : bundleComponents;
+
+          if (Array.isArray(components) && components.length > 0) {
+            for (const component of components) {
+              await this.sendCommand(encoder.encode(`  + ${component.name}\n`));
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse bundle components:', e);
+        }
+      }
+
+      // Print discount if applicable
+      if (discountReason) {
+        await this.sendCommand(encoder.encode(`  (${discountReason})\n`));
+      }
+
+      await this.sendCommand(encoder.encode(`  RM ${parseFloat(item.total).toFixed(2)}\n\n`));
     }
 
-    // Total
-    await this.sendCommand(encoder.encode('\n'));
+    // Total with discount info
+    const retailTotal = this.getOrderMeta(order, '_retail_total');
+    const totalDiscount = this.getOrderMeta(order, '_total_discount');
+
+    if (totalDiscount && parseFloat(totalDiscount) > 0) {
+      await this.sendCommand(encoder.encode(`Retail Total: RM ${parseFloat(retailTotal).toFixed(2)}\n`));
+      await this.sendCommand(encoder.encode(`Discount: -RM ${parseFloat(totalDiscount).toFixed(2)}\n`));
+      await this.sendCommand(encoder.encode('--------------------------------\n'));
+    }
+
+    // Bold total
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x01])); // Bold ON
-    await this.sendCommand(encoder.encode(`TOTAL: RM ${order.total}\n`));
+    await this.sendCommand(encoder.encode(`TOTAL: RM ${parseFloat(order.total).toFixed(2)}\n`));
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
 
-    // Thank you
+    // Thank you (centered)
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
     await this.sendCommand(encoder.encode('\nThank you!\n'));
+    await this.sendCommand(encoder.encode('Come again soon!\n'));
 
     // Feed and cut
     await this.sendCommand(new Uint8Array([0x1B, 0x64, 0x03])); // Feed 3 lines
@@ -114,6 +170,8 @@ export class ThermalPrinter {
    * Print kitchen stub
    */
   async printKitchenStub(order: any): Promise<void> {
+    const encoder = new TextEncoder();
+
     // Initialize printer
     await this.sendCommand(new Uint8Array([0x1B, 0x40])); // ESC @
 
@@ -122,17 +180,44 @@ export class ThermalPrinter {
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
 
     // Header
-    const encoder = new TextEncoder();
     await this.sendCommand(encoder.encode(`ORDER #${order.id}\n`));
-    await this.sendCommand(encoder.encode(`${new Date(order.date_created).toLocaleTimeString()}\n\n`));
+    await this.sendCommand(encoder.encode(`${new Date(order.date_created).toLocaleTimeString('en-MY')}\n\n`));
 
     // Regular + Left
     await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x00])); // Left
 
-    // Items
+    // Items with bundle components
     for (const item of order.line_items) {
-      await this.sendCommand(encoder.encode(`${item.quantity}x ${item.name}\n`));
+      const isBundle = this.getItemMeta(item, '_is_bundle') === 'true';
+      const bundleDisplayName = this.getItemMeta(item, '_bundle_display_name');
+      const bundleComponents = this.getItemMeta(item, '_bundle_components');
+
+      const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+
+      // Bold item name
+      await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x01])); // Bold ON
+      await this.sendCommand(encoder.encode(`${item.quantity}x ${displayName}\n`));
+      await this.sendCommand(new Uint8Array([0x1B, 0x45, 0x00])); // Bold OFF
+
+      // Print bundle components
+      if (isBundle && bundleComponents) {
+        try {
+          const components = typeof bundleComponents === 'string'
+            ? JSON.parse(bundleComponents)
+            : bundleComponents;
+
+          if (Array.isArray(components) && components.length > 0) {
+            for (const component of components) {
+              await this.sendCommand(encoder.encode(`  + ${component.name}\n`));
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse bundle components:', e);
+        }
+      }
+
+      await this.sendCommand(encoder.encode('\n'));
     }
 
     // Feed and cut
