@@ -125,13 +125,19 @@ export default function CashPayment({
       let device = printerManager.getCachedDevice('receipt');
 
       if (!device) {
+        console.log('🖨️ No cached receipt printer found, requesting pairing...');
         // No cached device, prompt to pair
         device = await printer.pair();
+        console.log('✅ Receipt printer paired:', device.name, device.id);
         printerManager.savePrinterConfig('receipt', device.id, device.name || 'Receipt Printer');
         printerManager.setCachedDevice('receipt', device);
+      } else {
+        console.log('🖨️ Using cached receipt printer:', device.name, device.id);
       }
 
+      console.log('🔌 Connecting to receipt printer...');
       await printer.connect(device);
+      console.log('📄 Printing receipt...');
       await printer.printReceipt(order);
 
       alert('Receipt printed successfully!');
@@ -154,13 +160,19 @@ export default function CashPayment({
       let device = printerManager.getCachedDevice('kitchen');
 
       if (!device) {
+        console.log('🖨️ No cached kitchen printer found, requesting pairing...');
         // No cached device, prompt to pair
         device = await printer.pair();
+        console.log('✅ Kitchen printer paired:', device.name, device.id);
         printerManager.savePrinterConfig('kitchen', device.id, device.name || 'Kitchen Printer');
         printerManager.setCachedDevice('kitchen', device);
+      } else {
+        console.log('🖨️ Using cached kitchen printer:', device.name, device.id);
       }
 
+      console.log('🔌 Connecting to kitchen printer...');
       await printer.connect(device);
+      console.log('📄 Printing kitchen stub...');
       await printer.printKitchenStub(order);
 
       alert('Kitchen stub printed successfully!');

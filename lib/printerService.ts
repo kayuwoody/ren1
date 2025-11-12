@@ -453,45 +453,65 @@ export class PrinterManager {
     const results = { receipt: null as any, kitchen: null as any };
 
     if (!this.isBluetoothSupported()) {
+      console.log('❌ Bluetooth not supported in this browser');
       return results;
     }
 
     try {
+      // Check what printer info we have saved
+      const receiptInfo = this.getSavedDeviceInfo('receipt');
+      const kitchenInfo = this.getSavedDeviceInfo('kitchen');
+
+      console.log('🔍 Printer Auto-Reconnect:', {
+        receiptSaved: receiptInfo ? `${receiptInfo.name} (${receiptInfo.id})` : 'none',
+        kitchenSaved: kitchenInfo ? `${kitchenInfo.name} (${kitchenInfo.id})` : 'none',
+        hasGetDevices: 'getDevices' in (navigator as any).bluetooth
+      });
+
       // Modern Web Bluetooth API allows getting previously authorized devices
       if ('getDevices' in (navigator as any).bluetooth) {
         const devices = await (navigator as any).bluetooth.getDevices();
-        console.log(`🔍 Found ${devices.length} previously authorized Bluetooth device(s)`);
+        console.log(`📱 Found ${devices.length} previously authorized Bluetooth device(s)`);
 
-        const receiptInfo = this.getSavedDeviceInfo('receipt');
-        const kitchenInfo = this.getSavedDeviceInfo('kitchen');
+        if (devices.length > 0) {
+          console.log('📱 Authorized devices:', devices.map((d: any) => `${d.name} (${d.id})`).join(', '));
+        }
 
         for (const device of devices) {
           // Match receipt printer
           if (receiptInfo && device.id === receiptInfo.id) {
-            console.log(`✅ Found receipt printer: ${device.name}`);
+            console.log(`✅ Matched receipt printer: ${device.name} (${device.id})`);
             this.receiptDevice = device;
             results.receipt = device;
           }
 
           // Match kitchen printer
           if (kitchenInfo && device.id === kitchenInfo.id) {
-            console.log(`✅ Found kitchen printer: ${device.name}`);
+            console.log(`✅ Matched kitchen printer: ${device.name} (${device.id})`);
             this.kitchenDevice = device;
             results.kitchen = device;
           }
         }
 
+        if (!results.receipt && receiptInfo) {
+          console.warn(`⚠️ Receipt printer "${receiptInfo.name}" not found in authorized devices - will need to re-pair`);
+        }
+        if (!results.kitchen && kitchenInfo) {
+          console.warn(`⚠️ Kitchen printer "${kitchenInfo.name}" not found in authorized devices - will need to re-pair`);
+        }
+
         if (results.receipt) {
-          console.log('✅ Receipt printer auto-reconnected');
+          console.log('✅ Receipt printer ready for use');
         }
         if (results.kitchen) {
-          console.log('✅ Kitchen printer auto-reconnected');
+          console.log('✅ Kitchen printer ready for use');
         }
       } else {
-        console.log('ℹ️ Bluetooth getDevices() not available - manual pairing required');
+        console.warn('⚠️ Bluetooth getDevices() not available in this browser - printers will need manual pairing each time');
+        console.log('💡 Tip: Use Chrome, Edge, or Opera for automatic printer reconnection');
       }
     } catch (err) {
-      console.error('⚠️ Auto-reconnect failed:', err);
+      console.error('❌ Auto-reconnect failed:', err);
     }
 
     return results;
