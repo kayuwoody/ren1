@@ -186,7 +186,7 @@ const ProductListPage: React.FC = () => {
   // Extract unique categories with proper names
   const categories = Array.from(
     new Set(
-      products.flatMap(p => p.categories.map(c => ({ slug: c.slug, name: c.name })))
+      products.flatMap(p => (p.categories || []).map(c => ({ slug: c.slug, name: c.name })))
     )
   ).reduce((acc, cat) => {
     if (!acc.find(c => c.slug === cat.slug)) {
