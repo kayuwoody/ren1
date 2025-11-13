@@ -2,23 +2,9 @@
  * Static Receipt HTML Generator
  *
  * Generates self-contained HTML files for receipts that can be uploaded to static hosting.
- * No JavaScript, no external dependencies - just pure HTML/CSS with embedded images.
+ * No JavaScript, no external dependencies - just pure HTML/CSS.
+ * Images use relative paths (./mascot.jpg) - upload mascot.jpg to the same directory on Hostinger.
  */
-
-import fs from 'fs';
-import path from 'path';
-
-// Read and encode mascot logo as base64 for embedding
-function getMascotBase64(): string {
-  try {
-    const mascotPath = path.join(process.cwd(), 'public', 'mascot.jpg');
-    const mascotBuffer = fs.readFileSync(mascotPath);
-    return `data:image/jpeg;base64,${mascotBuffer.toString('base64')}`;
-  } catch (err) {
-    console.warn('⚠️  Could not load mascot.jpg, using fallback');
-    return ''; // Fallback to no image
-  }
-}
 
 export function generateReceiptHTML(order: any): string {
   const getItemMeta = (item: any, key: string) => {
@@ -41,9 +27,6 @@ export function generateReceiptHTML(order: any): string {
   const totalDiscount = parseFloat(getOrderMeta('_total_discount') || '0');
   const finalTotal = parseFloat(order.total);
   const retailTotal = finalTotal + totalDiscount;
-
-  // Get base64 encoded logo
-  const mascotBase64 = getMascotBase64();
 
   return `<!DOCTYPE html>
 <html lang="en">
