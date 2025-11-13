@@ -170,7 +170,7 @@ export default function CustomerDisplayPage() {
             <div className="text-center">
               <div className="relative w-72 h-72 mx-auto mb-4">
                 <Image
-                  src="/new circle mascot.jpg"
+                  src="/circle mascot2.jfif"
                   alt="Coffee Oasis Mascot"
                   fill
                   className="object-contain mix-blend-multiply"
@@ -328,3 +328,4 @@ export default function CustomerDisplayPage() {
     </div>
   );
 }
+
