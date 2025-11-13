@@ -122,7 +122,8 @@ export default function CustomerDisplayPage() {
                 alt="Coffee Oasis"
                 width={1600}
                 height={288}
-                className="object-contain"
+                className="object-contain mix-blend-multiply"
+                style={{ backgroundColor: 'transparent' }}
               />
             </div>
           </div>
@@ -177,7 +178,8 @@ export default function CustomerDisplayPage() {
                   src="/circle mascot2.jfif"
                   alt="Coffee Oasis Mascot"
                   fill
-                  className="object-contain"
+                  className="object-contain mix-blend-multiply"
+                  style={{ backgroundColor: 'transparent' }}
                   priority
                 />
               </div>
