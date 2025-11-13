@@ -217,7 +217,12 @@ export function calculatePriceWithSelections(
     return product.basePrice * quantity;
   }
 
-  let totalPrice = 0;
+  // For root level (depth 0), check if this has linked products to determine if it's a combo
+  const hasLinkedProducts = recipe.some(item => item.itemType === 'product');
+  const isCombo = depth === 0 && hasLinkedProducts;
+
+  // For non-combo products, start with base price. For combos, only sum components.
+  let totalPrice = isCombo ? 0 : (product.basePrice * quantity);
 
   recipe.forEach(item => {
     // Skip optional items unless selected
