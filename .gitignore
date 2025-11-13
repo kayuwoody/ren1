@@ -42,3 +42,4 @@ prisma/dev.db-wal
 *.db-shm
 *.db-wal
 prisma/dev.db
+prisma/dev.db
