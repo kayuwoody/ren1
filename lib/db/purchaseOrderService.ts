@@ -12,6 +12,7 @@ import {
   PurchaseOrderWithItems,
   generatePONumber,
 } from './purchaseOrderSchema';
+import { wcApi } from '../wooClient';
 
 interface CreatePurchaseOrderInput {
   supplier: string;
@@ -239,9 +240,41 @@ export function updatePurchaseOrder(id: string, updates: UpdatePurchaseOrderInpu
 }
 
 /**
- * Mark a purchase order as received and update inventory
+ * Add stock to WooCommerce product (when receiving inventory)
  */
-export function markPurchaseOrderReceived(id: string): PurchaseOrderWithItems | null {
+async function addWooProductStock(wcProductId: number, quantity: number, productName: string): Promise<void> {
+  try {
+    // Fetch current product from WooCommerce
+    const response = await wcApi.get(`products/${wcProductId}`);
+    const product = (response as any).data;
+
+    // Check if product manages stock
+    if (!product.manage_stock) {
+      console.log(`   ℹ️  Product "${productName}" does not manage stock in WooCommerce - skipping inventory update`);
+      return;
+    }
+
+    const currentStock = product.stock_quantity || 0;
+    const newStock = currentStock + quantity;
+
+    console.log(`   📦 WooCommerce Inventory (Receiving): ${productName} (${currentStock} → ${newStock})`);
+
+    // Update WooCommerce product stock
+    await wcApi.put(`products/${wcProductId}`, {
+      stock_quantity: newStock
+    });
+
+  } catch (error: any) {
+    console.error(`   ❌ Failed to update WooCommerce stock for ${productName}:`, error.message);
+    // Don't fail the whole operation if WooCommerce update fails
+  }
+}
+
+/**
+ * Mark a purchase order as received and update inventory
+ * Updates both local database AND WooCommerce stock levels
+ */
+export async function markPurchaseOrderReceived(id: string): Promise<PurchaseOrderWithItems | null> {
   const order = getPurchaseOrder(id);
   if (!order) return null;
 
@@ -255,16 +288,32 @@ export function markPurchaseOrderReceived(id: string): PurchaseOrderWithItems | 
   db.prepare('UPDATE PurchaseOrderItem SET receivedQuantity = quantity WHERE purchaseOrderId = ?')
     .run(id);
 
+  console.log(`📦 Receiving PO ${order.poNumber} - Updating inventory...`);
+
   // Update inventory for materials and products
   for (const item of order.items) {
     if (item.itemType === 'material' && item.materialId) {
+      // Update local material stock
       db.prepare('UPDATE Material SET stockQuantity = stockQuantity + ? WHERE id = ?')
         .run(item.quantity, item.materialId);
+      console.log(`   ✅ Material: ${item.materialName} +${item.quantity} ${item.unit}`);
     } else if (item.itemType === 'product' && item.productId) {
+      // Update local product stock
       db.prepare('UPDATE Product SET stockQuantity = stockQuantity + ? WHERE id = ?')
         .run(item.quantity, item.productId);
+      console.log(`   ✅ Local Product: ${item.productName} +${item.quantity}`);
+
+      // Update WooCommerce stock if product has wcId
+      const product = db.prepare('SELECT wcId, name FROM Product WHERE id = ?').get(item.productId) as { wcId?: number; name: string } | undefined;
+      if (product?.wcId) {
+        await addWooProductStock(product.wcId, item.quantity, product.name);
+      } else {
+        console.log(`   ℹ️  Product "${item.productName}" has no WooCommerce ID - skipping WooCommerce sync`);
+      }
     }
   }
+
+  console.log(`✅ PO ${order.poNumber} marked as received and inventory updated`);
 
   return getPurchaseOrder(id);
 }
