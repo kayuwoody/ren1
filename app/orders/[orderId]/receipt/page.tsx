@@ -184,10 +184,12 @@ export default function ReceiptPage() {
           {/* Header with Logo */}
           <div className="text-center mb-6 border-b-2 border-amber-600 pb-4">
             <div className="mb-3">
-              {/* Logo placeholder - you can replace with actual logo */}
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-600 to-amber-800 rounded-full mb-2">
-                <span className="text-2xl text-white">☕</span>
-              </div>
+              {/* Mascot Logo */}
+              <img
+                src="/mascot.jpg"
+                alt="Coffee Oasis Logo"
+                className="w-24 h-24 mx-auto object-contain mb-2"
+              />
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-1">Coffee Oasis</h1>
             <p className="text-sm text-amber-700 font-medium">Smart Locker Coffee Shop</p>
