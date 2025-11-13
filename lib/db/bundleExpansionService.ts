@@ -10,10 +10,8 @@ export interface BundleComponent {
   productSku?: string;
   wcId?: number;
   quantity: number;
-  basePrice: number;        // The product's base price
-  priceAdjustment: number;  // Price adjustment from parent recipe
-  effectivePrice: number;   // basePrice + priceAdjustment
-  totalPrice: number;       // effectivePrice × quantity
+  basePrice: number;        // The product's base/sales price
+  totalPrice: number;       // basePrice × quantity
   unitCost: number;         // COGS per unit
   totalCost: number;        // unitCost × quantity
   depth: number;            // Nesting level (0 = top level)
@@ -99,8 +97,6 @@ export function expandBundle(
         wcId: product.wcId,
         quantity,
         basePrice: product.basePrice,
-        priceAdjustment: 0,
-        effectivePrice: product.basePrice,
         totalPrice: product.basePrice * quantity,
         unitCost: product.supplierCost || 0,
         totalCost: (product.supplierCost || 0) * quantity,
@@ -166,9 +162,7 @@ export function expandBundle(
       wcId: linkedProduct.wcId,
       quantity: componentQuantity,
       basePrice: linkedProduct.basePrice,
-      priceAdjustment: (recipeItem as any).priceAdjustment || 0,
-      effectivePrice: linkedProduct.basePrice + ((recipeItem as any).priceAdjustment || 0),
-      totalPrice: (linkedProduct.basePrice + ((recipeItem as any).priceAdjustment || 0)) * componentQuantity,
+      totalPrice: linkedProduct.basePrice * componentQuantity,
       unitCost: linkedProduct.supplierCost || 0,
       totalCost: (linkedProduct.supplierCost || 0) * componentQuantity,
       depth: depth + 1,
@@ -335,9 +329,7 @@ export function getBundleDirectComponents(
       wcId: linkedProduct.wcId,
       quantity: componentQuantity,
       basePrice: linkedProduct.basePrice,
-      priceAdjustment: (recipeItem as any).priceAdjustment || 0,
-      effectivePrice: linkedProduct.basePrice + ((recipeItem as any).priceAdjustment || 0),
-      totalPrice: (linkedProduct.basePrice + ((recipeItem as any).priceAdjustment || 0)) * componentQuantity,
+      totalPrice: linkedProduct.basePrice * componentQuantity,
       unitCost: linkedProduct.supplierCost || 0,
       totalCost: (linkedProduct.supplierCost || 0) * componentQuantity,
       depth: 1, // Always depth 1 (direct children only)

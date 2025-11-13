@@ -13,7 +13,7 @@ export interface FlattenedXORGroup {
   items: Array<{
     id: string;                 // Product ID
     name: string;
-    priceAdjustment: number;
+    basePrice: number;          // Product's base/sales price
   }>;
 }
 
@@ -23,7 +23,7 @@ export interface FlattenedXORGroup {
 export interface FlattenedOptionalItem {
   id: string;
   name: string;
-  priceAdjustment: number;
+  basePrice: number;          // Product's base/sales price
   parentProductId?: string;
   parentProductName?: string;
 }
@@ -126,7 +126,7 @@ export function flattenAllChoices(
           return {
             id: item.linkedProductId!,
             name: item.linkedProductName || linkedProd?.name || 'Unknown',
-            priceAdjustment: (item as any).priceAdjustment || 0,
+            basePrice: linkedProd?.basePrice || 0,
           };
         }),
     });
@@ -141,7 +141,7 @@ export function flattenAllChoices(
       optionalItems.push({
         id: item.linkedProductId,
         name: item.linkedProductName || linkedProd?.name || 'Unknown',
-        priceAdjustment: (item as any).priceAdjustment || 0,
+        basePrice: linkedProd?.basePrice || 0,
         parentProductId: depth === 0 ? undefined : product.id,
         parentProductName: depth === 0 ? undefined : product.name,
       });
@@ -194,7 +194,7 @@ export function flattenAllChoices(
 
 /**
  * Recursively calculate price based on unified selections
- * Traverses the product tree and applies selections at each level
+ * Traverses the product tree and sums up basePrices of selected components
  */
 export function calculatePriceWithSelections(
   productId: string,
@@ -205,13 +205,19 @@ export function calculatePriceWithSelections(
   const product = getProduct(productId);
   if (!product) return 0;
 
-  // Check for combo price override
+  // Check for combo price override (only at root level)
   if (depth === 0 && product.comboPriceOverride !== undefined && product.comboPriceOverride !== null) {
     return product.comboPriceOverride * quantity;
   }
 
   const recipe = getProductRecipe(productId);
-  let totalPrice = product.basePrice * quantity;
+
+  // If no recipe, this is a simple product - use its base price
+  if (recipe.length === 0) {
+    return product.basePrice * quantity;
+  }
+
+  let totalPrice = 0;
 
   recipe.forEach(item => {
     // Skip optional items unless selected
@@ -232,19 +238,28 @@ export function calculatePriceWithSelections(
       }
     }
 
-    // Add price adjustment and recurse if needed
+    // Add linked product's price and recurse if needed
     if (item.itemType === 'product' && item.linkedProductId) {
-      totalPrice += ((item as any).priceAdjustment || 0) * quantity;
+      const linkedProduct = getProduct(item.linkedProductId);
+      if (linkedProduct) {
+        // Add this product's base price
+        totalPrice += linkedProduct.basePrice * item.quantity * quantity;
 
-      // Recurse to get nested prices
-      const nestedPrice = calculatePriceWithSelections(
-        item.linkedProductId,
-        selections,
-        item.quantity * quantity,
-        depth + 1
-      );
+        // Recurse to get nested component prices (if any)
+        const linkedRecipe = getProductRecipe(item.linkedProductId);
+        if (linkedRecipe.length > 0) {
+          const nestedPrice = calculatePriceWithSelections(
+            item.linkedProductId,
+            selections,
+            item.quantity * quantity,
+            depth + 1
+          );
 
-      totalPrice += nestedPrice;
+          // Replace the base price with calculated nested price
+          totalPrice -= linkedProduct.basePrice * item.quantity * quantity;
+          totalPrice += nestedPrice;
+        }
+      }
     }
   });
 
