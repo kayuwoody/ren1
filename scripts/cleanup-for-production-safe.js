@@ -14,15 +14,27 @@
 
 const Database = require('better-sqlite3');
 const WooCommerceRestApi = require('@woocommerce/woocommerce-rest-api').default;
-require('dotenv').config({ path: '.env.local' });
+const fs = require('fs');
+
+// Load environment variables from .env.local
+const envFile = fs.readFileSync('.env.local', 'utf8');
+const envVars = {};
+envFile.split('\n').forEach(line => {
+  const match = line.match(/^([^=:#]+)=(.*)$/);
+  if (match) {
+    const key = match[1].trim();
+    const value = match[2].trim().replace(/^["']|["']$/g, '');
+    envVars[key] = value;
+  }
+});
 
 const db = new Database('./prisma/dev.db');
 
 // Initialize WooCommerce API
 const wcApi = new WooCommerceRestApi({
-  url: process.env.NEXT_PUBLIC_WC_API_URL || process.env.WC_API_URL || process.env.WC_STORE_URL,
-  consumerKey: process.env.WC_CONSUMER_KEY,
-  consumerSecret: process.env.WC_CONSUMER_SECRET,
+  url: envVars.NEXT_PUBLIC_WC_API_URL || envVars.WC_API_URL || envVars.WC_STORE_URL,
+  consumerKey: envVars.WC_CONSUMER_KEY,
+  consumerSecret: envVars.WC_CONSUMER_SECRET,
   version: 'wc/v3',
 });
 
