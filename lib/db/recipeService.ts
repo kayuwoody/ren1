@@ -23,6 +23,7 @@ export interface ProductRecipeItem {
   calculatedCost: number;
   isOptional: boolean;
   selectionGroup?: string; // Items in same group are mutually exclusive (XOR choice)
+  priceAdjustment: number; // Price adjustment for XOR options (e.g., +RM 2 for iced vs hot)
   sortOrder: number;
   createdAt: string;
 }
@@ -39,6 +40,7 @@ export function addRecipeItem(item: {
   unit: string;
   isOptional?: boolean;
   selectionGroup?: string;
+  priceAdjustment?: number;
   sortOrder?: number;
 }): ProductRecipeItem {
   const id = uuidv4();
@@ -71,8 +73,8 @@ export function addRecipeItem(item: {
 
   const stmt = db.prepare(`
     INSERT INTO ProductRecipe
-    (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, selectionGroup, sortOrder, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, selectionGroup, priceAdjustment, sortOrder, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -86,6 +88,7 @@ export function addRecipeItem(item: {
     calculatedCost,
     item.isOptional ? 1 : 0,
     item.selectionGroup || null,
+    item.priceAdjustment ?? 0,
     item.sortOrder ?? 0,
     now
   );

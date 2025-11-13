@@ -48,6 +48,18 @@ export default function CashPayment({
 
   useEffect(() => {
     setBluetoothSupported(printerManager.isBluetoothSupported());
+
+    // Auto-reconnect to previously paired printers
+    if (printerManager.isBluetoothSupported()) {
+      printerManager.autoReconnect().then(devices => {
+        if (devices.receipt) {
+          console.log('✅ Receipt printer available for printing');
+        }
+        if (devices.kitchen) {
+          console.log('✅ Kitchen printer available for printing');
+        }
+      });
+    }
   }, []);
 
   const confirmPayment = async () => {
@@ -109,15 +121,23 @@ export default function CashPayment({
     try {
       const printer = printerManager.getReceiptPrinter();
 
-      // Try to get saved printer device
-      const savedDeviceId = printerManager.getPrinterConfig('receipt');
-      if (!savedDeviceId) {
-        // No saved printer, prompt to pair
-        const device = await printer.pair();
-        printerManager.savePrinterConfig('receipt', device.id);
+      // Try to get cached device from auto-reconnect
+      let device = printerManager.getCachedDevice('receipt');
+
+      if (!device) {
+        console.log('🖨️ No cached receipt printer found, requesting pairing...');
+        // No cached device, prompt to pair
+        device = await printer.pair();
+        console.log('✅ Receipt printer paired:', device.name, device.id);
+        printerManager.savePrinterConfig('receipt', device.id, device.name || 'Receipt Printer');
+        printerManager.setCachedDevice('receipt', device);
+      } else {
+        console.log('🖨️ Using cached receipt printer:', device.name, device.id);
       }
 
-      await printer.connect();
+      console.log('🔌 Connecting to receipt printer...');
+      await printer.connect(device);
+      console.log('📄 Printing receipt...');
       await printer.printReceipt(order);
 
       alert('Receipt printed successfully!');
@@ -136,15 +156,23 @@ export default function CashPayment({
     try {
       const printer = printerManager.getKitchenPrinter();
 
-      // Try to get saved printer device
-      const savedDeviceId = printerManager.getPrinterConfig('kitchen');
-      if (!savedDeviceId) {
-        // No saved printer, prompt to pair
-        const device = await printer.pair();
-        printerManager.savePrinterConfig('kitchen', device.id);
+      // Try to get cached device from auto-reconnect
+      let device = printerManager.getCachedDevice('kitchen');
+
+      if (!device) {
+        console.log('🖨️ No cached kitchen printer found, requesting pairing...');
+        // No cached device, prompt to pair
+        device = await printer.pair();
+        console.log('✅ Kitchen printer paired:', device.name, device.id);
+        printerManager.savePrinterConfig('kitchen', device.id, device.name || 'Kitchen Printer');
+        printerManager.setCachedDevice('kitchen', device);
+      } else {
+        console.log('🖨️ Using cached kitchen printer:', device.name, device.id);
       }
 
-      await printer.connect();
+      console.log('🔌 Connecting to kitchen printer...');
+      await printer.connect(device);
+      console.log('📄 Printing kitchen stub...');
       await printer.printKitchenStub(order);
 
       alert('Kitchen stub printed successfully!');

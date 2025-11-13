@@ -245,8 +245,8 @@ export function generateReceiptHTML(order: any): string {
     <div class="header">
       <div class="logo">☕</div>
       <h1>Coffee Oasis</h1>
-      <p class="subtitle">Smart Locker Coffee Shop</p>
-      <p class="location">📍 Malaysia | 🌐 coffee-oasis.com.my</p>
+      <p class="subtitle">Your friendly local Coffee Shop</p>
+      <p class="location">📍 9ine | 🌐 coffee-oasis.com.my</p>
     </div>
 
     <!-- Order Info -->
@@ -364,10 +364,11 @@ export function generateReceiptHTML(order: any): string {
       <p class="thank-you-sub">Your order will be ready soon.</p>
       <div class="contact-info">
         <p>Questions? Contact us at support@coffee-oasis.com.my</p>
-        <p>📞 +60 12-345-6789</p>
+        <p>📞 +60 17-2099 411</p>
       </div>
     </div>
   </div>
 </body>
 </html>`;
 }
+
