@@ -41,9 +41,9 @@ export default function CreatePurchaseOrderPage() {
 
   // Form state
   const [supplier, setSupplier] = useState("");
-  const [orderDate, setOrderDate] = useState("");
+  const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]); // Today's date
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("");
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState("Deliver by 2PM");
   const [items, setItems] = useState<POItem[]>([]);
 
   // New item form
@@ -53,7 +53,7 @@ export default function CreatePurchaseOrderPage() {
   const [newItemQuantity, setNewItemQuantity] = useState(1);
   const [newItemUnit, setNewItemUnit] = useState("");
   const [newItemUnitCost, setNewItemUnitCost] = useState(0);
-  const [newItemNotes, setNewItemNotes] = useState("");
+  const [newItemNotes, setNewItemNotes] = useState("1 ctn of 1");
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -139,7 +139,7 @@ export default function CreatePurchaseOrderPage() {
 
     // Reset form
     setNewItemQuantity(1);
-    setNewItemNotes("");
+    setNewItemNotes("1 ctn of 1");
   };
 
   const handleRemoveItem = (tempId: string) => {
@@ -381,7 +381,11 @@ export default function CreatePurchaseOrderPage() {
               <input
                 type="number"
                 value={newItemQuantity}
-                onChange={(e) => setNewItemQuantity(parseFloat(e.target.value))}
+                onChange={(e) => {
+                  const qty = parseFloat(e.target.value);
+                  setNewItemQuantity(qty);
+                  setNewItemNotes(`1 ctn of ${qty}`);
+                }}
                 min="0"
                 step="0.01"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"

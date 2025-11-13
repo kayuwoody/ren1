@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck } from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -275,6 +275,17 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-semibold">Recipes</h2>
                 </div>
                 <p className="text-gray-600">Build product recipes and calculate COGS</p>
+              </Link>
+
+              <Link
+                href="/admin/purchase-orders/create"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Truck className="w-6 h-6 text-blue-600" />
+                  <h2 className="text-xl font-semibold">Purchase Orders</h2>
+                </div>
+                <p className="text-gray-600">Create supplier orders and manage inventory</p>
               </Link>
             </div>
           </div>

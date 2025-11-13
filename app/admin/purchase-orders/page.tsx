@@ -94,6 +94,31 @@ export default function PurchaseOrdersPage() {
     }
   };
 
+  const handleMarkOrdered = async (id: string) => {
+    if (!confirm("Mark this purchase order as ordered?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/purchase-orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "ordered" }),
+      });
+
+      if (response.ok) {
+        alert("Purchase order marked as ordered!");
+        loadPurchaseOrders();
+      } else {
+        const data = await response.json();
+        alert(`Failed to update status: ${data.error || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Failed to update status:", error);
+      alert("Failed to update purchase order status");
+    }
+  };
+
   const handleDelete = async (id: string, poNumber: string) => {
     if (!confirm(`Delete purchase order ${poNumber}? This cannot be undone.`)) {
       return;
@@ -266,10 +291,16 @@ export default function PurchaseOrdersPage() {
                     {po.status === "draft" && (
                       <>
                         <button
+                          onClick={() => handleMarkOrdered(po.id)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Mark as Ordered
+                        </button>
+                        <button
                           onClick={() =>
                             router.push(`/admin/purchase-orders/edit/${po.id}`)
                           }
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                          className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
                         >
                           Edit
                         </button>
