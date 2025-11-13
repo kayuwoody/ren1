@@ -373,7 +373,7 @@ export default function KitchenDisplayPage() {
         </div>
       ) : (
         /* Order Grid - Optimized for landscape tablets in kitchen */
-        <div className="grid grid-cols-3 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
           {orders.map((order) => {
             const timerInfo = getTimerInfo(order);
             const isUpdating = updatingOrderId === order.id;
