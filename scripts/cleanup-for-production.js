@@ -5,6 +5,9 @@
  * - Clears all inventory consumption records (COGS history)
  * - Deletes products that no longer exist in WooCommerce (after removing dependencies)
  *
+ * IMPORTANT: Run this AFTER syncing products from WooCommerce!
+ * First visit: http://localhost:3000/api/products?force_sync=true
+ *
  * CAUTION: This is destructive and cannot be undone!
  */
 
@@ -13,6 +16,8 @@ const db = new Database('./prisma/dev.db');
 
 console.log('🧹 Production Cleanup Script\n');
 console.log('⚠️  WARNING: This will delete historical COGS data!\n');
+console.log('⚠️  PREREQUISITE: Ensure products are synced from WooCommerce first!');
+console.log('   Run: curl "http://localhost:3000/api/products?force_sync=true"\n');
 
 // Step 1: Clear InventoryConsumption table
 console.log('Step 1: Clearing inventory consumption records...');
