@@ -372,8 +372,8 @@ export default function KitchenDisplayPage() {
           </div>
         </div>
       ) : (
-        /* Order Grid - Optimized for landscape tablets in kitchen */
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+        /* Order Grid - Auto-fit columns, let display determine optimal layout */
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
           {orders.map((order) => {
             const timerInfo = getTimerInfo(order);
             const isUpdating = updatingOrderId === order.id;
@@ -389,7 +389,7 @@ export default function KitchenDisplayPage() {
             return (
               <div
                 key={order.id}
-                className={`bg-gray-50 rounded-lg border-2 ${borderColor} p-3 shadow-lg`}
+                className={`bg-gray-50 rounded-lg border-2 ${borderColor} p-3 shadow-lg min-h-[200px]`}
               >
                 {/* Order Number */}
                 <div className="mb-2">

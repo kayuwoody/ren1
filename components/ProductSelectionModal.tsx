@@ -9,7 +9,7 @@ interface SelectionGroup {
   items: Array<{
     id: string;
     name: string;
-    priceAdjustment: number;
+    basePrice: number;      // Product's base/sales price
   }>;
 }
 
@@ -27,7 +27,7 @@ interface RecipeConfig {
   optional: Array<{
     id: string;
     name: string;
-    priceAdjustment: number;
+    basePrice: number;      // Product's base/sales price
   }>;
 }
 
@@ -95,22 +95,23 @@ export default function ProductSelectionModal({
       return product.comboPriceOverride;
     }
 
-    // Start with base price
-    let total = product.basePrice;
+    // For non-combo products, start with the base product price
+    // For combos, only sum component prices
+    let total = isCombo ? 0 : product.basePrice;
 
-    // Add price adjustments from mandatory selections (using uniqueKey)
+    // Add basePrices from mandatory selections
     recipe.mandatoryGroups.forEach((group) => {
       const selectedId = mandatorySelections[group.uniqueKey];
       const selectedItem = group.items.find((item) => item.id === selectedId);
       if (selectedItem) {
-        total += selectedItem.priceAdjustment;
+        total += selectedItem.basePrice;
       }
     });
 
-    // Add price adjustments from optional selections
+    // Add basePrices from optional selections
     recipe.optional.forEach((item) => {
       if (optionalSelections.has(item.id)) {
-        total += item.priceAdjustment;
+        total += item.basePrice;
       }
     });
 
@@ -229,11 +230,9 @@ export default function ProductSelectionModal({
                       className="w-4 h-4 text-blue-600"
                     />
                     <span className="ml-3 flex-1">{item.name}</span>
-                    {item.priceAdjustment !== 0 && (
-                      <span className="text-sm text-gray-600">
-                        {item.priceAdjustment > 0 ? '+' : ''}RM {item.priceAdjustment.toFixed(2)}
-                      </span>
-                    )}
+                    <span className="text-sm text-gray-600">
+                      RM {item.basePrice.toFixed(2)}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -259,11 +258,9 @@ export default function ProductSelectionModal({
                       className="w-4 h-4 text-blue-600 rounded"
                     />
                     <span className="ml-3 flex-1">{item.name}</span>
-                    {item.priceAdjustment !== 0 && (
-                      <span className="text-sm text-gray-600">
-                        {item.priceAdjustment > 0 ? '+' : ''}RM {item.priceAdjustment.toFixed(2)}
-                      </span>
-                    )}
+                    <span className="text-sm text-gray-600">
+                      RM {item.basePrice.toFixed(2)}
+                    </span>
                   </label>
                 ))}
               </div>

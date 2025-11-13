@@ -116,18 +116,20 @@ export default function CustomerDisplayPage() {
       <div className="mb-4 border-b border-gray-200 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="relative h-32 w-32">
+            <div className="relative h-[230px] w-auto">
               <Image
                 src="/co line mascot.png"
                 alt="Coffee Oasis"
-                fill
-                className="object-contain"
+                width={1280}
+                height={230}
+                className="object-contain mix-blend-multiply"
+                style={{ backgroundColor: 'transparent' }}
               />
             </div>
           </div>
           <div className="text-right">
             {/* Connection Status Indicator */}
-            <div className="mb-2 flex items-center justify-end gap-2">
+            <div className="mb-1 flex items-center justify-end gap-2">
               <div className={`w-2 h-2 rounded-full ${
                 connectionStatus === 'connected' ? 'bg-green-500' :
                 connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
@@ -140,22 +142,17 @@ export default function CustomerDisplayPage() {
               </span>
             </div>
             {mounted && (
-              <>
-                <p className="text-xl font-mono text-gray-800">
-                  {currentTime.toLocaleTimeString('en-MY', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                  })}
-                </p>
-                <p className="text-xs text-gray-600">
-                  {currentTime.toLocaleDateString('en-MY', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long'
-                  })}
-                </p>
-              </>
+              <p className="text-sm font-mono text-gray-700 whitespace-nowrap">
+                {currentTime.toLocaleTimeString('en-MY', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                })} • {currentTime.toLocaleDateString('en-MY', {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short'
+                })}
+              </p>
             )}
           </div>
         </div>
@@ -176,7 +173,8 @@ export default function CustomerDisplayPage() {
                   src="/new circle mascot.jpg"
                   alt="Coffee Oasis Mascot"
                   fill
-                  className="object-contain"
+                  className="object-contain mix-blend-multiply"
+                  style={{ backgroundColor: 'transparent' }}
                   priority
                 />
               </div>
