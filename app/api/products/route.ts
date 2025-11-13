@@ -83,8 +83,13 @@ export async function GET(req: Request) {
           deleteProduct(cachedProduct.id);
           deletedCount++;
           console.log(`🗑️  Deleted product from cache: ${cachedProduct.name} (WC ID: ${cachedProduct.wcId})`);
-        } catch (err) {
-          console.error(`⚠️ Failed to delete product ${cachedProduct.id}:`, err);
+        } catch (err: any) {
+          // Products with recipes or consumption history can't be deleted due to foreign key constraints
+          if (err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+            console.warn(`⚠️  Cannot delete "${cachedProduct.name}": Has recipes or order history (keeping in cache)`);
+          } else {
+            console.error(`⚠️ Failed to delete product ${cachedProduct.id}:`, err);
+          }
         }
       }
     }

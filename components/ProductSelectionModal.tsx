@@ -88,8 +88,10 @@ export default function ProductSelectionModal({
 
   // Calculate total price based on selections
   const calculateTotal = () => {
-    // If combo price override is set, use that exact price
-    if (product.comboPriceOverride !== undefined && product.comboPriceOverride !== null) {
+    // If combo price override is set, use that exact price (ignore option adjustments)
+    if (product.comboPriceOverride !== undefined &&
+        product.comboPriceOverride !== null &&
+        product.comboPriceOverride > 0) {
       return product.comboPriceOverride;
     }
 

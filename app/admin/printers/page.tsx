@@ -38,6 +38,21 @@ export default function PrintersAdminPage() {
     // Load last print times
     setLastReceiptPrint(localStorage.getItem('last_receipt_print') || '');
     setLastKitchenPrint(localStorage.getItem('last_kitchen_print') || '');
+
+    // Auto-reconnect to previously paired printers
+    const reconnect = async () => {
+      const devices = await printerManager.autoReconnect();
+      if (devices.receipt) {
+        setReceiptPrinter(devices.receipt);
+        console.log('✅ Receipt printer auto-reconnected on startup');
+      }
+      if (devices.kitchen) {
+        setKitchenPrinter(devices.kitchen);
+        console.log('✅ Kitchen printer auto-reconnected on startup');
+      }
+    };
+
+    reconnect();
   }, []);
 
   const addPrintLog = (log: Omit<PrintLog, 'id' | 'timestamp'>) => {
@@ -67,7 +82,8 @@ export default function PrintersAdminPage() {
       const printer = printerManager.getReceiptPrinter();
       const device = await printer.pair();
       setReceiptPrinter(device);
-      printerManager.savePrinterConfig('receipt', device.id);
+      printerManager.savePrinterConfig('receipt', device.id, device.name || 'Receipt Printer');
+      printerManager.setCachedDevice('receipt', device);
       alert(`Receipt printer paired: ${device.name}`);
     } catch (err: any) {
       console.error('Receipt printer error:', err);
@@ -80,7 +96,8 @@ export default function PrintersAdminPage() {
       const printer = printerManager.getKitchenPrinter();
       const device = await printer.pair();
       setKitchenPrinter(device);
-      printerManager.savePrinterConfig('kitchen', device.id);
+      printerManager.savePrinterConfig('kitchen', device.id, device.name || 'Kitchen Printer');
+      printerManager.setCachedDevice('kitchen', device);
       alert(`Kitchen printer paired: ${device.name}`);
     } catch (err: any) {
       console.error('Kitchen printer error:', err);

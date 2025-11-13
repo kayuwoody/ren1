@@ -60,6 +60,7 @@ export function initDatabase() {
       calculatedCost REAL NOT NULL,
       isOptional INTEGER NOT NULL DEFAULT 0,
       selectionGroup TEXT,
+      priceAdjustment REAL NOT NULL DEFAULT 0,
       sortOrder INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (productId) REFERENCES Product(id) ON DELETE CASCADE,
@@ -96,6 +97,7 @@ export function initDatabase() {
           calculatedCost REAL NOT NULL,
           isOptional INTEGER NOT NULL DEFAULT 0,
           selectionGroup TEXT,
+          priceAdjustment REAL NOT NULL DEFAULT 0,
           sortOrder INTEGER NOT NULL DEFAULT 0,
           createdAt TEXT NOT NULL DEFAULT (datetime('now')),
           FOREIGN KEY (productId) REFERENCES Product(id) ON DELETE CASCADE,
@@ -106,9 +108,9 @@ export function initDatabase() {
 
       // Copy data from old table
       db.exec(`
-        INSERT INTO ProductRecipe (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, selectionGroup, sortOrder, createdAt)
+        INSERT INTO ProductRecipe (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, selectionGroup, priceAdjustment, sortOrder, createdAt)
         SELECT id, productId, 'material', materialId, NULL, quantity, unit, calculatedCost,
-               COALESCE(isOptional, 0), NULL, COALESCE(sortOrder, 0), createdAt
+               COALESCE(isOptional, 0), NULL, 0, COALESCE(sortOrder, 0), createdAt
         FROM ProductRecipe_old
       `);
 
@@ -130,6 +132,21 @@ export function initDatabase() {
       console.log('🔄 Adding selectionGroup column to ProductRecipe table...');
       db.exec(`ALTER TABLE ProductRecipe ADD COLUMN selectionGroup TEXT`);
       console.log('✅ selectionGroup column added');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
+  // Migration: Add priceAdjustment column if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(ProductRecipe)").all() as any[];
+    const hasPriceAdjustment = tableInfo.some((col: any) => col.name === 'priceAdjustment');
+
+    if (tableInfo.length > 0 && !hasPriceAdjustment) {
+      console.log('🔄 Adding priceAdjustment column to ProductRecipe table...');
+      db.exec(`ALTER TABLE ProductRecipe ADD COLUMN priceAdjustment REAL NOT NULL DEFAULT 0`);
+      console.log('✅ priceAdjustment column added');
+      console.log('📝 Note: Price adjustment for XOR options (e.g., +RM 2 for iced vs hot)');
     }
   } catch (e) {
     // Column already exists or table doesn't exist
