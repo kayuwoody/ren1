@@ -126,7 +126,7 @@ export function flattenAllChoices(
           return {
             id: item.linkedProductId!,
             name: item.linkedProductName || linkedProd?.name || 'Unknown',
-            priceAdjustment: (item as any).priceAdjustment || 0,
+            priceAdjustment: item.priceAdjustment || 0,
           };
         }),
     });
@@ -141,7 +141,7 @@ export function flattenAllChoices(
       optionalItems.push({
         id: item.linkedProductId,
         name: item.linkedProductName || linkedProd?.name || 'Unknown',
-        priceAdjustment: (item as any).priceAdjustment || 0,
+        priceAdjustment: item.priceAdjustment || 0,
         parentProductId: depth === 0 ? undefined : product.id,
         parentProductName: depth === 0 ? undefined : product.name,
       });
@@ -234,7 +234,7 @@ export function calculatePriceWithSelections(
 
     // Add price adjustment and recurse if needed
     if (item.itemType === 'product' && item.linkedProductId) {
-      totalPrice += ((item as any).priceAdjustment || 0) * quantity;
+      totalPrice += (item.priceAdjustment || 0) * quantity;
 
       // Recurse to get nested prices
       const nestedPrice = calculatePriceWithSelections(
