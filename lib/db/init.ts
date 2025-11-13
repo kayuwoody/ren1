@@ -1,8 +1,17 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 
 // Database file location
-const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
+const dbDir = path.join(process.cwd(), 'prisma');
+const dbPath = path.join(dbDir, 'dev.db');
+
+// Ensure prisma directory exists before opening database
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+  console.log('📁 Created prisma directory');
+}
+
 export const db = new Database(dbPath);
 
 // Enable foreign keys
