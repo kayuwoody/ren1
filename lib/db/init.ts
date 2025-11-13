@@ -293,6 +293,14 @@ export function initDatabase() {
   `);
 
   console.log('✅ Database schema initialized');
+
+  // Initialize purchase order tables
+  try {
+    const { initPurchaseOrderTables } = require('./purchaseOrderSchema');
+    initPurchaseOrderTables();
+  } catch (e) {
+    console.log('⚠️ Purchase order tables not initialized (schema file may not exist yet)');
+  }
 }
 
 // Run initialization if this file is executed directly
