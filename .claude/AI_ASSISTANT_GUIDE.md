@@ -291,6 +291,37 @@ setProductRecipe(productId, [
 ]);
 ```
 
+### Purchase Order Service (`lib/db/purchaseOrderService.ts`)
+```typescript
+import {
+  createPurchaseOrder,
+  markPurchaseOrderReceived,
+  getPurchaseOrder,
+  generatePONumber
+} from '@/lib/db/purchaseOrderService';
+
+// Create new PO
+const po = createPurchaseOrder({
+  supplierName: 'Coffee Supplier Inc',
+  orderDate: '2025-11-13',
+  items: [
+    {
+      itemType: 'product',
+      productId: 'prod123',
+      quantity: 24,
+      unit: 'units',
+      notes: '1 ctn of 24'
+    }
+  ],
+  notes: 'Deliver by 2PM'
+});
+// Auto-generates PO number: PO-2025-11-0001
+
+// Mark as received (updates inventory + WooCommerce)
+await markPurchaseOrderReceived(po.id);
+// ⚠️ ASYNC - syncs stock to WooCommerce for products with wcId
+```
+
 ### Order Service (`lib/orderService.ts`)
 ```typescript
 import { getWooOrder, updateWooOrder } from '@/lib/orderService';
@@ -731,5 +762,124 @@ This guide is a concise reference. The full docs have:
 
 ---
 
-**Last Updated:** Session 011CV322pbHjdvxk3YcqjKk6 (Thermal printer enhancements + Stock display + Payment flow simplification)
+## Recent Changes (Session 011CV4vsw1uumcSjLujxNLHj)
+
+### Stock Management with WooCommerce Sync
+
+**1. Manual Stock Updates** ✅
+- **File:** `app/admin/recipes/page.tsx:581-620`
+- **Feature:** Editable stock quantity field with +/- buttons
+- **API Endpoint:** `/api/products/update-stock` (POST)
+- **Behavior:**
+  - Updates local SQLite database
+  - Syncs to WooCommerce if product has `wcId` and `manageStock` enabled
+  - Real-time UI updates (no page reload needed)
+  - Color-coded display: red (0), yellow (<10), green (≥10)
+- **Code:**
+  ```typescript
+  async function updateStockQuantity(newStock: number) {
+    const response = await fetch('/api/products/update-stock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        productId: selectedProduct.id,
+        stockQuantity: newStock,
+      }),
+    });
+  }
+  ```
+
+**2. Stock Display Source Fix** ✅
+- **File:** `app/api/admin/products/route.ts:43`
+- **Issue:** Stock quantity showed stale values after updates (was using WooCommerce API response)
+- **Fix:** Use local DB as source of truth for display
+- **Before:** `stockQuantity: wcProduct?.stock_quantity ?? null`
+- **After:** `stockQuantity: product.stockQuantity ?? null`
+- **Why:** WooCommerce responses can be cached/delayed, local DB is always current
+
+### Purchase Order System
+
+**3. Complete PO Management** ✅
+- **Service:** `lib/db/purchaseOrderService.ts`
+- **Features:**
+  - Create, read, update, delete purchase orders
+  - Auto-generated PO numbers: `PO-YYYY-MM-NNNN`
+  - Status workflow: draft → ordered → received
+  - CSV export for supplier communication
+  - Automatic inventory updates when receiving PO
+  - WooCommerce stock sync via `addWooProductStock()`
+- **Database:** SQLite tables for PurchaseOrder and PurchaseOrderItem
+- **API Routes:**
+  - `GET/POST /api/purchase-orders` - List and create
+  - `GET/PATCH/DELETE /api/purchase-orders/[id]` - Single PO operations
+  - `GET /api/purchase-orders/[id]/csv` - Export to CSV
+  - `POST /api/purchase-orders/[id]/receive` - Mark received, update inventory
+
+**4. WooCommerce Inventory Sync for POs** ✅
+- **File:** `lib/db/purchaseOrderService.ts:355-386`
+- **Function:** `addWooProductStock(wcProductId, quantity, productName)`
+- **Behavior:**
+  - Fetches current stock from WooCommerce
+  - Checks if `manage_stock` is enabled
+  - Calculates new stock: `current + quantity`
+  - Updates via WooCommerce API
+  - Logs inventory changes
+- **Called When:** Purchase order marked as "received"
+- **Pattern:** Mirrors `deductWooProductStock()` from inventory consumption service
+
+**5. Purchase Order UI Enhancements** ✅
+- **Admin Dashboard Button** (`/app/admin/page.tsx:281-289`)
+  - Added "Purchase Orders" card with Truck icon
+  - Quick access to create new POs
+- **Create PO Form Defaults** (`/app/admin/purchase-orders/create/page.tsx`)
+  - Order date: Today (`new Date().toISOString().split('T')[0]`)
+  - Notes: "Deliver by 2PM"
+  - Item notes: "1 ctn of 1" (auto-updates when quantity changes)
+  - Example: Quantity 24 → Item notes: "1 ctn of 24"
+- **PO List Actions** (`/app/admin/purchase-orders/page.tsx`)
+  - "Mark as Ordered" button for draft POs
+  - CSV export for all POs
+  - Edit/Delete for draft POs only
+  - "Mark Received" for ordered POs (triggers inventory update)
+
+### Code Quality & Type Safety
+
+**6. priceAdjustment Property Removal** ✅
+- **File:** `lib/db/recipeService.ts`
+- **Change:** Removed unused `priceAdjustment` from `ProductRecipeItem` interface
+- **Reason:** Was an overengineered solution (commit 651c8a1), replaced with direct `basePrice` usage
+- **Cleaned Up:**
+  - Interface definition (line 9-28)
+  - `addRecipeItem()` parameter
+  - SQL INSERT statement (removed from column list)
+  - `getRecipeItem()` and `getProductRecipe()` return statements
+- **Database:** Column still exists with DEFAULT 0, but no longer used by application
+
+**7. Database File Tracking Fix** ✅
+- **File:** `prisma/dev.db`
+- **Issue:** Was tracked in git despite being in `.gitignore`
+- **Fix:** Removed from tracking with `git rm --cached prisma/dev.db`
+- **Impact:** Database changes no longer appear in git status
+
+**8. Build Error Fixes** ✅
+- **File:** `/app/api/purchase-orders/route.ts`
+- **Issue:** Next.js build error - exported non-HTTP method functions
+- **Fix:** Removed helper functions (they exist in separate route files)
+- **Valid Exports:** Only GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
+
+### Files Modified in This Session
+
+1. `lib/db/recipeService.ts` - Removed priceAdjustment property
+2. `lib/db/purchaseOrderService.ts` - Added WooCommerce sync for receiving POs
+3. `app/api/products/update-stock/route.ts` - Created stock update endpoint
+4. `app/api/admin/products/route.ts` - Fixed stock source (local DB)
+5. `app/admin/recipes/page.tsx` - Added editable stock field with sync
+6. `app/admin/page.tsx` - Added Purchase Orders button
+7. `app/admin/purchase-orders/create/page.tsx` - Added defaults and auto-fill
+8. `app/admin/purchase-orders/page.tsx` - Added "Mark as Ordered" button
+9. `app/api/purchase-orders/route.ts` - Fixed build error (removed helper exports)
+
+---
+
+**Last Updated:** Session 011CV4vsw1uumcSjLujxNLHj (Stock management + Purchase orders + priceAdjustment cleanup)
 **For questions:** Ask the user - they know the business logic best!

@@ -4,9 +4,50 @@
 Coffee shop POS (Next.js 14, TypeScript, WooCommerce API, SQLite). Currency: RM (Malaysian Ringgit).
 
 ## Current Branch
-`claude/read-claude-docs-011CV322pbHjdvxk3YcqjKk6`
+`claude/fix-priceadjustment-011CV4vsw1uumcSjLujxNLHj`
 
 ## Recently Completed
+
+### Stock Management & Inventory Updates (Session 011CV4vsw1uumcSjLujxNLHj)
+- **Feature**: Manual stock quantity management with WooCommerce sync
+- **API Endpoint**: `/api/products/update-stock` - POST endpoint for stock updates
+- **UI Changes**:
+  - Editable stock field with +/- buttons in `/admin/recipes` page
+  - Direct numeric input (not just +/- buttons)
+  - Color-coded stock display (red: 0, yellow: <10, green: ≥10)
+  - Real-time updates to both local DB and WooCommerce
+- **Source of Truth Fix**: Changed stock display to use local DB instead of WooCommerce API (fixes stale data on reload)
+  - File: `app/api/admin/products/route.ts:43` - returns `product.stockQuantity` instead of `wcProduct?.stock_quantity`
+- **Files**: `app/api/products/update-stock/route.ts`, `app/admin/recipes/page.tsx`, `app/api/admin/products/route.ts`
+
+### Purchase Order System (Session 011CV4vsw1uumcSjLujxNLHj)
+- **Feature**: Complete supplier purchase order management
+- **Workflow**: Draft → Ordered → Received (updates inventory automatically)
+- **Auto-generated PO Numbers**: Format `PO-YYYY-MM-NNNN` (e.g., PO-2025-11-0001)
+- **CSV Export**: Download PO as CSV for supplier communication
+- **WooCommerce Sync**: Receiving PO updates both local DB and WooCommerce stock levels
+- **UI Enhancements**:
+  - Purchase Orders button on admin dashboard (`/admin/page.tsx`)
+  - Prefilled item notes: "1 ctn of " + quantity (auto-updates on quantity change)
+  - Default order date: Today
+  - Default notes: "Deliver by 2PM"
+  - "Mark as Ordered" button for draft POs
+- **Files**:
+  - Service: `lib/db/purchaseOrderService.ts` (includes `addWooProductStock()` for inventory sync)
+  - API: `/app/api/purchase-orders/**`
+  - UI: `/app/admin/purchase-orders/**`
+- **FTP Integration**: Receipt upload to Hostinger FTP server (restored from previous work)
+
+### Code Cleanup & Type Safety (Session 011CV4vsw1uumcSjLujxNLHj)
+- **priceAdjustment Removal**: Removed unused `priceAdjustment` property from `ProductRecipeItem` interface
+  - Was an overengineered solution replaced in commit 651c8a1 (now uses `basePrice` directly)
+  - Cleaned up interface, function parameters, SQL INSERT, and return statements
+  - Database column still exists but is no longer used by application
+  - File: `lib/db/recipeService.ts`
+- **dev.db Tracking Fix**: Removed `prisma/dev.db` from git tracking (was tracked despite .gitignore)
+- **Build Error Fixes**: Fixed Next.js route exports (removed non-HTTP method exports from `/api/purchase-orders/route.ts`)
+
+## Recently Completed (Previous Sessions)
 
 ### Thermal Printer & Receipt Enhancements (Session 011CV322pbHjdvxk3YcqjKk6)
 - **Feature**: Enhanced thermal printer receipts with professional formatting
@@ -125,6 +166,7 @@ lib/
   db/
     inventoryConsumptionService.ts  ← CRITICAL: Don't break recursion
     recipeService.ts                ← CRITICAL: updateProductTotalCost has recursion
+    purchaseOrderService.ts         ← Purchase order CRUD, WooCommerce sync
   sse/
     cartStreamManager.ts     ← SSE manager for cart updates
     orderStreamManager.ts    ← SSE manager for order updates
@@ -139,13 +181,25 @@ app/api/
   kitchen/stream/route.ts  ← SSE endpoint for kitchen display
   update-order/[orderId]/route.ts  ← Broadcasts order updates
   promo/upload/route.ts  ← Upload promo images to WooCommerce
+  purchase-orders/
+    route.ts           ← GET (list), POST (create)
+    [id]/route.ts      ← GET, PATCH (update), DELETE
+    [id]/csv/route.ts  ← CSV export
+    [id]/receive/route.ts  ← POST (mark received, update inventory)
+  products/
+    update-stock/route.ts  ← POST (manual stock updates with WooCommerce sync)
 
 app/
   customer-display/page.tsx  ← Listens to SSE (no polling)
   kitchen/page.tsx           ← Listens to SSE (no polling)
   products/page.tsx          ← Checks isCombo, fetches components once
   payment/page.tsx           ← Stores components in order metadata
-  admin/promo-generator/page.tsx  ← Generate promo images for combos
+  admin/
+    promo-generator/page.tsx  ← Generate promo images for combos
+    purchase-orders/
+      page.tsx               ← List POs, mark as ordered, CSV export
+      create/page.tsx        ← Create new PO (defaults: today, "Deliver by 2PM")
+    recipes/page.tsx          ← Editable stock with +/- and WooCommerce sync
 
 context/cartContext.tsx  ← CartItem.components field
 components/ProductSelectionModal.tsx  ← isCombo prop, buildDisplayName()
