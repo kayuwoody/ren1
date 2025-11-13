@@ -64,6 +64,7 @@ export default function RecipesPage() {
   const [newUnitCost, setNewUnitCost] = useState('');
   const [editingComboPrice, setEditingComboPrice] = useState(false);
   const [newComboPrice, setNewComboPrice] = useState('');
+  const [updatingStock, setUpdatingStock] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -252,6 +253,42 @@ export default function RecipesPage() {
       alert('Failed to update combo price. Please try again.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function updateStockQuantity(newStock: number) {
+    if (!selectedProduct) return;
+
+    setUpdatingStock(true);
+    try {
+      const response = await fetch('/api/products/update-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: selectedProduct.id,
+          stockQuantity: newStock,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Update local state
+        const updatedProduct = { ...selectedProduct, stockQuantity: newStock };
+        setSelectedProduct(updatedProduct);
+        setProducts(products.map(p => p.id === selectedProduct.id ? updatedProduct : p));
+
+        if (!result.wooCommerceUpdated) {
+          console.warn('Stock updated locally but not in WooCommerce:', result.error);
+        }
+      } else {
+        alert(`Failed to update stock: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Failed to update stock:', error);
+      alert('Failed to update stock. Please try again.');
+    } finally {
+      setUpdatingStock(false);
     }
   }
 
@@ -541,6 +578,46 @@ export default function RecipesPage() {
                       {grossMargin.toFixed(1)}%
                     </p>
                   </div>
+                  {selectedProduct.manageStock && (
+                    <div>
+                      <p className="text-sm text-gray-500">Stock Quantity</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateStockQuantity(Math.max(0, (selectedProduct.stockQuantity || 0) - 1))}
+                          disabled={updatingStock || (selectedProduct.stockQuantity || 0) === 0}
+                          className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                          title="Decrease stock"
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          value={updatingStock ? '' : (selectedProduct.stockQuantity || 0)}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            if (!isNaN(value) && value >= 0) {
+                              updateStockQuantity(value);
+                            }
+                          }}
+                          disabled={updatingStock}
+                          className={`w-20 text-center text-lg font-semibold border rounded px-2 py-1 ${
+                            (selectedProduct.stockQuantity || 0) === 0 ? 'text-red-600 border-red-300' :
+                            (selectedProduct.stockQuantity || 0) < 10 ? 'text-yellow-600 border-yellow-300' :
+                            'text-green-600 border-green-300'
+                          } disabled:bg-gray-100 disabled:text-gray-400`}
+                          placeholder={updatingStock ? '...' : '0'}
+                        />
+                        <button
+                          onClick={() => updateStockQuantity((selectedProduct.stockQuantity || 0) + 1)}
+                          disabled={updatingStock}
+                          className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                          title="Increase stock"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

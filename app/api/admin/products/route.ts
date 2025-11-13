@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     // Get all products from local database (includes COGS from recipes)
     const localProducts = getAllProducts();
 
-    // Transform for API response with current price and stock from WooCommerce
+    // Transform for API response with current price from WooCommerce, stock from local DB
     const transformedProducts = localProducts.map((product) => {
       const wcProduct = wcProducts.find((p: any) => p.id === product.wcId);
       return {
@@ -40,8 +40,8 @@ export async function GET(req: Request) {
         unitCost: product.unitCost,
         comboPriceOverride: product.comboPriceOverride,
         imageUrl: product.imageUrl,
-        stockQuantity: wcProduct?.stock_quantity ?? null,
-        manageStock: wcProduct?.manage_stock ?? false,
+        stockQuantity: product.stockQuantity ?? null, // Use local DB as source of truth
+        manageStock: product.manageStock ?? false,
       };
     });
 
