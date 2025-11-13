@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   createPurchaseOrder,
   getAllPurchaseOrders,
-  getSuppliers,
 } from '@/lib/db/purchaseOrderService';
-import { getAllProducts } from '@/lib/db/productService';
-import { getAllMaterials } from '@/lib/db/materialService';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 /**
@@ -90,38 +87,5 @@ export async function POST(req: Request) {
     return NextResponse.json(purchaseOrder, { status: 201 });
   } catch (error) {
     return handleApiError(error, '/api/purchase-orders');
-  }
-}
-
-/**
- * GET /api/purchase-orders/suppliers
- *
- * Get list of unique suppliers from materials
- */
-export async function getSuppliersList() {
-  try {
-    const suppliers = getSuppliers();
-    return NextResponse.json({ suppliers });
-  } catch (error) {
-    return handleApiError(error, '/api/purchase-orders/suppliers');
-  }
-}
-
-/**
- * GET /api/purchase-orders/items
- *
- * Get all materials and products for selection
- */
-export async function getAvailableItems() {
-  try {
-    const materials = getAllMaterials();
-    const products = getAllProducts();
-
-    return NextResponse.json({
-      materials,
-      products,
-    });
-  } catch (error) {
-    return handleApiError(error, '/api/purchase-orders/items');
   }
 }
