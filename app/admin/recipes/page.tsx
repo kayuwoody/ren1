@@ -590,13 +590,23 @@ export default function RecipesPage() {
                         >
                           −
                         </button>
-                        <p className={`text-lg font-semibold min-w-[60px] text-center ${
-                          (selectedProduct.stockQuantity || 0) === 0 ? 'text-red-600' :
-                          (selectedProduct.stockQuantity || 0) < 10 ? 'text-yellow-600' :
-                          'text-green-600'
-                        }`}>
-                          {updatingStock ? '...' : (selectedProduct.stockQuantity || 0)}
-                        </p>
+                        <input
+                          type="number"
+                          value={updatingStock ? '' : (selectedProduct.stockQuantity || 0)}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value);
+                            if (!isNaN(value) && value >= 0) {
+                              updateStockQuantity(value);
+                            }
+                          }}
+                          disabled={updatingStock}
+                          className={`w-20 text-center text-lg font-semibold border rounded px-2 py-1 ${
+                            (selectedProduct.stockQuantity || 0) === 0 ? 'text-red-600 border-red-300' :
+                            (selectedProduct.stockQuantity || 0) < 10 ? 'text-yellow-600 border-yellow-300' :
+                            'text-green-600 border-green-300'
+                          } disabled:bg-gray-100 disabled:text-gray-400`}
+                          placeholder={updatingStock ? '...' : '0'}
+                        />
                         <button
                           onClick={() => updateStockQuantity((selectedProduct.stockQuantity || 0) + 1)}
                           disabled={updatingStock}
