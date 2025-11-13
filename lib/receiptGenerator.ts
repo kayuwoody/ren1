@@ -2,8 +2,23 @@
  * Static Receipt HTML Generator
  *
  * Generates self-contained HTML files for receipts that can be uploaded to static hosting.
- * No JavaScript, no external dependencies - just pure HTML/CSS.
+ * No JavaScript, no external dependencies - just pure HTML/CSS with embedded images.
  */
+
+import fs from 'fs';
+import path from 'path';
+
+// Read and encode mascot logo as base64 for embedding
+function getMascotBase64(): string {
+  try {
+    const mascotPath = path.join(process.cwd(), 'public', 'mascot.jpg');
+    const mascotBuffer = fs.readFileSync(mascotPath);
+    return `data:image/jpeg;base64,${mascotBuffer.toString('base64')}`;
+  } catch (err) {
+    console.warn('⚠️  Could not load mascot.jpg, using fallback');
+    return ''; // Fallback to no image
+  }
+}
 
 export function generateReceiptHTML(order: any): string {
   const getItemMeta = (item: any, key: string) => {
@@ -26,6 +41,9 @@ export function generateReceiptHTML(order: any): string {
   const totalDiscount = parseFloat(getOrderMeta('_total_discount') || '0');
   const finalTotal = parseFloat(order.total);
   const retailTotal = finalTotal + totalDiscount;
+
+  // Get base64 encoded logo
+  const mascotBase64 = getMascotBase64();
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -64,10 +82,6 @@ export function generateReceiptHTML(order: any): string {
       height: 6rem;
       margin: 0 auto 0.5rem;
       display: block;
-    }
-    .logo img {
-      width: 100%;
-      height: 100%;
       object-fit: contain;
     }
     h1 {
@@ -243,7 +257,7 @@ export function generateReceiptHTML(order: any): string {
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <img src="/mascot.jpg" alt="Coffee Oasis Logo" class="logo" />
+      <img src="./mascot.jpg" alt="Coffee Oasis Logo" class="logo" />
       <h1>Coffee Oasis</h1>
       <p class="subtitle">Your friendly local Coffee Shop</p>
       <p class="location">📍 9ine | 🌐 coffee-oasis.com.my</p>
