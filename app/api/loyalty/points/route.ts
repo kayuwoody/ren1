@@ -3,6 +3,9 @@ import { getCustomerPoints } from '@/lib/loyaltyService';
 import { cookies } from 'next/headers';
 import { handleApiError, unauthorizedError } from '@/lib/api/error-handler';
 
+// Force dynamic rendering for this API route
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/loyalty/points
  *

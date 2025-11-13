@@ -4,6 +4,9 @@ import { cookies } from 'next/headers';
 import { listOrdersByUser, listOrdersByGuest } from '@/lib/orderService';
 import { handleApiError } from '@/lib/api/error-handler';
 
+// Force dynamic rendering for this API route
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   try {
     const c = cookies();
