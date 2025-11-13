@@ -93,8 +93,9 @@ export default function ProductSelectionModal({
       return product.comboPriceOverride;
     }
 
-    // Sum up basePrices of all selected components
-    let total = 0;
+    // For non-combo products, start with the base product price
+    // For combos, only sum component prices
+    let total = isCombo ? 0 : product.basePrice;
 
     // Add basePrices from mandatory selections
     recipe.mandatoryGroups.forEach((group) => {
