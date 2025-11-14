@@ -13,11 +13,18 @@ import { wcApi } from '@/lib/wooClient';
 
 export async function GET() {
   try {
-    // Get today's date range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Get today's date range in Malaysia time (UTC+8)
+    const now = new Date();
+    const utc8Offset = 8 * 60; // 8 hours in minutes
+    const utc8Time = new Date(now.getTime() + (utc8Offset * 60 * 1000));
+
+    // Create start of day (00:00:00) in UTC+8
+    const today = new Date(utc8Time);
+    today.setUTCHours(0, 0, 0, 0);
+
+    // Create end of day (23:59:59.999) in UTC+8
     const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
 
     // Fetch today's orders
     const { data: todayOrders } = await wcApi.get('orders', {

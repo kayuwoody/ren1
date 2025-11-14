@@ -5,6 +5,15 @@ All notable changes to Coffee Oasis POS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Timezone handling** - Admin dashboard daily stats now correctly use Malaysia time (UTC+8) instead of system/UTC time
+- **Date boundaries** - Today's orders/revenue calculated using Malaysian day boundaries (00:00-23:59 UTC+8)
+
+### Added
+- **Timezone documentation** - Added implementation pattern and affected areas to PROJECT_DOCUMENTATION.md
+
 ## [1.0.0] - 2025-11-13 - Production v1.0
 
 ### Added

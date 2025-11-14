@@ -43,6 +43,23 @@
 - **Cache Busters** - `_: Date.now()` ensures fresh WooCommerce data
 - **Status Filtering** - `status: 'any'` excludes trashed orders automatically
 
+#### Timezone Handling
+- **Malaysia Time (UTC+8)** - All daily stats and date calculations use Malaysia timezone
+- **Admin Dashboard Stats** - Today's orders/revenue calculated using UTC+8 day boundaries
+- **Daily Sales Reports** - Date picker defaults to Malaysia "today" (UTC+8)
+- **Implementation Pattern**:
+  ```typescript
+  // Convert current time to Malaysia time (UTC+8)
+  const now = new Date();
+  const utc8Offset = 8 * 60; // 8 hours in minutes
+  const utc8Time = new Date(now.getTime() + (utc8Offset * 60 * 1000));
+
+  // Create start of day (00:00:00) in UTC+8
+  const today = new Date(utc8Time);
+  today.setUTCHours(0, 0, 0, 0);
+  ```
+- **Affected Areas**: `/api/admin/daily-stats`, `/app/admin/sales/daily`
+
 ---
 
 ## Table of Contents
