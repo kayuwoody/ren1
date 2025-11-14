@@ -240,10 +240,10 @@ export default function CheckoutPage() {
                         50% off
                       </button>
                       <button
-                        onClick={() => applyQuickDiscount(index, 25, "Unicorns")}
-                        className="px-3 py-1 bg-pink-100 text-pink-700 rounded text-xs font-medium hover:bg-pink-200"
+                        onClick={() => applyQuickDiscount(index, 25)}
+                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
                       >
-                        🦄 25% off
+                        25% off
                       </button>
                       <button
                         onClick={() => applyQuickDiscount(index, 100, "Unicorns")}
