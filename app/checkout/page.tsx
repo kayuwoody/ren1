@@ -228,22 +228,28 @@ export default function CheckoutPage() {
                         10% off
                       </button>
                       <button
+                        onClick={() => applyQuickDiscount(index, 15)}
+                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
+                      >
+                        15% off
+                      </button>
+                      <button
                         onClick={() => applyQuickDiscount(index, 20)}
                         className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
                       >
                         20% off
                       </button>
                       <button
-                        onClick={() => applyQuickDiscount(index, 50)}
-                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
-                      >
-                        50% off
-                      </button>
-                      <button
                         onClick={() => applyQuickDiscount(index, 25)}
                         className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
                       >
                         25% off
+                      </button>
+                      <button
+                        onClick={() => applyQuickDiscount(index, 50)}
+                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
+                      >
+                        50% off
                       </button>
                       <button
                         onClick={() => applyQuickDiscount(index, 100, "Unicorns")}
