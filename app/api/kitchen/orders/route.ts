@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { wcApi } from "@/lib/wooClient";
 
+// Force dynamic rendering for this API route
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/kitchen/orders
  *

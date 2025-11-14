@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
 import { handleApiError } from '@/lib/api/error-handler';
 
+// Force dynamic rendering for this API route
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/admin/orders
  *
