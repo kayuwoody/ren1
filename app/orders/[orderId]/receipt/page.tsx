@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { Printer, Bluetooth, Share2, Mail, MessageCircle, Star } from 'lucide-react';
-import QRCode from 'react-qr-code';
 import { printerManager } from '@/lib/printerService';
 
 export default function ReceiptPage() {
@@ -332,19 +331,9 @@ export default function ReceiptPage() {
             </div>
           </div>
 
-          {/* QR Code & Footer */}
+          {/* Footer */}
           <div className="mt-8 pt-6 border-t-2 border-gray-200">
             <div className="flex flex-col items-center space-y-4">
-              {/* QR Code */}
-              <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
-                <QRCode
-                  value={typeof window !== 'undefined' ? window.location.href : ''}
-                  size={120}
-                  level="M"
-                />
-                <p className="text-xs text-center text-gray-500 mt-2">Scan to view receipt</p>
-              </div>
-
               {/* Locker info */}
               {order.status === 'ready-for-pickup' && order.meta_data?.find((m: any) => m.key === '_locker_number') && (
                 <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-3 w-full">

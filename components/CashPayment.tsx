@@ -99,8 +99,6 @@ export default function CashPayment({
         .then(data => {
           if (data.success) {
             console.log(`✅ Static receipt generated: ${data.receiptUrl}`);
-            // Open the static receipt
-            window.open(data.receiptUrl, '_blank');
           }
         })
         .catch(err => console.error('Failed to generate static receipt:', err));
