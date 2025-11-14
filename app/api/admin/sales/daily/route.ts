@@ -3,6 +3,9 @@ import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 import { handleApiError } from '@/lib/api/error-handler';
 
+// Force dynamic rendering for this API route
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   console.log('🔧 [DEBUG] Daily sales API loaded - Code version: 2025-11-03-v2');
   try {

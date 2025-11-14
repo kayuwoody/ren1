@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
 import { handleApiError } from '@/lib/api/error-handler';
 
+// Force dynamic rendering for this API route
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/admin/orders
  *
@@ -17,9 +20,12 @@ export async function GET(req: Request) {
     // if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Fetch all orders with expanded parameters (using pagination helper)
+    // Explicitly exclude trash status - only show active orders
     const orders = await fetchAllWooPages('orders', {
+      status: 'any',  // 'any' means all statuses EXCEPT trash
       orderby: 'date',
-      order: 'desc'
+      order: 'desc',
+      _: Date.now()  // Cache buster to ensure fresh data
     });
 
     return NextResponse.json(orders);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Image from 'next/image';
 import { Printer, Bluetooth, Share2, Mail, MessageCircle, Star } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { printerManager } from '@/lib/printerService';
@@ -183,11 +184,16 @@ export default function ReceiptPage() {
         <div className="bg-white shadow-lg rounded-lg p-8 print:shadow-none print:rounded-none">
           {/* Header with Logo */}
           <div className="text-center mb-6 border-b-2 border-amber-600 pb-4">
-            <div className="mb-3">
-              {/* Logo placeholder - you can replace with actual logo */}
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-600 to-amber-800 rounded-full mb-2">
-                <span className="text-2xl text-white">☕</span>
-              </div>
+            <div className="mb-3 flex justify-center">
+              {/* Mascot Logo */}
+              <Image
+                src="/mascot.jpg"
+                alt="Coffee Oasis Logo"
+                width={96}
+                height={96}
+                className="object-contain mb-2"
+                priority
+              />
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-1">Coffee Oasis</h1>
             <p className="text-sm text-amber-700 font-medium">Smart Locker Coffee Shop</p>

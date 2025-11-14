@@ -3,6 +3,7 @@
  *
  * Generates self-contained HTML files for receipts that can be uploaded to static hosting.
  * No JavaScript, no external dependencies - just pure HTML/CSS.
+ * Images use relative paths (./mascot.jpg) - upload mascot.jpg to the same directory on Hostinger.
  */
 
 export function generateReceiptHTML(order: any): string {
@@ -60,15 +61,11 @@ export function generateReceiptHTML(order: any): string {
       margin-bottom: 1.5rem;
     }
     .logo {
-      width: 4rem;
-      height: 4rem;
-      background: linear-gradient(135deg, #d97706, #92400e);
-      border-radius: 50%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2rem;
-      margin-bottom: 0.5rem;
+      width: 6rem;
+      height: 6rem;
+      margin: 0 auto 0.5rem;
+      display: block;
+      object-fit: contain;
     }
     h1 {
       font-size: 1.875rem;
@@ -243,7 +240,7 @@ export function generateReceiptHTML(order: any): string {
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <div class="logo">☕</div>
+      <img src="./mascot.jpg" alt="Coffee Oasis Logo" class="logo" />
       <h1>Coffee Oasis</h1>
       <p class="subtitle">Your friendly local Coffee Shop</p>
       <p class="location">📍 9ine | 🌐 coffee-oasis.com.my</p>

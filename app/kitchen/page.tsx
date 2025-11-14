@@ -372,8 +372,8 @@ export default function KitchenDisplayPage() {
           </div>
         </div>
       ) : (
-        /* Order Grid - Auto-fit columns, let display determine optimal layout */
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+        /* Order Grid - Auto-fit columns with max width to prevent single orders from expanding too much */
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,min(450px,100%)))] gap-4">
           {orders.map((order) => {
             const timerInfo = getTimerInfo(order);
             const isUpdating = updatingOrderId === order.id;

@@ -3,6 +3,9 @@ import { cookies } from 'next/headers';
 import { wcApi } from '@/lib/wooClient';
 import { handleApiError } from '@/lib/api/error-handler';
 
+// Force dynamic rendering for this API route
+export const dynamic = 'force-dynamic';
+
 type Order = any; // tighten if you have a Woo order type
 
 function toNum(v: string | null, fallback: number): number {
