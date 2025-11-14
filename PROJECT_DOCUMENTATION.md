@@ -1,61 +1,47 @@
 # Coffee Oasis POS System - Project Documentation
 
-**Current Status:** ✅ Production Ready (Staff/Admin App)
-**Last Updated:** November 9, 2025
-**Version:** 3.0.0
+**Current Status:** ✅ Production v1.0 Deployed
+**Last Updated:** November 13, 2025
+**Version:** 1.0.0
 
 ---
 
-## 🎉 Recent Updates (November 2025)
+## 🎉 Production v1.0 Release Notes (November 13, 2025)
 
-### ✨ **NEW MAJOR FEATURES**
+### ✨ **PRODUCTION CHANGES**
 
-#### Multi-Screen POS System
-- **Network-enabled displays** - POS serves customer/kitchen displays over local network
-- **Customer Display** - Clean, kiosk-mode display with real-time cart sync
-- **Kitchen Display** - 3-4 column grid optimized for landscape tablets
-- **Server-side cart sync** - All displays stay in sync across devices in real-time
+#### Receipt System
+- **Static HTML Receipts** - Uploaded to Hostinger `public_html/receipts/` folder
+- **Mascot Logo** - Receipts display Coffee Oasis mascot (relative path: `./mascot.jpg`)
+- **No Auto-Open** - Receipts generated silently without popup interruption
+- **QR Code Removed** - Removed outdated localhost QR code from internal receipt page
+- **FTP Upload** - Automatic upload to Hostinger via FTP after payment
 
-#### Hold Order System
-- **Multiple concurrent orders** - Hold orders while serving other customers
-- **Auto-generated tags** - Format: YYMMDD_H### (e.g., 250811_H001)
-- **Customer assignment** - Search and assign customers or use auto-tags
-- **Auto-cleanup** - 4-hour threshold for old held orders
-- **LocalStorage based** - Fast, lightweight, no database needed
+#### Discount System
+- **10% off** - Standard quick discount
+- **15% off** - ✨ NEW quick discount option
+- **20% off** - Standard quick discount
+- **25% off** - Standard quick discount
+- **50% off** - Standard quick discount
+- **🦄 Free (100% off)** - Tagged as "Unicorns" for special promotions
+- **Custom discounts** - Manual entry for percent, amount, or price override
 
-#### COGS & Inventory Management
-- **Recipe Builder** - Define product recipes with materials, packaging, and labor
-- **COGS Calculation** - Automatic cost tracking per product
-- **Bundle Products** - Support for products with mandatory/optional add-ons
-- **XOR Groups** - Mutually exclusive ingredient options (e.g., milk types)
-- **Material Database** - Track raw materials with costs and units
-- **Inventory Deduction** - Automatic stock tracking when orders are placed
+#### Database & Performance
+- **Production Database Cleanup** - All consumption records cleared for fresh start
+- **Dynamic API Routes** - All order/sales endpoints force dynamic rendering (no caching)
+- **Build Cache Fixed** - Added `export const dynamic = 'force-dynamic'` to prevent stale data
+- **Prisma Directory Auto-Creation** - Database directory created automatically if missing
 
-#### Advanced Discount System
-- **Percent Discounts** - 10%, 20%, staff discount, etc.
-- **Fixed Amount** - Deduct specific RM amounts
-- **Price Override** - Set custom final price for special deals
-- **Discount Reasons** - Track why discounts were applied
-- **Per-item Discounts** - Apply different discounts to each cart item
+#### Kitchen Display
+- **Max Width Fix** - Single orders no longer expand to full screen (450px max width)
+- **Auto-fit Grid** - Multiple orders tile nicely across the screen
+- **Viewport Config** - Theme color moved to viewport export (Next.js 14+ compliance)
 
-#### Admin Dashboard Improvements
-- **Daily Operational Stats** - Today's orders, revenue, items sold, pending orders
-- **Grouped Quick Actions** - Organized by Operations, Inventory, Analytics, System
-- **Streamlined UI** - Removed redundant sections and clutter
-- **Real-time Updates** - Stats refresh automatically
-
-### 🎨 **UI/UX IMPROVEMENTS**
-- **Mascot Integration** - Coffee Oasis unicorn mascot on customer display
-- **Kiosk Mode** - Navigation hidden on customer/kitchen displays
-- **Responsive Grids** - All displays adapt to phone/tablet/desktop
-- **Single Column Cart** - Customer display optimized for easy reading
-- **Compact Kitchen Display** - Fits 3-4 orders on tablet screens
-
-### 🐛 **CRITICAL FIXES**
-- **Hydration Error** - Fixed time display server/client mismatch
-- **Cross-device Sync** - Solved localStorage limitation with server-side storage
-- **Cart Property Names** - Standardized on productId/retailPrice/finalPrice
-- **Network Access** - Configured Next.js to accept connections from other devices
+#### Admin Features
+- **Order Management** - All active orders displayed (trash excluded)
+- **Kitchen Orders** - Processing orders with real-time updates
+- **Cache Busters** - `_: Date.now()` ensures fresh WooCommerce data
+- **Status Filtering** - `status: 'any'` excludes trashed orders automatically
 
 ---
 
@@ -884,6 +870,71 @@ This allows other devices to connect to the POS server over the network.
 
 ## Setup Instructions
 
+### Production v1.0 Deployment
+
+**Prerequisites:**
+- Node.js 18+ installed
+- WooCommerce store configured
+- Hostinger FTP access for receipt hosting
+
+**Step 1: Environment Configuration**
+
+```bash
+# Copy example environment file
+cp .env.local.example .env.local
+
+# Edit .env.local with your credentials:
+# - WooCommerce API keys (consumer key/secret)
+# - WooCommerce store URL
+# - FTP credentials for receipt uploads
+```
+
+**Step 2: Install & Build**
+
+```bash
+# Install dependencies
+npm install
+
+# Build for production (CRITICAL: Required for latest changes)
+npm run build
+
+# Start production server
+npm run start
+```
+
+**Step 3: Database Initialization**
+
+```bash
+# Database auto-creates on first run
+# Location: ./prisma/dev.db
+#
+# The database starts clean with:
+# - 0 consumption records (fresh for production)
+# - All product/recipe data from WooCommerce sync
+# - Empty order history
+
+# Database is gitignored - never committed to repository
+```
+
+**Step 4: Hostinger Receipt Setup**
+
+```bash
+# 1. Upload mascot.jpg to public_html/receipts/ folder on Hostinger
+# 2. Ensure receipts folder has write permissions
+# 3. Receipts auto-upload after each payment via FTP
+# 4. Access receipts at: https://coffee-oasis.com.my/receipts/receipt-[orderID].html
+```
+
+**Step 5: Production Checklist**
+
+✅ Environment variables configured
+✅ `npm run build` completed successfully
+✅ Database initialized (prisma/dev.db exists)
+✅ Mascot.jpg uploaded to Hostinger
+✅ FTP credentials tested
+✅ Admin auth enabled (sessionStorage)
+✅ WooCommerce API connection verified
+
 ### Quick Start (Single Device Development)
 
 ```bash
@@ -894,7 +945,7 @@ cd ren1
 # Install dependencies
 npm install
 
-# Run development server
+# Run development server (use this for dev, NOT npm run build)
 npm run dev
 
 # Open browser
@@ -949,17 +1000,49 @@ Fullscreen mode
 - Should appear on customer display within 1 second
 - Should appear on kitchen display after payment
 
-### Database Setup
+### Database Management
 
+**Location:** `./prisma/dev.db`
+
+**Auto-Creation:**
 ```bash
-# Database file is created automatically on first run
-# Location: ./database.sqlite
+# Database and prisma directory created automatically on first run
+# No manual setup required
+```
 
-# To reset database (WARNING: Deletes all data)
-rm database.sqlite
+**Clean Production Database:**
+```bash
+# Production starts with:
+# - 61 products (synced from WooCommerce)
+# - 44 recipe items (ingredients/materials)
+# - 0 consumption records (cleared for fresh start)
+# - 3 purchase orders (if any exist)
+```
 
-# Restart server to recreate
+**Reset Database (WARNING: Deletes ALL data):**
+```bash
+# Stop server first
+rm prisma/dev.db
+
+# Restart server - fresh database created
 npm run start
+```
+
+**Database Files (.gitignore):**
+```
+prisma/dev.db         # Main database (ignored)
+prisma/dev.db-shm     # SQLite shared memory (ignored)
+prisma/dev.db-wal     # Write-ahead log (ignored)
+prisma/.gitkeep       # Keeps directory in git
+```
+
+**Backup Database:**
+```bash
+# Copy database file to safe location
+cp prisma/dev.db prisma/backup-$(date +%Y%m%d).db
+
+# Or use SQLite dump
+sqlite3 prisma/dev.db .dump > backup.sql
 ```
 
 ---
