@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Printer, Bluetooth, Receipt } from "lucide-react";
+import { Bluetooth, Receipt } from "lucide-react";
 import { printerManager } from "@/lib/printerService";
 
 interface CashPaymentProps {
@@ -48,18 +48,6 @@ export default function CashPayment({
 
   useEffect(() => {
     setBluetoothSupported(printerManager.isBluetoothSupported());
-
-    // Auto-reconnect to previously paired printers
-    if (printerManager.isBluetoothSupported()) {
-      printerManager.autoReconnect().then(devices => {
-        if (devices.receipt) {
-          console.log('✅ Receipt printer available for printing');
-        }
-        if (devices.kitchen) {
-          console.log('✅ Kitchen printer available for printing');
-        }
-      });
-    }
   }, []);
 
   const confirmPayment = async () => {
@@ -118,30 +106,21 @@ export default function CashPayment({
     setPrinting(true);
     try {
       const printer = printerManager.getReceiptPrinter();
-
-      // Try to get cached device from auto-reconnect
       let device = printerManager.getCachedDevice('receipt');
 
       if (!device) {
-        console.log('🖨️ No cached receipt printer found, requesting pairing...');
-        // No cached device, prompt to pair
         device = await printer.pair();
-        console.log('✅ Receipt printer paired:', device.name, device.id);
         printerManager.savePrinterConfig('receipt', device.id, device.name || 'Receipt Printer');
         printerManager.setCachedDevice('receipt', device);
-      } else {
-        console.log('🖨️ Using cached receipt printer:', device.name, device.id);
       }
 
-      console.log('🔌 Connecting to receipt printer...');
       await printer.connect(device);
-      console.log('📄 Printing receipt...');
       await printer.printReceipt(order);
 
       alert('Receipt printed successfully!');
     } catch (err: any) {
       console.error('Failed to print receipt:', err);
-      alert(`Failed to print receipt: ${err.message}\n\nTip: Go to Admin > Printers to pair your printer first.`);
+      alert(`Failed to print: ${err.message}`);
     } finally {
       setPrinting(false);
     }
@@ -153,30 +132,21 @@ export default function CashPayment({
     setPrinting(true);
     try {
       const printer = printerManager.getKitchenPrinter();
-
-      // Try to get cached device from auto-reconnect
       let device = printerManager.getCachedDevice('kitchen');
 
       if (!device) {
-        console.log('🖨️ No cached kitchen printer found, requesting pairing...');
-        // No cached device, prompt to pair
         device = await printer.pair();
-        console.log('✅ Kitchen printer paired:', device.name, device.id);
         printerManager.savePrinterConfig('kitchen', device.id, device.name || 'Kitchen Printer');
         printerManager.setCachedDevice('kitchen', device);
-      } else {
-        console.log('🖨️ Using cached kitchen printer:', device.name, device.id);
       }
 
-      console.log('🔌 Connecting to kitchen printer...');
       await printer.connect(device);
-      console.log('📄 Printing kitchen stub...');
       await printer.printKitchenStub(order);
 
       alert('Kitchen stub printed successfully!');
     } catch (err: any) {
       console.error('Failed to print kitchen stub:', err);
-      alert(`Failed to print kitchen stub: ${err.message}\n\nTip: Go to Admin > Printers to pair your printer first.`);
+      alert(`Failed to print: ${err.message}`);
     } finally {
       setPrinting(false);
     }
@@ -192,7 +162,7 @@ export default function CashPayment({
     }
   };
 
-  // Show success screen with print options after payment confirmed
+  // Optional print screen after payment confirmed
   if (paymentConfirmed && order) {
     return (
       <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-8">
@@ -202,19 +172,16 @@ export default function CashPayment({
             <span className="text-3xl">✓</span>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Payment Confirmed!
+            Payment Received
           </h2>
-          <p className="text-gray-600">Order #{orderID} sent to kitchen</p>
-          <p className="text-sm text-green-600 mt-2">
-            PDF receipt generated
-          </p>
+          <p className="text-gray-600">Order #{orderID}</p>
         </div>
 
         {/* Bluetooth Print Options */}
         {bluetoothSupported && (
           <div className="mb-6">
             <p className="text-sm font-medium text-gray-700 mb-3 text-center">
-              Print on Thermal Printer? (Optional)
+              Print receipt? (Optional)
             </p>
 
             <div className="grid grid-cols-2 gap-2">
@@ -224,7 +191,7 @@ export default function CashPayment({
                 className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors text-sm"
               >
                 <Bluetooth className="w-4 h-4" />
-                {printing ? 'Printing...' : 'Print Receipt'}
+                {printing ? 'Printing...' : 'Receipt'}
               </button>
               <button
                 onClick={handlePrintKitchen}
@@ -232,13 +199,9 @@ export default function CashPayment({
                 className="flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-400 transition-colors text-sm"
               >
                 <Receipt className="w-4 h-4" />
-                {printing ? 'Printing...' : 'Print Kitchen'}
+                {printing ? 'Printing...' : 'Kitchen'}
               </button>
             </div>
-
-            <p className="text-xs text-gray-500 mt-3 text-center">
-              Thermal printing is optional. Click continue to proceed.
-            </p>
           </div>
         )}
 
@@ -250,20 +213,14 @@ export default function CashPayment({
           Continue to Next Order →
         </button>
 
-        {/* Info */}
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <div className="text-sm text-gray-600 text-center">
-            <p>Order is now being prepared</p>
-            <p className="text-xs mt-1">
-              Customer can track status at /orders/{orderID}
-            </p>
-          </div>
-        </div>
+        <p className="text-xs text-gray-500 mt-3 text-center">
+          Order sent to kitchen
+        </p>
       </div>
     );
   }
 
-  // Show payment confirmation screen (before payment)
+  // Show payment confirmation screen
   return (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-8">
       {/* Header */}

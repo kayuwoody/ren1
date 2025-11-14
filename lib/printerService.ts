@@ -11,6 +11,7 @@
 export class ThermalPrinter {
   private device: any = null;
   private characteristic: any = null;
+  private server: any = null;
 
   /**
    * Request bluetooth printer pairing
@@ -44,14 +45,46 @@ export class ThermalPrinter {
         throw new Error('No device paired. Call pair() first.');
       }
 
-      const server = await this.device.gatt.connect();
-      const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+      // Check if already connected
+      if (this.device.gatt.connected && this.characteristic) {
+        console.log('✅ Already connected to thermal printer');
+        return;
+      }
+
+      console.log('🔌 Connecting to thermal printer...');
+      this.server = await this.device.gatt.connect();
+
+      // Listen for disconnection events
+      this.device.addEventListener('gattserverdisconnected', () => {
+        console.log('⚠️ Thermal printer disconnected');
+        this.characteristic = null;
+        this.server = null;
+      });
+
+      const service = await this.server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
       this.characteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
 
       console.log('✅ Connected to thermal printer');
     } catch (err) {
       console.error('Connection failed:', err);
+      this.characteristic = null;
+      this.server = null;
       throw err;
+    }
+  }
+
+  /**
+   * Ensure printer is connected, reconnect if needed
+   */
+  private async ensureConnected(): Promise<void> {
+    if (!this.device) {
+      throw new Error('No device paired. Call pair() first.');
+    }
+
+    // If not connected or characteristic lost, reconnect
+    if (!this.device.gatt.connected || !this.characteristic) {
+      console.log('🔄 Reconnecting to printer...');
+      await this.connect();
     }
   }
 
@@ -59,6 +92,8 @@ export class ThermalPrinter {
    * Send ESC/POS command
    */
   private async sendCommand(data: Uint8Array): Promise<void> {
+    await this.ensureConnected();
+
     if (!this.characteristic) {
       throw new Error('Not connected');
     }
@@ -373,8 +408,16 @@ export class ThermalPrinter {
     if (this.device?.gatt?.connected) {
       await this.device.gatt.disconnect();
     }
-    this.device = null;
+    this.server = null;
     this.characteristic = null;
+    // Don't null out device - we want to keep it for reconnection
+  }
+
+  /**
+   * Check if currently connected
+   */
+  isConnected(): boolean {
+    return this.device?.gatt?.connected && this.characteristic !== null;
   }
 }
 
