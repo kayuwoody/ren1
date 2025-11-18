@@ -12,6 +12,7 @@ export async function GET(req: Request) {
     const range = searchParams.get('range') || '7days';
     const startDateParam = searchParams.get('start');
     const endDateParam = searchParams.get('end');
+    const hideStaffMeals = searchParams.get('hideStaffMeals') === 'true';
 
     // Calculate date range
     let startDate = new Date();
@@ -62,9 +63,20 @@ export async function GET(req: Request) {
     console.log(`📦 Fetched ${allOrders.length} total orders from WooCommerce`);
 
     // Filter only orders that count as sales (exclude pending payment)
-    const orders = allOrders.filter(
+    let orders = allOrders.filter(
       (order) => order.status === 'completed' || order.status === 'processing' || order.status === 'ready-for-pickup'
     );
+
+    // Filter out staff meals (orders with total = 0) if requested
+    if (hideStaffMeals) {
+      orders = orders.filter((order) => {
+        const finalTotal = parseFloat(
+          getMetaValue(order.meta_data, '_final_total', order.total)
+        );
+        return finalTotal > 0;
+      });
+      console.log(`🍽️  Filtered out staff meals (total=0), ${orders.length} orders remaining`);
+    }
 
     console.log(`✅ Filtered to ${orders.length} orders with sales status`);
     if (orders.length > 0) {

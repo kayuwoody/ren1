@@ -23,17 +23,18 @@ export default function SalesReportPage() {
   const [dateRange, setDateRange] = useState('7days'); // 7days, 30days, 90days, all
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [hideStaffMeals, setHideStaffMeals] = useState(true);
 
   useEffect(() => {
     fetchSalesReport();
-  }, [dateRange, startDate, endDate]);
+  }, [dateRange, startDate, endDate, hideStaffMeals]);
 
   const fetchSalesReport = async () => {
     setLoading(true);
     try {
-      let url = `/api/admin/sales?range=${dateRange}`;
+      let url = `/api/admin/sales?range=${dateRange}&hideStaffMeals=${hideStaffMeals}`;
       if (startDate && endDate) {
-        url = `/api/admin/sales?start=${startDate}&end=${endDate}`;
+        url = `/api/admin/sales?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}`;
       }
 
       const res = await fetch(url);
@@ -180,6 +181,17 @@ export default function SalesReportPage() {
                 </div>
               </>
             )}
+
+            <button
+              onClick={() => setHideStaffMeals(!hideStaffMeals)}
+              className={`px-4 py-2 rounded-lg transition ${
+                hideStaffMeals
+                  ? 'bg-orange-600 text-white hover:bg-orange-700'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {hideStaffMeals ? '✓ Staff Meals Hidden' : 'Show Staff Meals'}
+            </button>
 
             <button
               onClick={exportToCSV}
