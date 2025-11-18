@@ -14,21 +14,23 @@ import { wcApi } from '@/lib/wooClient';
 export async function GET() {
   try {
     // Get today's date range in Malaysia time (UTC+8)
+    // Malaysia is 8 hours ahead of UTC
     const now = new Date();
 
-    // Convert to Malaysia time by adding 8 hours
-    const malaysiaTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    // Get current time in Malaysia by using toLocaleString with Asia/Kuala_Lumpur timezone
+    const malaysiaTimeStr = now.toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' });
+    const malaysiaTime = new Date(malaysiaTimeStr);
 
     // Get the date string in Malaysia timezone (YYYY-MM-DD)
-    const year = malaysiaTime.getUTCFullYear();
-    const month = String(malaysiaTime.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(malaysiaTime.getUTCDate()).padStart(2, '0');
+    const year = malaysiaTime.getFullYear();
+    const month = String(malaysiaTime.getMonth() + 1).padStart(2, '0');
+    const day = String(malaysiaTime.getDate()).padStart(2, '0');
     const todayMalaysia = `${year}-${month}-${day}`;
 
-    // Create start of day in Malaysia time, then convert to UTC for API
-    // Malaysia 00:00:00 = UTC 16:00:00 (previous day)
+    // Create start and end of day in Malaysia time (UTC+8)
+    // Example: 2024-11-18T00:00:00+08:00 = 2024-11-17T16:00:00Z
     const startOfDay = new Date(`${todayMalaysia}T00:00:00+08:00`);
-    const endOfDay = new Date(`${todayMalaysia}T23:59:59+08:00`);
+    const endOfDay = new Date(`${todayMalaysia}T23:59:59.999+08:00`);
 
     console.log('Daily Stats Date Range:', {
       malaysiaDate: todayMalaysia,
@@ -56,7 +58,9 @@ export async function GET() {
     todayOrders.forEach((order: any) => {
       // Add to revenue (only completed/processing orders)
       if (['completed', 'processing'].includes(order.status)) {
-        todayRevenue += parseFloat(order.total || '0');
+        // Use _final_total from metadata if available (accounts for discounts)
+        const finalTotal = order.meta_data?.find((m: any) => m.key === '_final_total')?.value;
+        todayRevenue += parseFloat(finalTotal || order.total || '0');
 
         // Count items only from paid orders
         if (order.line_items) {

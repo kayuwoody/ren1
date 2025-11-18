@@ -146,8 +146,7 @@ export default function PaymentPage() {
       }),
     });
 
-    // Show success and redirect to admin POS
-    alert(`✅ Payment confirmed! Order #${order.id} sent to kitchen.`);
+    // Redirect to admin POS
     router.push("/admin/pos");
   };
 
