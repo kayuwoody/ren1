@@ -29,8 +29,13 @@ export async function GET(req: Request) {
     if (localProducts.length > 0 && !forceSync) {
       console.log(`✅ Returning ${localProducts.length} products from local cache`);
 
+      // Filter out hidden/private products from customer-facing display
+      const visibleProducts = localProducts.filter(
+        product => product.category !== 'hidden' && product.category !== 'private'
+      );
+
       // Convert local products to WooCommerce format for compatibility
-      const wcFormatProducts = localProducts.map(product => ({
+      const wcFormatProducts = visibleProducts.map(product => ({
         id: product.wcId,
         name: product.name,
         sku: product.sku,
@@ -43,6 +48,7 @@ export async function GET(req: Request) {
         // Add any other fields your frontend expects
       }));
 
+      console.log(`📦 Filtered out ${localProducts.length - visibleProducts.length} hidden/private products from display`);
       return NextResponse.json(wcFormatProducts);
     }
 
@@ -51,7 +57,7 @@ export async function GET(req: Request) {
 
     const { data: wcProducts } = (await wcApi.get("products", {
       per_page: 100,
-      status: 'publish' // Only get published products
+      status: 'any' // Include all products (publish, private, etc.) - private ones used for hidden modifiers
     })) as { data: any };
 
     console.log(`✅ WooCommerce returned ${wcProducts.length} products`);
@@ -98,7 +104,14 @@ export async function GET(req: Request) {
       console.log(`✅ Removed ${deletedCount} products from cache that no longer exist in WooCommerce`);
     }
 
-    return NextResponse.json(wcProducts);
+    // Filter out hidden/private products from customer-facing display
+    const visibleWcProducts = wcProducts.filter((product: any) => {
+      const category = product.categories?.[0]?.slug || 'uncategorized';
+      return category !== 'hidden' && category !== 'private';
+    });
+
+    console.log(`📦 Filtered out ${wcProducts.length - visibleWcProducts.length} hidden/private products from display`);
+    return NextResponse.json(visibleWcProducts);
   } catch (error: any) {
     console.error("❌ Products fetch failed:", error);
 
@@ -108,7 +121,12 @@ export async function GET(req: Request) {
       if (fallbackProducts.length > 0) {
         console.log(`⚠️ WooCommerce failed, returning ${fallbackProducts.length} cached products as fallback`);
 
-        const wcFormatProducts = fallbackProducts.map(product => ({
+        // Filter out hidden/private products from customer-facing display
+        const visibleFallbackProducts = fallbackProducts.filter(
+          product => product.category !== 'hidden' && product.category !== 'private'
+        );
+
+        const wcFormatProducts = visibleFallbackProducts.map(product => ({
           id: product.wcId,
           name: product.name,
           sku: product.sku,
