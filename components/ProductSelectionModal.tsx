@@ -180,6 +180,26 @@ export default function ProductSelectionModal({
     setOptionalSelections(newSet);
   };
 
+  // Helper function to determine if a group is a nested group and if it should be enabled
+  const isGroupEnabled = (group: SelectionGroup) => {
+    // Check if this is a nested group by parsing the uniqueKey
+    // Nested groups have format: "ParentItemId:GroupName" (e.g., "Americano:Temperature")
+    // Top-level groups have format: "root:GroupName" (e.g., "root:Coffee Type")
+
+    if (group.uniqueKey.startsWith("root:")) {
+      // Top-level group - always enabled
+      return true;
+    }
+
+    // Extract parent item ID from uniqueKey (everything before the colon)
+    const parentItemId = group.uniqueKey.split(":")[0];
+
+    // Check if the parent item is currently selected in any group
+    const isParentSelected = Object.values(mandatorySelections).includes(parentItemId);
+
+    return isParentSelected;
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -205,39 +225,47 @@ export default function ProductSelectionModal({
           )}
 
           {/* Mandatory Selection Groups (XOR choices) - Now includes nested groups! */}
-          {recipe.mandatoryGroups.map((group) => (
-            <div key={group.uniqueKey} className="space-y-2">
-              <label className="block font-semibold text-gray-700">
-                Choose {group.groupName}: <span className="text-red-500">*</span>
-              </label>
-              <div className="space-y-2">
-                {group.items.map((item) => (
-                  <label
-                    key={item.id}
-                    className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
-                  >
-                    <input
-                      type="radio"
-                      name={group.uniqueKey}
-                      value={item.id}
-                      checked={mandatorySelections[group.uniqueKey] === item.id}
-                      onChange={(e) =>
-                        setMandatorySelections({
-                          ...mandatorySelections,
-                          [group.uniqueKey]: e.target.value,
-                        })
-                      }
-                      className="w-4 h-4 text-blue-600"
-                    />
-                    <span className="ml-3 flex-1">{item.name}</span>
-                    <span className="text-sm text-gray-600">
-                      RM {item.basePrice.toFixed(2)}
-                    </span>
-                  </label>
-                ))}
+          {recipe.mandatoryGroups.map((group) => {
+            const enabled = isGroupEnabled(group);
+
+            return (
+              <div
+                key={group.uniqueKey}
+                className={`space-y-2 transition ${!enabled ? 'opacity-40 pointer-events-none' : ''}`}
+              >
+                <label className="block font-semibold text-gray-700">
+                  Choose {group.groupName}: <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-2">
+                  {group.items.map((item) => (
+                    <label
+                      key={item.id}
+                      className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                    >
+                      <input
+                        type="radio"
+                        name={group.uniqueKey}
+                        value={item.id}
+                        checked={mandatorySelections[group.uniqueKey] === item.id}
+                        onChange={(e) =>
+                          setMandatorySelections({
+                            ...mandatorySelections,
+                            [group.uniqueKey]: e.target.value,
+                          })
+                        }
+                        disabled={!enabled}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span className="ml-3 flex-1">{item.name}</span>
+                      <span className="text-sm text-gray-600">
+                        RM {item.basePrice.toFixed(2)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Optional Add-ons */}
           {recipe.optional.length > 0 && (
