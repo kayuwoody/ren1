@@ -405,15 +405,19 @@ export function getSelectedComponents(
       if (nestedComponents.length > 0) {
         components.push(...nestedComponents);
       } else {
-        // No nested components found, add this product as-is
-        console.log(`    ✅ Adding "${linkedProd.name}" (no nested components found)`);
-        console.log(`       Category: ${linkedProd.category || 'uncategorized'}`);
-        components.push({
-          productId: linkedProd.id,
-          productName: linkedProd.name,
-          quantity: componentQuantity,
-          category: linkedProd.category || 'uncategorized',
-        });
+        // No nested components found, add this product as-is (unless it's hidden/private)
+        if (linkedProd.category === 'hidden' || linkedProd.category === 'private') {
+          console.log(`    🚫 Skipping "${linkedProd.name}" (category: ${linkedProd.category})`);
+        } else {
+          console.log(`    ✅ Adding "${linkedProd.name}" (no nested components found)`);
+          console.log(`       Category: ${linkedProd.category || 'uncategorized'}`);
+          components.push({
+            productId: linkedProd.id,
+            productName: linkedProd.name,
+            quantity: componentQuantity,
+            category: linkedProd.category || 'uncategorized',
+          });
+        }
       }
     } else {
       // This product either:
@@ -462,14 +466,20 @@ export function getSelectedComponents(
       }
 
       const reason = linkedHasXORGroups ? 'has internal XOR choices' : 'only has materials';
-      console.log(`    ✅ Adding complete product "${displayName}" (${reason})`);
-      console.log(`       Category: ${linkedProd.category || 'uncategorized'} | WC ID: ${linkedProd.wcId}`);
-      components.push({
-        productId: linkedProd.id,
-        productName: displayName,
-        quantity: componentQuantity,
-        category: linkedProd.category || 'uncategorized',
-      });
+
+      // Skip hidden/private products from component display
+      if (linkedProd.category === 'hidden' || linkedProd.category === 'private') {
+        console.log(`    🚫 Skipping "${displayName}" (category: ${linkedProd.category})`);
+      } else {
+        console.log(`    ✅ Adding complete product "${displayName}" (${reason})`);
+        console.log(`       Category: ${linkedProd.category || 'uncategorized'} | WC ID: ${linkedProd.wcId}`);
+        components.push({
+          productId: linkedProd.id,
+          productName: displayName,
+          quantity: componentQuantity,
+          category: linkedProd.category || 'uncategorized',
+        });
+      }
     }
   });
 
