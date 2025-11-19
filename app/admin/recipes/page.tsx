@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2, ChefHat, Calculator, Search, RefreshCw, Edit2 } from 'lucide-react';
 
@@ -65,8 +65,13 @@ export default function RecipesPage() {
   const [editingComboPrice, setEditingComboPrice] = useState(false);
   const [newComboPrice, setNewComboPrice] = useState('');
   const [updatingStock, setUpdatingStock] = useState(false);
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
+    // Prevent double fetch in React strict mode (development only)
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+
     fetchProducts();
     fetchMaterials();
   }, []);
