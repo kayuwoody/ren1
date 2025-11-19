@@ -335,12 +335,12 @@ export function getSelectedComponents(
   selections: UnifiedBundleSelection,
   quantity: number = 1,
   depth: number = 0
-): Array<{ productId: string; productName: string; quantity: number }> {
+): Array<{ productId: string; productName: string; quantity: number; category: string }> {
   const product = getProduct(productId);
   if (!product) return [];
 
   const recipe = getProductRecipe(productId);
-  const components: Array<{ productId: string; productName: string; quantity: number }> = [];
+  const components: Array<{ productId: string; productName: string; quantity: number; category: string }> = [];
 
   // Group recipe items to check for XOR groups
   const hasXORGroups = recipe.some(item => item.selectionGroup);
@@ -411,6 +411,7 @@ export function getSelectedComponents(
           productId: linkedProd.id,
           productName: linkedProd.name,
           quantity: componentQuantity,
+          category: linkedProd.category || 'uncategorized',
         });
       }
     } else {
@@ -465,6 +466,7 @@ export function getSelectedComponents(
         productId: linkedProd.id,
         productName: displayName,
         quantity: componentQuantity,
+        category: linkedProd.category || 'uncategorized',
       });
     }
   });
