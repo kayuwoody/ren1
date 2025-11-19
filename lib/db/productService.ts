@@ -1,8 +1,5 @@
-import { db, initDatabase } from './init';
+import { db } from './init';
 import { v4 as uuidv4 } from 'uuid';
-
-// Ensure database is initialized
-initDatabase();
 
 export interface Product {
   id: string;

@@ -9,20 +9,23 @@ const dbPath = path.join(dbDir, 'dev.db');
 // Ensure prisma directory exists before opening database
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
-  console.log('📁 Created prisma directory at:', dbDir);
 }
-
-// Log database location on first connection
-console.log('💾 SQLite database location:', dbPath);
-console.log('💾 Database file exists:', fs.existsSync(dbPath));
 
 export const db = new Database(dbPath);
 
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
 
+// Track if database has been initialized
+let isInitialized = false;
+
 // Initialize database schema
 export function initDatabase() {
+  // Only initialize once
+  if (isInitialized) {
+    return;
+  }
+  isInitialized = true;
   // Products table
   db.exec(`
     CREATE TABLE IF NOT EXISTS Product (
@@ -333,7 +336,5 @@ export function initDatabase() {
   }
 }
 
-// Run initialization if this file is executed directly
-if (require.main === module) {
-  initDatabase();
-}
+// Run initialization when module is first imported
+initDatabase();
