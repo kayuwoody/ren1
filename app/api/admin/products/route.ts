@@ -9,22 +9,37 @@ import { handleApiError } from '@/lib/api/error-handler';
  */
 export async function GET(req: Request) {
   try {
+    console.log('📦 Fetching products from WooCommerce...');
     const wcProducts = await fetchAllWooPages('products', {
       orderby: 'title',
       order: 'asc'
     });
 
+    console.log(`✅ Fetched ${wcProducts.length} products from WooCommerce`);
+
     // Sync each product to local database
+    let syncedCount = 0;
+    let failedCount = 0;
+
     wcProducts.forEach((wcProduct: any) => {
       try {
         syncProductFromWooCommerce(wcProduct);
+        syncedCount++;
       } catch (err) {
-        console.error(`Failed to sync product ${wcProduct.id}:`, err);
+        failedCount++;
+        console.error(`❌ Failed to sync product ${wcProduct.id} (${wcProduct.name}):`, err);
       }
     });
 
+    console.log(`📊 Sync results: ${syncedCount} successful, ${failedCount} failed`);
+
     // Get all products from local database (includes COGS from recipes)
     const localProducts = getAllProducts();
+    console.log(`💾 Local database has ${localProducts.length} products`);
+
+    if (localProducts.length === 0 && wcProducts.length > 0) {
+      console.error('⚠️  WARNING: WooCommerce has products but local database is empty! Check for sync errors above.');
+    }
 
     // Transform for API response with current price from WooCommerce, stock from local DB
     const transformedProducts = localProducts.map((product) => {
