@@ -180,24 +180,13 @@ export default function ProductSelectionModal({
     setOptionalSelections(newSet);
   };
 
-  // Helper function to determine if a group is a nested group and if it should be enabled
-  const isGroupEnabled = (group: SelectionGroup) => {
-    // Check if this is a nested group by parsing the uniqueKey
-    // Nested groups have format: "ParentItemId:GroupName" (e.g., "Americano:Temperature")
-    // Top-level groups have format: "root:GroupName" (e.g., "root:Coffee Type")
+  // Separate top-level and nested groups
+  const topLevelGroups = recipe.mandatoryGroups.filter(g => g.uniqueKey.startsWith('root:'));
+  const nestedGroups = recipe.mandatoryGroups.filter(g => !g.uniqueKey.startsWith('root:'));
 
-    if (group.uniqueKey.startsWith("root:")) {
-      // Top-level group - always enabled
-      return true;
-    }
-
-    // Extract parent item ID from uniqueKey (everything before the colon)
-    const parentItemId = group.uniqueKey.split(":")[0];
-
-    // Check if the parent item is currently selected in any group
-    const isParentSelected = Object.values(mandatorySelections).includes(parentItemId);
-
-    return isParentSelected;
+  // Helper to get nested groups for a specific parent item ID
+  const getNestedGroupsForItem = (itemId: string) => {
+    return nestedGroups.filter(g => g.uniqueKey.startsWith(`${itemId}:`));
   };
 
   if (!isOpen) return null;
@@ -224,48 +213,80 @@ export default function ProductSelectionModal({
             </div>
           )}
 
-          {/* Mandatory Selection Groups (XOR choices) - Now includes nested groups! */}
-          {recipe.mandatoryGroups.map((group) => {
-            const enabled = isGroupEnabled(group);
+          {/* Mandatory Selection Groups (XOR choices) - With inline nested groups */}
+          {topLevelGroups.map((group) => (
+            <div key={group.uniqueKey} className="space-y-2">
+              <label className="block font-semibold text-gray-700">
+                Choose {group.groupName}: <span className="text-red-500">*</span>
+              </label>
+              <div className="space-y-2">
+                {group.items.map((item) => {
+                  const isSelected = mandatorySelections[group.uniqueKey] === item.id;
+                  const itemNestedGroups = getNestedGroupsForItem(item.id);
 
-            return (
-              <div
-                key={group.uniqueKey}
-                className={`space-y-2 transition ${!enabled ? 'opacity-40 pointer-events-none' : ''}`}
-              >
-                <label className="block font-semibold text-gray-700">
-                  Choose {group.groupName}: <span className="text-red-500">*</span>
-                </label>
-                <div className="space-y-2">
-                  {group.items.map((item) => (
-                    <label
-                      key={item.id}
-                      className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
-                    >
-                      <input
-                        type="radio"
-                        name={group.uniqueKey}
-                        value={item.id}
-                        checked={mandatorySelections[group.uniqueKey] === item.id}
-                        onChange={(e) =>
-                          setMandatorySelections({
-                            ...mandatorySelections,
-                            [group.uniqueKey]: e.target.value,
-                          })
-                        }
-                        disabled={!enabled}
-                        className="w-4 h-4 text-blue-600"
-                      />
-                      <span className="ml-3 flex-1">{item.name}</span>
-                      <span className="text-sm text-gray-600">
-                        RM {item.basePrice.toFixed(2)}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                  return (
+                    <div key={item.id}>
+                      {/* Parent item */}
+                      <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                        <input
+                          type="radio"
+                          name={group.uniqueKey}
+                          value={item.id}
+                          checked={isSelected}
+                          onChange={(e) =>
+                            setMandatorySelections({
+                              ...mandatorySelections,
+                              [group.uniqueKey]: e.target.value,
+                            })
+                          }
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="ml-3 flex-1">{item.name}</span>
+                        <span className="text-sm text-gray-600">
+                          RM {item.basePrice.toFixed(2)}
+                        </span>
+                      </label>
+
+                      {/* Nested groups - only show if this item is selected */}
+                      {isSelected && itemNestedGroups.map((nestedGroup) => (
+                        <div key={nestedGroup.uniqueKey} className="ml-8 mt-2 space-y-2">
+                          <label className="block text-sm font-semibold text-gray-600">
+                            {nestedGroup.groupName}: <span className="text-red-500">*</span>
+                          </label>
+                          <div className="space-y-1">
+                            {nestedGroup.items.map((nestedItem) => (
+                              <label
+                                key={nestedItem.id}
+                                className="flex items-center p-2 border rounded cursor-pointer hover:bg-gray-50 transition text-sm"
+                              >
+                                <input
+                                  type="radio"
+                                  name={nestedGroup.uniqueKey}
+                                  value={nestedItem.id}
+                                  checked={mandatorySelections[nestedGroup.uniqueKey] === nestedItem.id}
+                                  onChange={(e) =>
+                                    setMandatorySelections({
+                                      ...mandatorySelections,
+                                      [nestedGroup.uniqueKey]: e.target.value,
+                                    })
+                                  }
+                                  className="w-4 h-4 text-blue-600"
+                                />
+                                <span className="ml-2 flex-1">{nestedItem.name}</span>
+                                <span className="text-xs text-gray-600">
+                                  RM {nestedItem.basePrice.toFixed(2)}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
 
           {/* Optional Add-ons */}
           {recipe.optional.length > 0 && (
