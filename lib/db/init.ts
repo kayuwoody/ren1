@@ -325,14 +325,12 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_consumption_date ON InventoryConsumption(consumedAt);
   `);
 
-  console.log('✅ Database schema initialized');
-
   // Initialize purchase order tables
   try {
     const { initPurchaseOrderTables } = require('./purchaseOrderSchema');
     initPurchaseOrderTables();
   } catch (e) {
-    console.log('⚠️ Purchase order tables not initialized (schema file may not exist yet)');
+    // Silently ignore if purchase order schema doesn't exist
   }
 }
 

@@ -60,8 +60,6 @@ export function initPurchaseOrderTables() {
     CREATE INDEX IF NOT EXISTS idx_purchase_order_item_material ON PurchaseOrderItem(materialId);
     CREATE INDEX IF NOT EXISTS idx_purchase_order_item_product ON PurchaseOrderItem(productId);
   `);
-
-  console.log('✅ Purchase Order tables initialized');
 }
 
 /**

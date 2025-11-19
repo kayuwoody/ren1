@@ -103,7 +103,7 @@ const ProductListPage: React.FC = () => {
     });
 
     // Only fetch components for combo products (not regular products with variants)
-    let components: Array<{ productId: string; productName: string; quantity: number }> = [];
+    let components: Array<{ productId: string; productName: string; quantity: number; category: string }> = [];
     if (bundle.isCombo) {
       try {
         console.log(`📦 Fetching bundle components for ${bundle.displayName}...`);
