@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 
 /**
  * Admin Daily Stats API
@@ -40,18 +40,16 @@ export async function GET() {
       note: 'Querying WooCommerce for orders created between these UTC times'
     });
 
-    // Fetch today's orders
-    const { data: todayOrders } = await wcApi.get('orders', {
+    // Fetch ALL today's orders using pagination helper (not limited to 100)
+    const todayOrders = await fetchAllWooPages('orders', {
       after: startOfDay.toISOString(),
       before: endOfDay.toISOString(),
-      per_page: 100
-    }) as { data: any[] };
+    });
 
-    // Fetch pending orders (any date)
-    const { data: pendingOrders } = await wcApi.get('orders', {
+    // Fetch ALL pending orders (not limited to 100)
+    const pendingOrders = await fetchAllWooPages('orders', {
       status: 'pending,processing,on-hold',
-      per_page: 100
-    }) as { data: any[] };
+    });
 
     // Calculate stats
     let todayRevenue = 0;
@@ -61,8 +59,10 @@ export async function GET() {
       // Add to revenue (only completed/processing/ready-for-pickup orders)
       if (['completed', 'processing', 'ready-for-pickup'].includes(order.status)) {
         // Use _final_total from metadata if available (accounts for discounts)
-        const finalTotal = order.meta_data?.find((m: any) => m.key === '_final_total')?.value;
-        todayRevenue += parseFloat(finalTotal || order.total || '0');
+        const finalTotal = parseFloat(
+          getMetaValue(order.meta_data, '_final_total', order.total)
+        );
+        todayRevenue += finalTotal;
 
         // Count items only from paid orders
         if (order.line_items) {
