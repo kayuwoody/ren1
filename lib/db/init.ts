@@ -9,8 +9,12 @@ const dbPath = path.join(dbDir, 'dev.db');
 // Ensure prisma directory exists before opening database
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
-  console.log('📁 Created prisma directory');
+  console.log('📁 Created prisma directory at:', dbDir);
 }
+
+// Log database location on first connection
+console.log('💾 SQLite database location:', dbPath);
+console.log('💾 Database file exists:', fs.existsSync(dbPath));
 
 export const db = new Database(dbPath);
 
