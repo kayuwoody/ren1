@@ -163,15 +163,19 @@ export default function CheckoutPage() {
                       <p className="font-semibold text-lg">{item.name}</p>
                       <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
 
-                      {/* Show expanded components */}
+                      {/* Show expanded components (excluding hidden/private) */}
                       {expandedComponents.length > 0 && (
                         <div className="mt-2 ml-4 space-y-1">
-                          {expandedComponents.map((component, idx) => (
-                            <div key={idx} className="text-sm text-gray-600 flex items-start">
-                              <span className="mr-2">→</span>
-                              <span>{component.productName} × {component.quantity}</span>
-                            </div>
-                          ))}
+                          {expandedComponents
+                            .filter((component: any) =>
+                              component.category !== 'hidden' && component.category !== 'private'
+                            )
+                            .map((component: any, idx: number) => (
+                              <div key={idx} className="text-sm text-gray-600 flex items-start">
+                                <span className="mr-2">→</span>
+                                <span>{component.productName} × {component.quantity}</span>
+                              </div>
+                            ))}
                         </div>
                       )}
                     </div>
