@@ -184,6 +184,17 @@ export default function ProductSelectionModal({
   const topLevelGroups = recipe.mandatoryGroups.filter(g => g.uniqueKey.startsWith('root:'));
   const nestedGroups = recipe.mandatoryGroups.filter(g => !g.uniqueKey.startsWith('root:'));
 
+  // Get all item IDs that are part of top-level XOR groups
+  const topLevelItemIds = new Set(
+    topLevelGroups.flatMap(group => group.items.map(item => item.id))
+  );
+
+  // Find nested groups whose parent is NOT in any top-level group (standalone items with nested XORs)
+  const standaloneNestedGroups = nestedGroups.filter(nestedGroup => {
+    const parentItemId = nestedGroup.uniqueKey.split(':')[0];
+    return !topLevelItemIds.has(parentItemId);
+  });
+
   // Helper to get nested groups for a specific parent item ID
   const getNestedGroupsForItem = (itemId: string) => {
     return nestedGroups.filter(g => g.uniqueKey.startsWith(`${itemId}:`));
@@ -284,6 +295,41 @@ export default function ProductSelectionModal({
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          ))}
+
+          {/* Standalone nested XOR groups (for items not in top-level groups) */}
+          {standaloneNestedGroups.map((nestedGroup) => (
+            <div key={nestedGroup.uniqueKey} className="space-y-2">
+              <label className="block font-semibold text-gray-700">
+                Choose {nestedGroup.groupName}: <span className="text-red-500">*</span>
+              </label>
+              <div className="space-y-2">
+                {nestedGroup.items.map((item) => (
+                  <label
+                    key={item.id}
+                    className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                  >
+                    <input
+                      type="radio"
+                      name={nestedGroup.uniqueKey}
+                      value={item.id}
+                      checked={mandatorySelections[nestedGroup.uniqueKey] === item.id}
+                      onChange={(e) =>
+                        setMandatorySelections({
+                          ...mandatorySelections,
+                          [nestedGroup.uniqueKey]: e.target.value,
+                        })
+                      }
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="ml-3 flex-1">{item.name}</span>
+                    <span className="text-sm text-gray-600">
+                      RM {item.basePrice.toFixed(2)}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
           ))}
