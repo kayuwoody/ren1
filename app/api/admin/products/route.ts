@@ -9,9 +9,11 @@ import { handleApiError } from '@/lib/api/error-handler';
  */
 export async function GET(req: Request) {
   try {
+    // Fetch all products including private ones (used for hidden modifiers)
     const wcProducts = await fetchAllWooPages('products', {
       orderby: 'title',
-      order: 'asc'
+      order: 'asc',
+      status: 'any', // Include publish, draft, pending, private, etc.
     });
 
     // Sync each product to local database
