@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`📦 Bundle expansion for ${product.name}: ${components.length} components`);
     components.forEach(c => {
-      console.log(`   → ${c.productName} × ${c.quantity}`);
+      console.log(`   → ${c.productName} × ${c.quantity} | Category: ${c.category}`);
     });
 
     return NextResponse.json({ components });

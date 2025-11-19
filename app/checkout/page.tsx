@@ -154,6 +154,21 @@ export default function CheckoutPage() {
 
               // Get expanded components from cart item
               const expandedComponents = item.components || [];
+              const visibleComponents = expandedComponents.filter((component: any) =>
+                component.category !== 'hidden' && component.category !== 'private'
+              );
+
+              if (expandedComponents.length > 0) {
+                console.log(`🛒 Item "${item.name}" components:`, {
+                  total: expandedComponents.length,
+                  visible: visibleComponents.length,
+                  hidden: expandedComponents.length - visibleComponents.length,
+                  components: expandedComponents.map((c: any) => ({
+                    name: c.productName,
+                    category: c.category
+                  }))
+                });
+              }
 
               return (
                 <div key={index} className="bg-white border rounded-lg p-4">
@@ -164,18 +179,14 @@ export default function CheckoutPage() {
                       <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
 
                       {/* Show expanded components (excluding hidden/private) */}
-                      {expandedComponents.length > 0 && (
+                      {visibleComponents.length > 0 && (
                         <div className="mt-2 ml-4 space-y-1">
-                          {expandedComponents
-                            .filter((component: any) =>
-                              component.category !== 'hidden' && component.category !== 'private'
-                            )
-                            .map((component: any, idx: number) => (
-                              <div key={idx} className="text-sm text-gray-600 flex items-start">
-                                <span className="mr-2">→</span>
-                                <span>{component.productName} × {component.quantity}</span>
-                              </div>
-                            ))}
+                          {visibleComponents.map((component: any, idx: number) => (
+                            <div key={idx} className="text-sm text-gray-600 flex items-start">
+                              <span className="mr-2">→</span>
+                              <span>{component.productName} × {component.quantity}</span>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>

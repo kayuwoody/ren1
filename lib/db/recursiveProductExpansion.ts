@@ -407,6 +407,7 @@ export function getSelectedComponents(
       } else {
         // No nested components found, add this product as-is
         console.log(`    ✅ Adding "${linkedProd.name}" (no nested components found)`);
+        console.log(`       Category: ${linkedProd.category || 'uncategorized'}`);
         components.push({
           productId: linkedProd.id,
           productName: linkedProd.name,
@@ -462,6 +463,7 @@ export function getSelectedComponents(
 
       const reason = linkedHasXORGroups ? 'has internal XOR choices' : 'only has materials';
       console.log(`    ✅ Adding complete product "${displayName}" (${reason})`);
+      console.log(`       Category: ${linkedProd.category || 'uncategorized'} | WC ID: ${linkedProd.wcId}`);
       components.push({
         productId: linkedProd.id,
         productName: displayName,
