@@ -361,18 +361,6 @@ export default function ProductSelectionModal({
               </div>
             </div>
           )}
-
-          {/* Mandatory Individual Items (informational) */}
-          {recipe.mandatoryIndividual.length > 0 && (
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <p className="text-sm text-gray-600">Includes:</p>
-              <ul className="text-sm text-gray-700 list-disc list-inside">
-                {recipe.mandatoryIndividual.map((item) => (
-                  <li key={item.id}>{item.name}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
 
         {/* Footer */}
