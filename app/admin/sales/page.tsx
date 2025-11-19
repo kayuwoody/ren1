@@ -12,6 +12,9 @@ interface SalesReport {
   totalCOGS: number;
   totalProfit: number;
   overallMargin: number;
+  totalItemsSold: number;
+  averageItemPrice: number;
+  averageProfitPerItem: number;
   revenueByDay: { date: string; revenue: number; orders: number; discounts: number; cogs: number; profit: number; margin: number }[];
   topProducts: { name: string; quantity: number; revenue: number; cogs: number; profit: number; margin: number }[];
   ordersByStatus: { status: string; count: number }[];
@@ -315,6 +318,51 @@ export default function SalesReportPage() {
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   {discountRate.toFixed(1)}% discount rate
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Cards - Row 3: Item-Level Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-cyan-100 rounded-lg">
+                <ShoppingCart className="w-6 h-6 text-cyan-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Total Items Sold</p>
+                <p className="text-2xl font-bold text-cyan-600">
+                  {report.totalItemsSold}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-teal-100 rounded-lg">
+                <DollarSign className="w-6 h-6 text-teal-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Avg Item Sale Price</p>
+                <p className="text-2xl font-bold text-teal-600">
+                  RM {report.averageItemPrice.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-lime-100 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-lime-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Avg Profit Per Item</p>
+                <p className="text-2xl font-bold text-lime-600">
+                  RM {report.averageProfitPerItem.toFixed(2)}
                 </p>
               </div>
             </div>

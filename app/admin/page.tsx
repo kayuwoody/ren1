@@ -60,6 +60,25 @@ export default function AdminDashboard() {
       setIsAuthenticated(true);
       fetchLockerStatus();
       fetchDailyStats();
+
+      // Set up auto-refresh for daily stats every 30 seconds
+      const statsInterval = setInterval(() => {
+        fetchDailyStats();
+      }, 30000); // 30 seconds
+
+      // Refresh stats when page becomes visible again (user switches back to tab)
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          fetchDailyStats();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      // Clean up interval and event listener on unmount
+      return () => {
+        clearInterval(statsInterval);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     }
   }, []);
 

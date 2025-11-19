@@ -87,6 +87,7 @@ export async function GET(req: Request) {
     let totalRevenue = 0;
     let totalDiscounts = 0;
     let totalCOGS = 0;
+    let totalItemsSold = 0;
     const revenueByDay: Record<string, { revenue: number; orders: number; discounts: number; cogs: number; profit: number }> = {};
     const productStats: Record<string, { quantity: number; revenue: number; cogs: number; profit: number }> = {};
     const ordersByStatus: Record<string, number> = {};
@@ -166,6 +167,9 @@ export async function GET(req: Request) {
         productStats[productName].revenue += itemRevenue;
         productStats[productName].cogs += itemCOGS;
         productStats[productName].profit += (itemRevenue - itemCOGS);
+
+        // Track total items sold for average calculations
+        totalItemsSold += item.quantity;
       });
     });
 
@@ -203,6 +207,8 @@ export async function GET(req: Request) {
 
     const totalProfit = totalRevenue - totalCOGS;
     const overallMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    const averageItemPrice = totalItemsSold > 0 ? totalRevenue / totalItemsSold : 0;
+    const averageProfitPerItem = totalItemsSold > 0 ? totalProfit / totalItemsSold : 0;
 
     console.log('📊 Sales Report Summary:', {
       totalOrders: orders.length,
@@ -212,6 +218,9 @@ export async function GET(req: Request) {
       overallMargin: overallMargin.toFixed(1) + '%',
       totalDiscounts: totalDiscounts.toFixed(2),
       avgOrderValue: (orders.length > 0 ? totalRevenue / orders.length : 0).toFixed(2),
+      totalItemsSold,
+      averageItemPrice: averageItemPrice.toFixed(2),
+      averageProfitPerItem: averageProfitPerItem.toFixed(2),
     });
 
     const report = {
@@ -222,6 +231,9 @@ export async function GET(req: Request) {
       totalCOGS,
       totalProfit,
       overallMargin,
+      totalItemsSold,
+      averageItemPrice,
+      averageProfitPerItem,
       revenueByDay: revenueByDayArray,
       topProducts,
       ordersByStatus: ordersByStatusArray,
