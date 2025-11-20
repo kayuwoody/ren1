@@ -14,7 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Vercel Blob not configured. Set BLOB_READ_WRITE_TOKEN environment variable.',
+          error: 'Vercel Blob not configured. Set bin2_READ_WRITE_TOKEN environment variable.',
         },
         { status: 400 }
       );
@@ -46,6 +46,6 @@ export async function GET(req: Request) {
     configured,
     message: configured
       ? 'Vercel Blob is configured and ready'
-      : 'Vercel Blob not configured. Set BLOB_READ_WRITE_TOKEN environment variable.',
+      : 'Vercel Blob not configured. Set bin2_READ_WRITE_TOKEN environment variable.',
   });
 }
