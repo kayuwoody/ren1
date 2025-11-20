@@ -65,6 +65,7 @@ export default function RecipesPage() {
   const [editingComboPrice, setEditingComboPrice] = useState(false);
   const [newComboPrice, setNewComboPrice] = useState('');
   const [updatingStock, setUpdatingStock] = useState(false);
+  const [syncingBlob, setSyncingBlob] = useState(false);
   const hasFetchedRef = useRef(false);
 
   useEffect(() => {
@@ -117,6 +118,27 @@ export default function RecipesPage() {
       setMaterials(data.materials || []);
     } catch (error) {
       console.error('Failed to fetch materials:', error);
+    }
+  }
+
+  async function syncToVercelBlob() {
+    try {
+      setSyncingBlob(true);
+      const res = await fetch('/api/admin/sync-blob', {
+        method: 'POST',
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        alert(`✅ Combos synced to Vercel Blob successfully!\n\nURL: ${data.blobUrl}`);
+      } else {
+        throw new Error(data.error || 'Sync failed');
+      }
+    } catch (error: any) {
+      console.error('Failed to sync to Vercel Blob:', error);
+      alert(`❌ Failed to sync to Vercel Blob:\n${error.message}`);
+    } finally {
+      setSyncingBlob(false);
     }
   }
 
@@ -455,6 +477,15 @@ export default function RecipesPage() {
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               {syncing ? 'Syncing...' : 'Sync from WooCommerce'}
+            </button>
+            <button
+              onClick={syncToVercelBlob}
+              disabled={syncingBlob}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm font-medium disabled:opacity-50"
+              title="Upload combos.json to Vercel Blob for customer app"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncingBlob ? 'animate-spin' : ''}`} />
+              {syncingBlob ? 'Uploading...' : 'Sync to Vercel'}
             </button>
           </div>
 
