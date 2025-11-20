@@ -7,7 +7,7 @@ import { exportCombosToJSONString } from './db/combosExportService';
  * Uploads combos.json to Vercel Blob storage for consumption by bin2 (customer app)
  *
  * Requirements:
- * - BLOB_READ_WRITE_TOKEN environment variable must be set
+ * - bin2_READ_WRITE_TOKEN environment variable must be set
  * - This token should be from the Vercel project running bin2
  */
 
@@ -17,10 +17,10 @@ import { exportCombosToJSONString } from './db/combosExportService';
  * @returns URL of the uploaded blob
  */
 export async function uploadCombosToVercelBlob(): Promise<string> {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  const token = process.env.bin2_READ_WRITE_TOKEN;
 
   if (!token) {
-    throw new Error('BLOB_READ_WRITE_TOKEN environment variable is not set');
+    throw new Error('bin2_READ_WRITE_TOKEN environment variable is not set');
   }
 
   console.log('☁️  Uploading combos to Vercel Blob...');
@@ -53,5 +53,5 @@ export async function uploadCombosToVercelBlob(): Promise<string> {
  * Check if Vercel Blob is configured
  */
 export function isVercelBlobConfigured(): boolean {
-  return !!process.env.BLOB_READ_WRITE_TOKEN;
+  return !!process.env.bin2_READ_WRITE_TOKEN;
 }

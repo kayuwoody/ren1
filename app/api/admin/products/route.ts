@@ -61,7 +61,7 @@ export async function GET(req: Request) {
         // Don't fail the whole request if blob sync fails
       }
     } else {
-      console.log('⏭️  Skipping Vercel Blob sync (BLOB_READ_WRITE_TOKEN not configured)');
+      console.log('⏭️  Skipping Vercel Blob sync (bin2_READ_WRITE_TOKEN not configured)');
     }
 
     return NextResponse.json({
