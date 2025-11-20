@@ -26,7 +26,6 @@ export interface ComboMaterial {
   id: string;
   name: string;
   category: string;
-  sku: string;
   purchaseUnit: string;
   costPerUnit: number;
 }
@@ -84,7 +83,6 @@ export function exportCombosToJSON(): CombosExport {
     id: m.id,
     name: m.name,
     category: m.category,
-    sku: m.sku,
     purchaseUnit: m.purchaseUnit,
     costPerUnit: m.costPerUnit,
   }));
