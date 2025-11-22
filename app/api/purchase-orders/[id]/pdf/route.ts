@@ -6,6 +6,18 @@ import fs from 'fs';
 import path from 'path';
 
 /**
+ * Sanitize text to only include WinAnsi-compatible characters
+ * StandardFonts in pdf-lib only support WinAnsi encoding
+ */
+function sanitizeText(text: string): string {
+  if (!text) return '';
+  // Replace characters outside WinAnsi range with safe alternatives
+  return text
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, '') // Remove non-WinAnsi characters
+    .trim();
+}
+
+/**
  * GET /api/purchase-orders/[id]/pdf
  *
  * Generate a PDF purchase order with letterhead
@@ -112,7 +124,7 @@ export async function GET(
       color: rgb(0, 0, 0),
     });
 
-    page.drawText(purchaseOrder.supplier, {
+    page.drawText(sanitizeText(purchaseOrder.supplier), {
       x: 50,
       y: y - 15,
       size: 10,
@@ -223,7 +235,7 @@ export async function GET(
       const notes = item.notes || '';
 
       // Item name
-      page.drawText(itemName || '', {
+      page.drawText(sanitizeText(itemName || ''), {
         x: 50,
         y: y,
         size: 10,
@@ -233,7 +245,7 @@ export async function GET(
 
       // Notes (if any)
       if (notes) {
-        page.drawText(notes, {
+        page.drawText(sanitizeText(notes), {
           x: 50,
           y: y - 12,
           size: 8,
@@ -243,7 +255,7 @@ export async function GET(
       }
 
       // Quantity
-      page.drawText(`${item.quantity} ${item.unit}`, {
+      page.drawText(`${item.quantity} ${sanitizeText(item.unit)}`, {
         x: 320,
         y: y,
         size: 10,
@@ -318,7 +330,7 @@ export async function GET(
       y -= 15;
 
       // Word wrap notes
-      const notesLines = wrapText(purchaseOrder.notes, 500, font, 10);
+      const notesLines = wrapText(sanitizeText(purchaseOrder.notes), 500, font, 10);
       notesLines.forEach((line) => {
         if (y < 100) return; // Stop if we're out of space
         page.drawText(line, {
