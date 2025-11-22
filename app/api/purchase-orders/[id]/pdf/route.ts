@@ -47,12 +47,13 @@ export async function GET(
     // --- LETTERHEAD ---
     // Add logo if it exists
     const logoPath = path.join(process.cwd(), 'public', 'co line mascot.png');
+    let logoHeight = 0;
     if (fs.existsSync(logoPath)) {
       try {
         const logoImage = fs.readFileSync(logoPath);
         const image = await pdfDoc.embedPng(logoImage);
         const logoWidth = 480; // 6x bigger (was 80)
-        const logoHeight = (image.height / image.width) * logoWidth;
+        logoHeight = (image.height / image.width) * logoWidth;
         page.drawImage(image, {
           x: 50,
           y: y - logoHeight,
@@ -65,6 +66,34 @@ export async function GET(
       }
     }
 
+    // Move below logo and add spacing
+    y -= logoHeight + 20;
+
+    // Contact information (right-aligned)
+    const contactPerson = 'Contact Person: Dan Lim';
+    const contactPersonWidth = font.widthOfTextAtSize(contactPerson, 10);
+    page.drawText(contactPerson, {
+      x: width - 50 - contactPersonWidth,
+      y: y,
+      size: 10,
+      font: font,
+      color: rgb(0, 0, 0),
+    });
+
+    y -= 14;
+
+    const contactNo = 'Contact No: 017-2099411';
+    const contactNoWidth = font.widthOfTextAtSize(contactNo, 10);
+    page.drawText(contactNo, {
+      x: width - 50 - contactNoWidth,
+      y: y,
+      size: 10,
+      font: font,
+      color: rgb(0, 0, 0),
+    });
+
+    y -= 14;
+
     // Company address (right-aligned)
     const addressLines = [
       'Cafe',
@@ -74,20 +103,19 @@ export async function GET(
       '43200 Cheras, Selangor',
     ];
 
-    let addressY = y;
     addressLines.forEach((line) => {
       const textWidth = font.widthOfTextAtSize(line, 10);
       page.drawText(line, {
         x: width - 50 - textWidth,
-        y: addressY,
+        y: y,
         size: 10,
         font: font,
         color: rgb(0, 0, 0),
       });
-      addressY -= 14;
+      y -= 14;
     });
 
-    y -= 120; // Move down after letterhead
+    y -= 20; // Add spacing after letterhead
 
     // --- PURCHASE ORDER HEADER ---
     const titleText = 'PURCHASE ORDER';
