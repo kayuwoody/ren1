@@ -58,12 +58,10 @@ export async function GET(
     // --- PURCHASE ORDER HEADER ---
     doc
       .fontSize(20)
-      .font('Helvetica-Bold')
       .text('PURCHASE ORDER', 50, 160, { align: 'center' });
 
     doc
       .fontSize(12)
-      .font('Helvetica')
       .text(`PO Number: ${purchaseOrder.poNumber}`, { align: 'center' })
       .moveDown();
 
@@ -71,25 +69,23 @@ export async function GET(
     const infoY = doc.y;
 
     // Left column - Supplier info
-    doc.fontSize(11).font('Helvetica-Bold').text('Supplier:', 50, infoY);
-    doc.fontSize(10).font('Helvetica').text(purchaseOrder.supplier, 50, doc.y);
+    doc.fontSize(11).text('Supplier:', 50, infoY);
+    doc.fontSize(10).text(purchaseOrder.supplier, 50, doc.y);
 
     // Right column - Order details
     let rightColY = infoY;
     if (purchaseOrder.orderDate) {
-      doc.fontSize(11).font('Helvetica-Bold').text('Order Date:', 350, rightColY);
+      doc.fontSize(11).text('Order Date:', 350, rightColY);
       doc
         .fontSize(10)
-        .font('Helvetica')
         .text(new Date(purchaseOrder.orderDate).toLocaleDateString('en-MY'), 350, doc.y);
       rightColY = doc.y + 5;
     }
 
     if (purchaseOrder.expectedDeliveryDate) {
-      doc.fontSize(11).font('Helvetica-Bold').text('Expected Delivery:', 350, rightColY);
+      doc.fontSize(11).text('Expected Delivery:', 350, rightColY);
       doc
         .fontSize(10)
-        .font('Helvetica')
         .text(
           new Date(purchaseOrder.expectedDeliveryDate).toLocaleDateString('en-MY'),
           350,
@@ -106,7 +102,6 @@ export async function GET(
     // Table header
     doc
       .fontSize(11)
-      .font('Helvetica-Bold')
       .text('Item', 50, tableTop)
       .text('Quantity', 320, tableTop)
       .text('Unit Cost', 400, tableTop)
@@ -135,7 +130,7 @@ export async function GET(
       const notes = item.notes || '';
 
       // Item name and notes (single column)
-      doc.fontSize(10).font('Helvetica').text(itemName || '', 50, currentY);
+      doc.fontSize(10).text(itemName || '', 50, currentY);
 
       if (notes) {
         doc.fontSize(8).fillColor('#666666').text(notes, 50, currentY + 12);
@@ -145,7 +140,6 @@ export async function GET(
       // Quantity
       doc
         .fontSize(10)
-        .font('Helvetica')
         .text(`${item.quantity} ${item.unit}`, 320, currentY);
 
       // Unit cost
@@ -173,7 +167,6 @@ export async function GET(
 
     doc
       .fontSize(12)
-      .font('Helvetica-Bold')
       .text('TOTAL:', 400, currentY)
       .text(`RM ${purchaseOrder.totalAmount.toFixed(2)}`, 480, currentY, {
         align: 'right',
@@ -191,10 +184,8 @@ export async function GET(
 
       doc
         .fontSize(11)
-        .font('Helvetica-Bold')
         .text('Notes:', 50, currentY)
         .fontSize(10)
-        .font('Helvetica')
         .text(purchaseOrder.notes, 50, currentY + 15, { width: 500 });
     }
 

@@ -272,19 +272,36 @@ export default function EditPurchaseOrderPage() {
       });
 
       if (!updateResponse.ok) {
-        throw new Error("Failed to update purchase order");
+        throw new Error("Failed to update purchase order metadata");
       }
 
-      // Delete existing items and create new ones
-      // (This is done by deleting the PO and recreating - simpler approach)
-      // For now, we'll just update the basic fields
-      // A full implementation would need an endpoint to update items
+      // Update items
+      const itemsResponse = await fetch(`/api/purchase-orders/${poId}/items`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            itemType: item.itemType,
+            materialId: item.materialId,
+            productId: item.productId,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitCost: item.unitCost,
+            notes: item.notes,
+          })),
+        }),
+      });
+
+      if (!itemsResponse.ok) {
+        const errorData = await itemsResponse.json();
+        throw new Error(`Failed to update items: ${errorData.error || "Unknown error"}`);
+      }
 
       alert("Purchase order updated successfully!");
       router.push("/admin/purchase-orders");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to update purchase order:", error);
-      alert("Failed to update purchase order");
+      alert(error.message || "Failed to update purchase order");
     } finally {
       setSubmitting(false);
     }
