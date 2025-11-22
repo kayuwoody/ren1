@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FileDown, Plus, Package, TruckIcon } from "lucide-react";
+import { FileDown, Plus, Package, TruckIcon, FileText } from "lucide-react";
 
 interface PurchaseOrderItem {
   id: string;
@@ -68,6 +68,24 @@ export default function PurchaseOrdersPage() {
     } catch (error) {
       console.error("Failed to download CSV:", error);
       alert("Failed to download CSV");
+    }
+  };
+
+  const handleDownloadPDF = async (id: string, poNumber: string) => {
+    try {
+      const response = await fetch(`/api/purchase-orders/${id}/pdf`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `PO-${poNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Failed to download PDF:", error);
+      alert("Failed to download PDF");
     }
   };
 
@@ -271,6 +289,14 @@ export default function PurchaseOrdersPage() {
 
                   {/* Actions */}
                   <div className="flex gap-2">
+                    <button
+                      onClick={() => handleDownloadPDF(po.id, po.poNumber)}
+                      className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Download PDF
+                    </button>
+
                     <button
                       onClick={() => handleDownloadCSV(po.id, po.poNumber)}
                       className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
