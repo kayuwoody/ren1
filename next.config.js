@@ -8,4 +8,6 @@ const nextConfig = {
   // swcMinify: true,  // <-- optional, defaults to true blah
 };
 
-module.exports = nextConfig; 
+module.exports = nextConfig;
+
+ 
