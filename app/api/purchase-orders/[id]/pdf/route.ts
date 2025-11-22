@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import PDFDocument from 'pdfkit';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { getPurchaseOrder } from '@/lib/db/purchaseOrderService';
 import { handleApiError, notFoundError } from '@/lib/api/error-handler';
 import fs from 'fs';
@@ -22,193 +22,332 @@ export async function GET(
     }
 
     // Create a new PDF document
-    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595, 842]); // A4 size in points
+    const { width, height } = page.getSize();
 
-    // Store PDF chunks in an array
-    const chunks: Uint8Array[] = [];
+    // Embed fonts
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Collect the PDF data
-    doc.on('data', (chunk) => chunks.push(chunk));
-
-    // Return a promise that resolves when the PDF is complete
-    const pdfPromise = new Promise<Buffer>((resolve, reject) => {
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-    });
+    let y = height - 50; // Start from top with margin
 
     // --- LETTERHEAD ---
     // Add logo if it exists
     const logoPath = path.join(process.cwd(), 'public', 'co line mascot.png');
     if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, 50, 45, { width: 100 });
+      try {
+        const logoImage = fs.readFileSync(logoPath);
+        const image = await pdfDoc.embedPng(logoImage);
+        const logoWidth = 80;
+        const logoHeight = (image.height / image.width) * logoWidth;
+        page.drawImage(image, {
+          x: 50,
+          y: y - logoHeight,
+          width: logoWidth,
+          height: logoHeight,
+        });
+      } catch (error) {
+        console.error('Failed to embed logo:', error);
+        // Continue without logo
+      }
     }
 
     // Company address (right-aligned)
-    doc
-      .fontSize(10)
-      .text('Cafe', 400, 50, { align: 'right' })
-      .text('9ine Condominium', { align: 'right' })
-      .text('Jalan Suria Residen 1/1', { align: 'right' })
-      .text('Taman Kemacahaya', { align: 'right' })
-      .text('43200 Cheras, Selangor', { align: 'right' });
+    const addressLines = [
+      'Cafe',
+      '9ine Condominium',
+      'Jalan Suria Residen 1/1',
+      'Taman Kemacahaya',
+      '43200 Cheras, Selangor',
+    ];
 
-    // Move down after letterhead
-    doc.moveDown(3);
+    let addressY = y;
+    addressLines.forEach((line) => {
+      const textWidth = font.widthOfTextAtSize(line, 10);
+      page.drawText(line, {
+        x: width - 50 - textWidth,
+        y: addressY,
+        size: 10,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
+      addressY -= 14;
+    });
+
+    y -= 120; // Move down after letterhead
 
     // --- PURCHASE ORDER HEADER ---
-    doc
-      .fontSize(20)
-      .text('PURCHASE ORDER', 50, 160, { align: 'center' });
+    const titleText = 'PURCHASE ORDER';
+    const titleWidth = fontBold.widthOfTextAtSize(titleText, 20);
+    page.drawText(titleText, {
+      x: (width - titleWidth) / 2,
+      y: y,
+      size: 20,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
 
-    doc
-      .fontSize(12)
-      .text(`PO Number: ${purchaseOrder.poNumber}`, { align: 'center' })
-      .moveDown();
+    y -= 30;
+
+    const poText = `PO Number: ${purchaseOrder.poNumber}`;
+    const poWidth = font.widthOfTextAtSize(poText, 12);
+    page.drawText(poText, {
+      x: (width - poWidth) / 2,
+      y: y,
+      size: 12,
+      font: font,
+      color: rgb(0, 0, 0),
+    });
+
+    y -= 40;
 
     // --- SUPPLIER & ORDER INFO ---
-    const infoY = doc.y;
+    // Left column - Supplier
+    page.drawText('Supplier:', {
+      x: 50,
+      y: y,
+      size: 11,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
 
-    // Left column - Supplier info
-    doc.fontSize(11).text('Supplier:', 50, infoY);
-    doc.fontSize(10).text(purchaseOrder.supplier, 50, doc.y);
+    page.drawText(purchaseOrder.supplier, {
+      x: 50,
+      y: y - 15,
+      size: 10,
+      font: font,
+      color: rgb(0, 0, 0),
+    });
 
     // Right column - Order details
-    let rightColY = infoY;
+    let rightY = y;
     if (purchaseOrder.orderDate) {
-      doc.fontSize(11).text('Order Date:', 350, rightColY);
-      doc
-        .fontSize(10)
-        .text(new Date(purchaseOrder.orderDate).toLocaleDateString('en-MY'), 350, doc.y);
-      rightColY = doc.y + 5;
+      page.drawText('Order Date:', {
+        x: 350,
+        y: rightY,
+        size: 11,
+        font: fontBold,
+        color: rgb(0, 0, 0),
+      });
+
+      page.drawText(new Date(purchaseOrder.orderDate).toLocaleDateString('en-MY'), {
+        x: 350,
+        y: rightY - 15,
+        size: 10,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
+      rightY -= 30;
     }
 
     if (purchaseOrder.expectedDeliveryDate) {
-      doc.fontSize(11).text('Expected Delivery:', 350, rightColY);
-      doc
-        .fontSize(10)
-        .text(
-          new Date(purchaseOrder.expectedDeliveryDate).toLocaleDateString('en-MY'),
-          350,
-          doc.y
-        );
+      page.drawText('Expected Delivery:', {
+        x: 350,
+        y: rightY,
+        size: 11,
+        font: fontBold,
+        color: rgb(0, 0, 0),
+      });
+
+      page.drawText(
+        new Date(purchaseOrder.expectedDeliveryDate).toLocaleDateString('en-MY'),
+        {
+          x: 350,
+          y: rightY - 15,
+          size: 10,
+          font: font,
+          color: rgb(0, 0, 0),
+        }
+      );
     }
 
-    doc.moveDown(2);
+    y -= 60;
 
     // --- LINE ITEMS TABLE ---
-    const tableTop = doc.y + 10;
-    const itemHeight = 25;
-
     // Table header
-    doc
-      .fontSize(11)
-      .text('Item', 50, tableTop)
-      .text('Quantity', 320, tableTop)
-      .text('Unit Cost', 400, tableTop)
-      .text('Total', 480, tableTop, { align: 'right', width: 70 });
+    page.drawText('Item', {
+      x: 50,
+      y: y,
+      size: 11,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
+
+    page.drawText('Quantity', {
+      x: 320,
+      y: y,
+      size: 11,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
+
+    page.drawText('Unit Cost', {
+      x: 400,
+      y: y,
+      size: 11,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
+
+    page.drawText('Total', {
+      x: 480,
+      y: y,
+      size: 11,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
+
+    y -= 5;
 
     // Draw header line
-    doc
-      .strokeColor('#000000')
-      .lineWidth(1)
-      .moveTo(50, tableTop + 15)
-      .lineTo(550, tableTop + 15)
-      .stroke();
+    page.drawLine({
+      start: { x: 50, y: y },
+      end: { x: width - 50, y: y },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
+
+    y -= 20;
 
     // Table rows
-    let currentY = tableTop + 25;
-
-    purchaseOrder.items.forEach((item, index) => {
+    for (const item of purchaseOrder.items) {
       // Check if we need a new page
-      if (currentY > 700) {
-        doc.addPage();
-        currentY = 50;
+      if (y < 100) {
+        const newPage = pdfDoc.addPage([595, 842]);
+        y = height - 50;
       }
 
       const itemName =
         item.itemType === 'material' ? item.materialName : item.productName;
       const notes = item.notes || '';
 
-      // Item name and notes (single column)
-      doc.fontSize(10).text(itemName || '', 50, currentY);
+      // Item name
+      page.drawText(itemName || '', {
+        x: 50,
+        y: y,
+        size: 10,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
 
+      // Notes (if any)
       if (notes) {
-        doc.fontSize(8).fillColor('#666666').text(notes, 50, currentY + 12);
-        doc.fillColor('#000000'); // Reset color
+        page.drawText(notes, {
+          x: 50,
+          y: y - 12,
+          size: 8,
+          font: font,
+          color: rgb(0.4, 0.4, 0.4),
+        });
       }
 
       // Quantity
-      doc
-        .fontSize(10)
-        .text(`${item.quantity} ${item.unit}`, 320, currentY);
+      page.drawText(`${item.quantity} ${item.unit}`, {
+        x: 320,
+        y: y,
+        size: 10,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
 
       // Unit cost
-      doc.text(`RM ${item.unitCost.toFixed(2)}`, 400, currentY);
+      page.drawText(`RM ${item.unitCost.toFixed(2)}`, {
+        x: 400,
+        y: y,
+        size: 10,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
 
       // Total
-      doc.text(`RM ${item.totalCost.toFixed(2)}`, 480, currentY, {
-        align: 'right',
-        width: 70,
+      const totalText = `RM ${item.totalCost.toFixed(2)}`;
+      const totalWidth = font.widthOfTextAtSize(totalText, 10);
+      page.drawText(totalText, {
+        x: width - 50 - totalWidth,
+        y: y,
+        size: 10,
+        font: font,
+        color: rgb(0, 0, 0),
       });
 
-      currentY += notes ? itemHeight + 10 : itemHeight;
+      y -= notes ? 35 : 25;
 
       // Draw row line
-      doc
-        .strokeColor('#CCCCCC')
-        .lineWidth(0.5)
-        .moveTo(50, currentY - 5)
-        .lineTo(550, currentY - 5)
-        .stroke();
-    });
+      page.drawLine({
+        start: { x: 50, y: y + 5 },
+        end: { x: width - 50, y: y + 5 },
+        thickness: 0.5,
+        color: rgb(0.8, 0.8, 0.8),
+      });
+    }
+
+    y -= 15;
 
     // --- TOTAL ---
-    currentY += 10;
+    page.drawText('TOTAL:', {
+      x: 400,
+      y: y,
+      size: 12,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
 
-    doc
-      .fontSize(12)
-      .text('TOTAL:', 400, currentY)
-      .text(`RM ${purchaseOrder.totalAmount.toFixed(2)}`, 480, currentY, {
-        align: 'right',
-        width: 70,
-      });
+    const totalAmountText = `RM ${purchaseOrder.totalAmount.toFixed(2)}`;
+    const totalAmountWidth = fontBold.widthOfTextAtSize(totalAmountText, 12);
+    page.drawText(totalAmountText, {
+      x: width - 50 - totalAmountWidth,
+      y: y,
+      size: 12,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
+
+    y -= 40;
 
     // --- NOTES ---
-    if (purchaseOrder.notes) {
-      currentY += 40;
+    if (purchaseOrder.notes && y > 100) {
+      page.drawText('Notes:', {
+        x: 50,
+        y: y,
+        size: 11,
+        font: fontBold,
+        color: rgb(0, 0, 0),
+      });
 
-      if (currentY > 700) {
-        doc.addPage();
-        currentY = 50;
-      }
+      y -= 15;
 
-      doc
-        .fontSize(11)
-        .text('Notes:', 50, currentY)
-        .fontSize(10)
-        .text(purchaseOrder.notes, 50, currentY + 15, { width: 500 });
+      // Word wrap notes
+      const notesLines = wrapText(purchaseOrder.notes, 500, font, 10);
+      notesLines.forEach((line) => {
+        if (y < 100) return; // Stop if we're out of space
+        page.drawText(line, {
+          x: 50,
+          y: y,
+          size: 10,
+          font: font,
+          color: rgb(0, 0, 0),
+        });
+        y -= 14;
+      });
     }
 
     // --- FOOTER ---
-    const footerY = 750;
-    doc
-      .fontSize(8)
-      .fillColor('#666666')
-      .text(
-        `Generated on ${new Date().toLocaleDateString('en-MY')} at ${new Date().toLocaleTimeString('en-MY')}`,
-        50,
-        footerY,
-        { align: 'center', width: 500 }
-      );
+    const footerText = `Generated on ${new Date().toLocaleDateString('en-MY')} at ${new Date().toLocaleTimeString('en-MY')}`;
+    const footerWidth = font.widthOfTextAtSize(footerText, 8);
+    page.drawText(footerText, {
+      x: (width - footerWidth) / 2,
+      y: 30,
+      size: 8,
+      font: font,
+      color: rgb(0.4, 0.4, 0.4),
+    });
 
-    // Finalize the PDF
-    doc.end();
-
-    // Wait for PDF to be generated
-    const pdfBuffer = await pdfPromise;
+    // Serialize the PDF to bytes
+    const pdfBytes = await pdfDoc.save();
 
     // Return PDF as response
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBytes, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="PO-${purchaseOrder.poNumber}.pdf"`,
@@ -217,4 +356,31 @@ export async function GET(
   } catch (error) {
     return handleApiError(error, '/api/purchase-orders/[id]/pdf');
   }
+}
+
+/**
+ * Helper function to wrap text for a given width
+ */
+function wrapText(text: string, maxWidth: number, font: any, fontSize: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  words.forEach((word) => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+    if (testWidth > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
 }
