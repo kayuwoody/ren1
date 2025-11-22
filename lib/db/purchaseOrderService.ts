@@ -319,6 +319,91 @@ export async function markPurchaseOrderReceived(id: string): Promise<PurchaseOrd
 }
 
 /**
+ * Update purchase order items (for draft orders only)
+ */
+export function updatePurchaseOrderItems(
+  id: string,
+  items: Array<{
+    itemType: 'material' | 'product';
+    materialId?: string;
+    productId?: string;
+    quantity: number;
+    unit: string;
+    unitCost: number;
+    notes?: string;
+  }>
+): PurchaseOrderWithItems | null {
+  const order = getPurchaseOrder(id);
+  if (!order) return null;
+
+  if (order.status !== 'draft') {
+    throw new Error('Only draft purchase orders can be edited');
+  }
+
+  const now = new Date().toISOString();
+
+  // Delete existing items
+  db.prepare('DELETE FROM PurchaseOrderItem WHERE purchaseOrderId = ?').run(id);
+
+  // Calculate total amount and insert new items
+  let totalAmount = 0;
+
+  for (const itemInput of items) {
+    const itemId = uuidv4();
+    const totalCost = itemInput.quantity * itemInput.unitCost;
+    totalAmount += totalCost;
+
+    let materialName: string | undefined;
+    let productName: string | undefined;
+    let sku: string | undefined;
+
+    if (itemInput.itemType === 'material' && itemInput.materialId) {
+      const material = db
+        .prepare('SELECT name FROM Material WHERE id = ?')
+        .get(itemInput.materialId) as { name: string } | undefined;
+      materialName = material?.name;
+    } else if (itemInput.itemType === 'product' && itemInput.productId) {
+      const product = db
+        .prepare('SELECT name, sku FROM Product WHERE id = ?')
+        .get(itemInput.productId) as { name: string; sku: string } | undefined;
+      productName = product?.name;
+      sku = product?.sku;
+    }
+
+    db.prepare(`
+      INSERT INTO PurchaseOrderItem (
+        id, purchaseOrderId, itemType, materialId, productId, materialName, productName, sku,
+        quantity, unit, unitCost, totalCost, receivedQuantity, notes, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(
+      itemId,
+      id,
+      itemInput.itemType,
+      itemInput.materialId || null,
+      itemInput.productId || null,
+      materialName || null,
+      productName || null,
+      sku || null,
+      itemInput.quantity,
+      itemInput.unit,
+      itemInput.unitCost,
+      totalCost,
+      itemInput.notes || null,
+      now
+    );
+  }
+
+  // Update total amount
+  db.prepare('UPDATE PurchaseOrder SET totalAmount = ?, updatedAt = ? WHERE id = ?').run(
+    totalAmount,
+    now,
+    id
+  );
+
+  return getPurchaseOrder(id);
+}
+
+/**
  * Delete a purchase order (only if status is 'draft')
  */
 export function deletePurchaseOrder(id: string): boolean {
