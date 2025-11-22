@@ -51,7 +51,7 @@ export async function GET(
       try {
         const logoImage = fs.readFileSync(logoPath);
         const image = await pdfDoc.embedPng(logoImage);
-        const logoWidth = 80;
+        const logoWidth = 480; // 6x bigger (was 80)
         const logoHeight = (image.height / image.width) * logoWidth;
         page.drawImage(image, {
           x: 50,
@@ -283,15 +283,17 @@ export async function GET(
         color: rgb(0, 0, 0),
       });
 
-      y -= notes ? 35 : 25;
-
-      // Draw row line
+      // Draw row line below the item (and notes if present)
+      const lineY = notes ? y - 20 : y - 15;
       page.drawLine({
-        start: { x: 50, y: y + 5 },
-        end: { x: width - 50, y: y + 5 },
+        start: { x: 50, y: lineY },
+        end: { x: width - 50, y: lineY },
         thickness: 0.5,
         color: rgb(0.8, 0.8, 0.8),
       });
+
+      // Move to next item position
+      y -= notes ? 35 : 25;
     }
 
     y -= 15;
