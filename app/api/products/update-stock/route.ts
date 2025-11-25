@@ -43,8 +43,10 @@ export async function POST(req: Request) {
     }
 
     // Update local database
+    const beforeUpdate = db.prepare('SELECT stockQuantity FROM Product WHERE id = ?').get(productId) as { stockQuantity: number } | undefined;
     db.prepare('UPDATE Product SET stockQuantity = ? WHERE id = ?').run(stockQuantity, productId);
-    console.log(`✅ Updated local stock for ${product.name}: ${stockQuantity}`);
+    const afterUpdate = db.prepare('SELECT stockQuantity FROM Product WHERE id = ?').get(productId) as { stockQuantity: number } | undefined;
+    console.log(`✅ Updated local stock for ${product.name}: ${beforeUpdate?.stockQuantity} → ${stockQuantity} (verified: ${afterUpdate?.stockQuantity})`);
 
     // Update WooCommerce if product has wcId and manages stock
     if (product.wcId && product.manageStock) {

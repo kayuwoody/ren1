@@ -171,6 +171,11 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     ? (existing.stockQuantity ?? 0) // Preserve existing local stock
     : (wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0); // Use WC stock for new products
 
+  // Debug logging for stock sync
+  if (existing && wcProduct.manage_stock) {
+    console.log(`📦 Stock sync for "${wcProduct.name}": DB=${existing.stockQuantity}, WC=${wcProduct.stock_quantity}, Using=${stockQuantity}`);
+  }
+
   if (existing && (supplierCost > 0 || unitCost > 0)) {
     console.log(`🔄 Syncing ${wcProduct.name} - Preserving: supplierCost=RM${supplierCost}, unitCost=RM${unitCost}, stock=${stockQuantity}`);
   }
