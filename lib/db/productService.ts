@@ -159,14 +159,20 @@ export function deleteProduct(id: string): boolean {
  * Sync product from WooCommerce
  */
 export function syncProductFromWooCommerce(wcProduct: any): Product {
-  // Check if product already exists to preserve local cost fields
+  // Check if product already exists to preserve local fields
   const existing = getProductByWcId(wcProduct.id);
 
   const supplierCost = existing?.supplierCost ?? 0;
   const unitCost = existing?.unitCost ?? 0;
 
+  // Preserve local stock quantity if product exists (local DB is source of truth for stock)
+  // Only sync stock from WooCommerce for new products to avoid race conditions
+  const stockQuantity = existing
+    ? (existing.stockQuantity ?? 0) // Preserve existing local stock
+    : (wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0); // Use WC stock for new products
+
   if (existing && (supplierCost > 0 || unitCost > 0)) {
-    console.log(`🔄 Syncing ${wcProduct.name} - Preserving: supplierCost=RM${supplierCost}, unitCost=RM${unitCost}`);
+    console.log(`🔄 Syncing ${wcProduct.name} - Preserving: supplierCost=RM${supplierCost}, unitCost=RM${unitCost}, stock=${stockQuantity}`);
   }
 
   const result = upsertProduct({
@@ -178,13 +184,13 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     basePrice: parseFloat(wcProduct.price) || 0,
     supplierCost, // Preserve existing supplierCost (local field)
     unitCost, // Preserve existing unitCost from recipes
-    stockQuantity: wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0, // Only track if WC manages stock
+    stockQuantity, // Preserve existing stock quantity (local DB is source of truth)
     manageStock: wcProduct.manage_stock ?? false, // Store whether WooCommerce tracks inventory
     imageUrl: wcProduct.images?.[0]?.src,
   });
 
   if (existing && (supplierCost > 0 || unitCost > 0)) {
-    console.log(`   ✅ After sync - supplierCost=RM${result.supplierCost}, unitCost=RM${result.unitCost}`);
+    console.log(`   ✅ After sync - supplierCost=RM${result.supplierCost}, unitCost=RM${result.unitCost}, stock=${result.stockQuantity}`);
   }
 
   return result;
