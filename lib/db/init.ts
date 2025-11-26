@@ -11,10 +11,60 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-export const db = new Database(dbPath);
+// Use global singleton to prevent multiple database instances during HMR
+declare global {
+  var __db: Database.Database | undefined;
+  var __dbShutdownRegistered: boolean | undefined;
+}
+
+let db: Database.Database;
+
+if (process.env.NODE_ENV === 'production') {
+  db = new Database(dbPath);
+} else {
+  // In development, use global singleton to survive HMR
+  if (!global.__db) {
+    global.__db = new Database(dbPath);
+  }
+  db = global.__db;
+}
+
+export { db };
 
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
+
+// Graceful shutdown handling - only register once globally
+if (!global.__dbShutdownRegistered) {
+  global.__dbShutdownRegistered = true;
+
+  const gracefulShutdown = () => {
+    try {
+      const currentDb = global.__db || db;
+      if (currentDb && !currentDb.readonly) {
+        currentDb.close();
+        console.log('✅ Database connection closed');
+      }
+    } catch (err) {
+      console.error('❌ Error closing database:', err);
+    }
+  };
+
+  // Register shutdown handlers (only once across HMR)
+  process.once('SIGINT', () => {
+    gracefulShutdown();
+    process.exit(0);
+  });
+
+  process.once('SIGTERM', () => {
+    gracefulShutdown();
+    process.exit(0);
+  });
+
+  process.once('beforeExit', () => {
+    gracefulShutdown();
+  });
+}
 
 // Track if database has been initialized
 let isInitialized = false;
