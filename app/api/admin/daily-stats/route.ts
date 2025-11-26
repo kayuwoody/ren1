@@ -13,31 +13,27 @@ import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 
 export async function GET() {
   try {
-    // Get today's date in Malaysia time (UTC+8)
+    // Get current date in UTC+8 (Malaysia time)
     const now = new Date();
+    const utc8Time = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const year = utc8Time.getUTCFullYear();
+    const month = utc8Time.getUTCMonth();
+    const day = utc8Time.getUTCDate();
 
-    // Method 1: Calculate Malaysia time by offsetting from UTC
-    // Malaysia is UTC+8, so we add 8 hours worth of milliseconds
-    const malaysiaOffset = 8 * 60 * 60 * 1000;
-    const malaysiaTime = new Date(now.getTime() + malaysiaOffset);
+    // Create start and end times in UTC, representing midnight to 23:59:59 in UTC+8
+    // UTC+8 midnight = 16:00 previous day UTC
+    // UTC+8 23:59:59 = 15:59:59 same day UTC
+    const startOfDay = new Date(Date.UTC(year, month, day, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
+    const endOfDay = new Date(Date.UTC(year, month, day, 23, 59, 59, 999) - (8 * 60 * 60 * 1000));
 
-    // Extract date components from the Malaysia time
-    const year = malaysiaTime.getUTCFullYear();
-    const month = String(malaysiaTime.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(malaysiaTime.getUTCDate()).padStart(2, '0');
-    const todayMalaysia = `${year}-${month}-${day}`;
-
-    // Create start and end of day in Malaysia time (UTC+8)
-    // Example: 2024-11-18T00:00:00+08:00 = 2024-11-17T16:00:00Z
-    const startOfDay = new Date(`${todayMalaysia}T00:00:00+08:00`);
-    const endOfDay = new Date(`${todayMalaysia}T23:59:59.999+08:00`);
+    const todayMalaysia = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     console.log('📅 Daily Stats Date Range:', {
-      currentUTC: now.toISOString(),
-      malaysiaDate: todayMalaysia,
+      targetDate: todayMalaysia,
       startOfDay: startOfDay.toISOString(),
       endOfDay: endOfDay.toISOString(),
-      note: 'Querying WooCommerce for orders created between these UTC times'
+      startLocal: new Date(startOfDay.getTime() + (8 * 60 * 60 * 1000)).toISOString(),
+      endLocal: new Date(endOfDay.getTime() + (8 * 60 * 60 * 1000)).toISOString(),
     });
 
     // Fetch ALL today's orders using pagination helper (not limited to 100)
