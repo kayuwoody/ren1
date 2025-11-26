@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { PAID_ORDER_STATUSES } from '@/lib/paymentService';
 
+// Force dynamic rendering to prevent caching - we need real-time stats
+export const dynamic = 'force-dynamic';
+
 /**
  * Admin Daily Stats API
  *
