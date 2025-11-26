@@ -30,13 +30,14 @@ export function getPaymentInfo(order: any): PaymentInfo {
 }
 
 /**
- * Order statuses that represent paid orders
+ * Order statuses that represent paid/fulfilled orders
  * - processing: Payment received, order being processed
  * - completed: Order fulfilled
- * - on-hold: Payment received but order on hold
  * - ready-for-pickup: Custom status - order ready in locker (always paid)
+ *
+ * Note: 'on-hold' is NOT included as those orders are awaiting payment
  */
-export const PAID_ORDER_STATUSES = ['processing', 'completed', 'on-hold', 'ready-for-pickup'] as const;
+export const PAID_ORDER_STATUSES = ['processing', 'completed', 'ready-for-pickup'] as const;
 
 /**
  * Check if order has been paid
