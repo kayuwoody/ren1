@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
+import { PAID_ORDER_STATUSES } from '@/lib/paymentService';
 
 /**
  * Admin Daily Stats API
@@ -52,8 +53,8 @@ export async function GET() {
     let itemsSold = 0;
 
     todayOrders.forEach((order: any) => {
-      // Add to revenue (only completed/processing/ready-for-pickup orders)
-      if (['completed', 'processing', 'ready-for-pickup'].includes(order.status)) {
+      // Add to revenue (only paid orders: completed/processing/on-hold/ready-for-pickup)
+      if (PAID_ORDER_STATUSES.includes(order.status)) {
         // Use _final_total from metadata if available (accounts for discounts)
         const finalTotal = parseFloat(
           getMetaValue(order.meta_data, '_final_total', order.total)
@@ -71,7 +72,7 @@ export async function GET() {
 
     console.log('📊 Daily Stats Results:', {
       totalOrdersFetched: todayOrders.length,
-      paidOrders: todayOrders.filter((o: any) => ['completed', 'processing', 'ready-for-pickup'].includes(o.status)).length,
+      paidOrders: todayOrders.filter((o: any) => PAID_ORDER_STATUSES.includes(o.status)).length,
       todayRevenue,
       itemsSold,
       sampleOrders: todayOrders.slice(0, 3).map((o: any) => ({

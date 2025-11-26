@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 import { handleApiError } from '@/lib/api/error-handler';
+import { PAID_ORDER_STATUSES } from '@/lib/paymentService';
 
 // Force dynamic rendering for this API route
 export const dynamic = 'force-dynamic';
@@ -54,9 +55,9 @@ export async function GET(req: Request) {
       order: 'desc',
     });
 
-    // Filter to completed/processing orders
+    // Filter to paid orders only
     const orders = allOrders.filter(
-      (order) => order.status === 'completed' || order.status === 'processing' || order.status === 'ready-for-pickup'
+      (order) => PAID_ORDER_STATUSES.includes(order.status)
     );
 
     console.log(`📦 Found ${orders.length} orders for ${displayDate}`);

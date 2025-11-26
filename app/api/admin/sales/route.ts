@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 import { handleApiError } from '@/lib/api/error-handler';
+import { PAID_ORDER_STATUSES } from '@/lib/paymentService';
 
 // Force dynamic rendering for this API route
 export const dynamic = 'force-dynamic';
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
 
     // Filter only orders that count as sales (exclude pending payment)
     let orders = allOrders.filter(
-      (order) => order.status === 'completed' || order.status === 'processing' || order.status === 'ready-for-pickup'
+      (order) => PAID_ORDER_STATUSES.includes(order.status)
     );
 
     // Filter out staff meals (orders with total = 0) if requested
