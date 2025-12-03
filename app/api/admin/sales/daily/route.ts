@@ -66,9 +66,6 @@ export async function GET(req: Request) {
       const finalTotal = parseFloat(
         getMetaValue(order.meta_data, '_final_total', order.total)
       );
-      const retailTotal = parseFloat(
-        getMetaValue(order.meta_data, '_retail_total', order.total)
-      );
       const totalDiscount = parseFloat(
         getMetaValue(order.meta_data, '_total_discount', '0')
       );
@@ -171,6 +168,9 @@ export async function GET(req: Request) {
           components, // Include bundle components
         };
       }) || [];
+
+      // Calculate retail total from actual item retail prices
+      const retailTotal = items.reduce((sum, item) => sum + (item.retailPrice * item.quantity), 0);
 
       return {
         id: order.id,
