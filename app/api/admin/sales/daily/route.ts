@@ -170,7 +170,7 @@ export async function GET(req: Request) {
       }) || [];
 
       // Calculate retail total from actual item retail prices
-      const retailTotal = items.reduce((sum, item) => sum + (item.retailPrice * item.quantity), 0);
+      const retailTotal = items.reduce((sum: number, item) => sum + (item.retailPrice * item.quantity), 0);
 
       return {
         id: order.id,
