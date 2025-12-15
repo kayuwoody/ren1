@@ -35,7 +35,7 @@ export async function GET(
 
     // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595, 842]); // A4 size in points
+    let page = pdfDoc.addPage([595, 842]); // A4 size in points
     const { width, height } = page.getSize();
 
     // Embed fonts
@@ -254,7 +254,7 @@ export async function GET(
     for (const item of purchaseOrder.items) {
       // Check if we need a new page
       if (y < 100) {
-        const newPage = pdfDoc.addPage([595, 842]);
+        page = pdfDoc.addPage([595, 842]);
         y = height - 50;
       }
 
