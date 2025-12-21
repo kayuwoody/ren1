@@ -301,6 +301,9 @@ export async function recordProductSale(
         console.log(`${indent}      💾 Stored linked product (visibility only): ${recipeItem.linkedProductName} x${quantityConsumed}`);
         consumptions.push(linkedProductConsumption);
 
+        // Deduct local DB inventory for linked products
+        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name);
+
         // Deduct WooCommerce inventory for ALL linked products
         // These are component products that WooCommerce doesn't automatically deduct
         // (Only the root product inventory is handled by WooCommerce when the order is created)
@@ -325,7 +328,9 @@ export async function recordProductSale(
     }
   }
 
+  // Deduct local DB stock for the main product (only at root level, not for linked products)
   if (depth === 0) {
+    deductLocalProductStock(productId, quantitySold, productName);
     console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
   }
 
@@ -355,6 +360,36 @@ function deductMaterialStock(materialId: string, quantity: number): void {
   }
 
   updateMaterialStock(materialId, newStock);
+}
+
+/**
+ * Deduct product from local DB stock
+ */
+function deductLocalProductStock(productId: string, quantity: number, productName: string): void {
+  const product = getProduct(productId);
+  if (!product) {
+    console.error(`❌ Product ${productId} not found - cannot deduct local stock`);
+    return;
+  }
+
+  // Only deduct if product manages stock
+  if (!product.manageStock) {
+    console.log(`   ℹ️  Product "${productName}" does not manage stock - skipping local DB deduction`);
+    return;
+  }
+
+  const currentStock = product.stockQuantity || 0;
+  const newStock = currentStock - quantity;
+
+  console.log(`   📦 Local DB Inventory: ${productName} (${currentStock} → ${newStock})`);
+
+  // Update local database stock
+  db.prepare('UPDATE Product SET stockQuantity = ? WHERE id = ?').run(newStock, productId);
+
+  // Log warnings
+  if (newStock < 0) {
+    console.warn(`   ⚠️  Local DB: ${productName} stock went negative: ${newStock}`);
+  }
 }
 
 /**
