@@ -17,6 +17,7 @@ interface Product {
   name: string;
   sku: string;
   supplierCost: number;
+  supplier?: string;
 }
 
 interface POItem {
@@ -45,6 +46,9 @@ export default function CreatePurchaseOrderPage() {
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("");
   const [notes, setNotes] = useState("Deliver by 2PM");
   const [items, setItems] = useState<POItem[]>([]);
+
+  // Filter state
+  const [filterSupplier, setFilterSupplier] = useState<string>("");
 
   // New item form
   const [newItemType, setNewItemType] = useState<"material" | "product">("material");
@@ -218,6 +222,15 @@ export default function CreatePurchaseOrderPage() {
     }
   };
 
+  // Filter materials and products by supplier
+  const filteredMaterials = filterSupplier
+    ? materials.filter((m) => m.supplier === filterSupplier)
+    : materials;
+
+  const filteredProducts = filterSupplier
+    ? products.filter((p) => p.supplier === filterSupplier)
+    : products;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
@@ -315,6 +328,24 @@ export default function CreatePurchaseOrderPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                Filter by Supplier (Optional)
+              </label>
+              <select
+                value={filterSupplier}
+                onChange={(e) => setFilterSupplier(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              >
+                <option value="">All Suppliers</option>
+                {suppliers.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Item Type
               </label>
               <div className="flex gap-4">
@@ -352,7 +383,7 @@ export default function CreatePurchaseOrderPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 >
                   <option value="">Select material...</option>
-                  {materials.map((m) => (
+                  {filteredMaterials.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name} ({m.supplier || "No supplier"})
                     </option>
@@ -365,9 +396,9 @@ export default function CreatePurchaseOrderPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 >
                   <option value="">Select product...</option>
-                  {products.map((p) => (
+                  {filteredProducts.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} ({p.sku})
+                      {p.name} ({p.supplier || "No supplier"}) - {p.sku}
                     </option>
                   ))}
                 </select>

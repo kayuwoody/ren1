@@ -43,6 +43,7 @@ export async function GET(req: Request) {
         supplierCost: product.supplierCost,
         unitCost: product.unitCost,
         comboPriceOverride: product.comboPriceOverride,
+        supplier: product.supplier,
         imageUrl: product.imageUrl,
         stockQuantity: product.stockQuantity ?? null, // Use local DB as source of truth
         manageStock: product.manageStock ?? false,
