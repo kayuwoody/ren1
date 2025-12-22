@@ -3,27 +3,27 @@ import { db } from '@/lib/db/init';
 import { handleApiError, validationError, notFoundError } from '@/lib/api/error-handler';
 
 /**
- * PATCH /api/admin/products/[id]/supplier
+ * PATCH /api/admin/products/[productId]/supplier
  * Update product supplier
  */
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { productId: string } }
 ) {
   try {
-    const { id } = params;
+    const { productId: id } = params;
     const body = await req.json();
     const { supplier } = body;
 
     // Validate supplier (allow null/empty to clear)
     if (supplier !== null && supplier !== undefined && typeof supplier !== 'string') {
-      return validationError('Supplier must be a string or null', '/api/admin/products/[id]/supplier');
+      return validationError('Supplier must be a string or null', '/api/admin/products/[productId]/supplier');
     }
 
     // Check if product exists
     const product = db.prepare('SELECT id, name FROM Product WHERE id = ?').get(id);
     if (!product) {
-      return notFoundError(`Product not found: ${id}`, '/api/admin/products/[id]/supplier');
+      return notFoundError(`Product not found: ${id}`, '/api/admin/products/[productId]/supplier');
     }
 
     // Update supplier
@@ -39,6 +39,6 @@ export async function PATCH(
       supplier: supplier || null,
     });
   } catch (error) {
-    return handleApiError(error, '/api/admin/products/[id]/supplier');
+    return handleApiError(error, '/api/admin/products/[productId]/supplier');
   }
 }
