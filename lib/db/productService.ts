@@ -169,6 +169,11 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
   const unitCost = existing?.unitCost ?? 0;
   const supplier = existing?.supplier ?? undefined; // Preserve supplier
 
+  // Debug logging for supplier sync
+  if (existing?.supplier) {
+    console.log(`🔄 Syncing ${wcProduct.name} - Preserving supplier: "${existing.supplier}"`);
+  }
+
   // Preserve local stock quantity if product exists (local DB is source of truth for stock)
   // Only sync stock from WooCommerce for new products to avoid race conditions
   const stockQuantity = existing
@@ -201,6 +206,13 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
 
   if (existing && (supplierCost > 0 || unitCost > 0)) {
     console.log(`   ✅ After sync - supplierCost=RM${result.supplierCost}, unitCost=RM${result.unitCost}, stock=${result.stockQuantity}`);
+  }
+
+  // Debug: Verify supplier was preserved
+  if (existing?.supplier && result.supplier !== existing.supplier) {
+    console.error(`❌ BUG: Supplier lost during sync! Before: "${existing.supplier}", After: "${result.supplier}"`);
+  } else if (existing?.supplier) {
+    console.log(`   ✅ Supplier preserved: "${result.supplier}"`);
   }
 
   return result;
