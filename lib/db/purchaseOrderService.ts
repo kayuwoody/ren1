@@ -422,6 +422,16 @@ export function deletePurchaseOrder(id: string): boolean {
  * Get suppliers from existing materials
  */
 export function getSuppliers(): string[] {
-  const results = db.prepare('SELECT DISTINCT supplier FROM Material WHERE supplier IS NOT NULL ORDER BY supplier').all() as Array<{ supplier: string }>;
-  return results.map(r => r.supplier);
+  // Get suppliers from both materials and products
+  const materialSuppliers = db.prepare('SELECT DISTINCT supplier FROM Material WHERE supplier IS NOT NULL').all() as Array<{ supplier: string }>;
+  const productSuppliers = db.prepare('SELECT DISTINCT supplier FROM Product WHERE supplier IS NOT NULL').all() as Array<{ supplier: string }>;
+
+  // Combine and deduplicate
+  const allSuppliers = new Set([
+    ...materialSuppliers.map(r => r.supplier),
+    ...productSuppliers.map(r => r.supplier)
+  ]);
+
+  // Return sorted array
+  return Array.from(allSuppliers).sort();
 }

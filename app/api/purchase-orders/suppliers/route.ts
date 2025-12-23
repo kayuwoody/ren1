@@ -5,7 +5,7 @@ import { handleApiError } from '@/lib/api/error-handler';
 /**
  * GET /api/purchase-orders/suppliers
  *
- * Get list of unique suppliers from materials
+ * Get list of unique suppliers from both materials and products
  */
 export async function GET() {
   try {
