@@ -213,6 +213,21 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Migration: Add supplier column to Product table if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const hasSupplier = tableInfo.some((col: any) => col.name === 'supplier');
+
+    if (tableInfo.length > 0 && !hasSupplier) {
+      console.log('🔄 Adding supplier column to Product table...');
+      db.exec(`ALTER TABLE Product ADD COLUMN supplier TEXT`);
+      console.log('✅ supplier column added');
+      console.log('📝 Note: Stores the supplier/vendor name for this product');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
   // Material Price History (audit trail for cost changes)
   db.exec(`
     CREATE TABLE IF NOT EXISTS MaterialPriceHistory (

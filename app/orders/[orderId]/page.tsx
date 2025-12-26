@@ -419,13 +419,15 @@ export default function OrderDetailPage() {
       <div className="pt-4 border-t space-y-3">
         {/* View Receipt Button */}
         {!isPending && (
-          <Link
-            href={`/orders/${orderId}/receipt`}
+          <a
+            href={`https://${process.env.NEXT_PUBLIC_RECEIPT_DOMAIN || 'coffee-oasis.com.my'}/receipts/order-${orderId}.html`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition"
           >
             <Receipt className="w-5 h-5" />
             View Receipt
-          </Link>
+          </a>
         )}
 
         {/* View All Orders Button */}

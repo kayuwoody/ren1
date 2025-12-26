@@ -13,6 +13,7 @@ export interface Product {
   stockQuantity: number;
   manageStock: boolean;
   comboPriceOverride?: number;
+  supplier?: string;
   imageUrl?: string;
   createdAt: string;
   updatedAt: string;
@@ -92,7 +93,7 @@ export function upsertProduct(
     const stmt = db.prepare(`
       UPDATE Product
       SET wcId = ?, name = ?, sku = ?, category = ?, basePrice = ?,
-          supplierCost = ?, unitCost = ?, stockQuantity = ?, manageStock = ?, imageUrl = ?, updatedAt = ?
+          supplierCost = ?, unitCost = ?, stockQuantity = ?, manageStock = ?, supplier = ?, imageUrl = ?, updatedAt = ?
       WHERE id = ?
     `);
 
@@ -106,6 +107,7 @@ export function upsertProduct(
       product.unitCost,
       product.stockQuantity,
       product.manageStock ? 1 : 0,
+      product.supplier || null,
       product.imageUrl || null,
       now,
       id
@@ -114,8 +116,8 @@ export function upsertProduct(
     // Insert new product
     const stmt = db.prepare(`
       INSERT INTO Product (id, wcId, name, sku, category, basePrice, supplierCost, unitCost,
-                          stockQuantity, manageStock, imageUrl, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          stockQuantity, manageStock, supplier, imageUrl, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -129,6 +131,7 @@ export function upsertProduct(
       product.unitCost,
       product.stockQuantity,
       product.manageStock ? 1 : 0,
+      product.supplier || null,
       product.imageUrl || null,
       now,
       now
@@ -164,6 +167,12 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
 
   const supplierCost = existing?.supplierCost ?? 0;
   const unitCost = existing?.unitCost ?? 0;
+  const supplier = existing?.supplier ?? undefined; // Preserve supplier
+
+  // Debug logging for supplier sync
+  if (existing?.supplier) {
+    console.log(`🔄 Syncing ${wcProduct.name} - Preserving supplier: "${existing.supplier}"`);
+  }
 
   // Preserve local stock quantity if product exists (local DB is source of truth for stock)
   // Only sync stock from WooCommerce for new products to avoid race conditions
@@ -191,11 +200,19 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     unitCost, // Preserve existing unitCost from recipes
     stockQuantity, // Preserve existing stock quantity (local DB is source of truth)
     manageStock: wcProduct.manage_stock ?? false, // Store whether WooCommerce tracks inventory
+    supplier, // Preserve existing supplier (local field)
     imageUrl: wcProduct.images?.[0]?.src,
   });
 
   if (existing && (supplierCost > 0 || unitCost > 0)) {
     console.log(`   ✅ After sync - supplierCost=RM${result.supplierCost}, unitCost=RM${result.unitCost}, stock=${result.stockQuantity}`);
+  }
+
+  // Debug: Verify supplier was preserved
+  if (existing?.supplier && result.supplier !== existing.supplier) {
+    console.error(`❌ BUG: Supplier lost during sync! Before: "${existing.supplier}", After: "${result.supplier}"`);
+  } else if (existing?.supplier) {
+    console.log(`   ✅ Supplier preserved: "${result.supplier}"`);
   }
 
   return result;

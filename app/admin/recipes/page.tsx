@@ -12,6 +12,7 @@ interface Product {
   supplierCost: number;
   unitCost: number;
   comboPriceOverride?: number;
+  supplier?: string;
   stockQuantity?: number | null;
   manageStock?: boolean;
 }
@@ -64,6 +65,8 @@ export default function RecipesPage() {
   const [newUnitCost, setNewUnitCost] = useState('');
   const [editingComboPrice, setEditingComboPrice] = useState(false);
   const [newComboPrice, setNewComboPrice] = useState('');
+  const [editingSupplier, setEditingSupplier] = useState(false);
+  const [newSupplier, setNewSupplier] = useState('');
   const [updatingStock, setUpdatingStock] = useState(false);
   const [syncingBlob, setSyncingBlob] = useState(false);
   const hasFetchedRef = useRef(false);
@@ -278,6 +281,45 @@ export default function RecipesPage() {
     } catch (error) {
       console.error('Failed to update combo price:', error);
       alert('Failed to update combo price. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateSupplier() {
+    if (!selectedProduct) return;
+
+    // Allow empty value to clear supplier
+    const supplier = newSupplier.trim() || null;
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/products/${selectedProduct.id}/supplier`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplier }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update supplier');
+      }
+
+      // Update local state
+      setSelectedProduct({ ...selectedProduct, supplier: supplier || undefined });
+      setProducts(products.map(p =>
+        p.id === selectedProduct.id ? { ...p, supplier: supplier || undefined } : p
+      ));
+
+      setEditingSupplier(false);
+      setNewSupplier('');
+      if (supplier) {
+        alert(`Supplier updated to "${supplier}"`);
+      } else {
+        alert('Supplier removed');
+      }
+    } catch (error) {
+      console.error('Failed to update supplier:', error);
+      alert('Failed to update supplier. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -564,6 +606,24 @@ export default function RecipesPage() {
                         }}
                         className="text-purple-600 hover:text-purple-800"
                         title="Edit combo price override"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Supplier</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-lg font-semibold text-purple-600">
+                        {selectedProduct.supplier || 'Not set'}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setNewSupplier(selectedProduct.supplier || '');
+                          setEditingSupplier(true);
+                        }}
+                        className="text-purple-600 hover:text-purple-800"
+                        title="Edit supplier"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -899,6 +959,63 @@ export default function RecipesPage() {
                 </button>
                 <button
                   onClick={updateComboPrice}
+                  disabled={saving}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Supplier Modal */}
+        {editingSupplier && selectedProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-xl font-semibold mb-4">Edit Supplier</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Set the supplier/vendor name for <strong>{selectedProduct.name}</strong>.
+                <br />
+                This helps organize purchase orders by supplier.
+              </p>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Supplier Name
+                </label>
+                <input
+                  type="text"
+                  value={newSupplier}
+                  onChange={(e) => setNewSupplier(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="e.g., ABC Bakery, XYZ Supplier"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Current: {selectedProduct.supplier || 'Not set'}
+                </p>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-purple-800">
+                  <strong>Tip:</strong> Use consistent supplier names to easily filter items when creating purchase orders.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setEditingSupplier(false);
+                    setNewSupplier('');
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateSupplier}
                   disabled={saving}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
                 >
