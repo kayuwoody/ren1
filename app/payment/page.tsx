@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
 import CashPayment from "@/components/CashPayment";
+import FiuuPayment from "@/components/FiuuPayment";
 
 export default function PaymentPage() {
   const router = useRouter();
@@ -11,7 +12,7 @@ export default function PaymentPage() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_qr" | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_qr" | "fiuu" | null>(null);
 
   // Calculate total (using finalPrice which includes discounts)
   const retailTotal = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
@@ -33,6 +34,11 @@ export default function PaymentPage() {
       }).catch(err => console.error('Failed to set pending order:', err));
     }
   }, [cartItems, order]); // Re-run when cart or order changes
+
+  // Handle Fiuu payment selection (no WooCommerce order needed initially)
+  const handleFiuuPayment = () => {
+    setPaymentMethod("fiuu");
+  };
 
   // Create order when payment method is selected
   const handlePaymentMethodSelect = async (method: "cash" | "bank_qr") => {
@@ -184,6 +190,29 @@ export default function PaymentPage() {
     );
   }
 
+  // Show Fiuu payment component
+  if (paymentMethod === "fiuu") {
+    // Generate a unique order ID for Fiuu (using timestamp + random)
+    const fiuuOrderID = `POS${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <FiuuPayment
+          orderID={fiuuOrderID}
+          amount={finalTotal.toFixed(2)}
+          billName="Walk-in Customer"
+          billEmail="pos@coffee-oasis.com.my"
+          billDesc={`POS Order - ${cartItems.length} item(s)`}
+          onCancel={handleCancel}
+          onError={(err) => {
+            setError(err);
+            setPaymentMethod(null);
+          }}
+        />
+      </div>
+    );
+  }
+
   // Show CashPayment component after order created
   if (order && paymentMethod) {
     return (
@@ -254,6 +283,27 @@ export default function PaymentPage() {
               <div className="text-left">
                 <p className="font-semibold">Bank QR Code</p>
                 <p className="text-sm text-blue-100">Customer scans your QR</p>
+              </div>
+            </span>
+            <span className="text-2xl">→</span>
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-2">
+            <div className="flex-1 border-t border-gray-300"></div>
+            <span className="text-sm text-gray-500">or pay online</span>
+            <div className="flex-1 border-t border-gray-300"></div>
+          </div>
+
+          <button
+            onClick={handleFiuuPayment}
+            className="w-full p-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all flex items-center justify-between shadow-md"
+          >
+            <span className="flex items-center gap-3">
+              <span className="text-2xl">💳</span>
+              <div className="text-left">
+                <p className="font-semibold">Card / E-Wallet / FPX</p>
+                <p className="text-sm text-purple-100">Customer pays on their device</p>
               </div>
             </span>
             <span className="text-2xl">→</span>
