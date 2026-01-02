@@ -101,7 +101,7 @@ export default function RecipesPage() {
   async function fetchProducts() {
     try {
       setSyncing(true);
-      const res = await fetch('/api/admin/products');
+      const res = await fetch('/api/admin/products', { cache: 'no-store' });
       const data = await res.json();
       console.log('📦 Fetched products:', data.products?.length || 0);
       console.log('📦 Sample product with stock:', data.products?.find((p: any) => p.manageStock));
@@ -116,7 +116,7 @@ export default function RecipesPage() {
 
   async function fetchMaterials() {
     try {
-      const res = await fetch('/api/admin/materials');
+      const res = await fetch('/api/admin/materials', { cache: 'no-store' });
       const data = await res.json();
       setMaterials(data.materials || []);
     } catch (error) {
