@@ -4,6 +4,8 @@ import { syncProductFromWooCommerce, getAllProducts } from '@/lib/db/productServ
 import { handleApiError } from '@/lib/api/error-handler';
 import { uploadCombosToVercelBlob, isVercelBlobConfigured } from '@/lib/vercelBlobService';
 
+export const dynamic = 'force-dynamic'; // Ensures fresh WooCommerce data on every request
+
 /**
  * GET /api/admin/products
  * Fetch all products from WooCommerce and sync to local database
