@@ -309,6 +309,9 @@ export async function recordProductSale(
         // (Only the root product inventory is handled by WooCommerce when the order is created)
         await deductWooProductStock(linkedProduct.wcId, quantityConsumed, linkedProduct.name);
 
+        // Log stock comparison for linked product
+        await logStockComparison(linkedProduct.id, linkedProduct.wcId, linkedProduct.name);
+
         // Then recursively process the linked product's materials
         // Pass bundleSelection through so nested XOR choices are respected
         const linkedConsumptions = await recordProductSale(
@@ -332,6 +335,12 @@ export async function recordProductSale(
   if (depth === 0) {
     deductLocalProductStock(productId, quantitySold, productName);
     console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
+
+    // Log stock comparison for root product (WC was auto-deducted when order was created)
+    if (product.wcId) {
+      console.log(`\n📊 Stock Comparison After Consumption:`);
+      await logStockComparison(productId, product.wcId, productName);
+    }
   }
 
   return consumptions;
@@ -364,6 +373,8 @@ function deductMaterialStock(materialId: string, quantity: number): void {
 
 /**
  * Deduct product from local DB stock
+ * NOTE: Always updates local stock unconditionally (like PO receiving does)
+ * The WC sync in deductWooProductStock will check WC's manage_stock independently
  */
 function deductLocalProductStock(productId: string, quantity: number, productName: string): void {
   const product = getProduct(productId);
@@ -372,19 +383,17 @@ function deductLocalProductStock(productId: string, quantity: number, productNam
     return;
   }
 
-  // Only deduct if product manages stock
-  if (!product.manageStock) {
-    console.log(`   ℹ️  Product "${productName}" does not manage stock - skipping local DB deduction`);
-    return;
-  }
-
   const currentStock = product.stockQuantity || 0;
   const newStock = currentStock - quantity;
 
   console.log(`   📦 Local DB Inventory: ${productName} (${currentStock} → ${newStock})`);
 
-  // Update local database stock
+  // Update local database stock (always update, matching PO receiving behavior)
   db.prepare('UPDATE Product SET stockQuantity = ? WHERE id = ?').run(newStock, productId);
+
+  // Verify the update
+  const verified = db.prepare('SELECT stockQuantity FROM Product WHERE id = ?').get(productId) as { stockQuantity: number } | undefined;
+  console.log(`   ✅ Local DB verified: ${productName} stock = ${verified?.stockQuantity}`);
 
   // Log warnings
   if (newStock < 0) {
@@ -426,6 +435,33 @@ async function deductWooProductStock(wcProductId: number, quantity: number, prod
   } catch (error: any) {
     console.error(`   ❌ Failed to update WooCommerce stock for ${productName}:`, error.message);
     // Don't fail the whole operation if WooCommerce update fails
+  }
+}
+
+/**
+ * Compare and log local DB vs WooCommerce stock levels for verification
+ */
+async function logStockComparison(productId: string, wcProductId: number, productName: string): Promise<void> {
+  try {
+    // Get local stock
+    const localProduct = getProduct(productId);
+    const localStock = localProduct?.stockQuantity ?? 'N/A';
+
+    // Get WooCommerce stock
+    const response = await wcApi.get(`products/${wcProductId}`);
+    const wcProduct = (response as any).data;
+    const wcStock = wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 'not managed';
+
+    // Log comparison
+    const match = localStock === wcStock;
+    const icon = match ? '✅' : '⚠️';
+    console.log(`   ${icon} Stock Comparison: "${productName}" - Local: ${localStock}, WC: ${wcStock}${match ? '' : ' (MISMATCH!)'}`);
+
+    if (!match && typeof localStock === 'number' && typeof wcStock === 'number') {
+      console.warn(`   🔍 Stock drift detected for "${productName}": Local=${localStock}, WC=${wcStock}, Diff=${localStock - wcStock}`);
+    }
+  } catch (error: any) {
+    console.error(`   ❌ Failed to compare stock for ${productName}:`, error.message);
   }
 }
 
