@@ -10,6 +10,8 @@ interface Material {
   purchaseUnit: string;
   purchaseCost: number;
   supplier?: string;
+  stockQuantity?: number;
+  lowStockThreshold?: number;
 }
 
 interface Product {
@@ -18,6 +20,7 @@ interface Product {
   sku: string;
   supplierCost: number;
   supplier?: string;
+  stockQuantity?: number;
 }
 
 interface POItem {
@@ -60,6 +63,14 @@ export default function CreatePurchaseOrderPage() {
   const [newItemNotes, setNewItemNotes] = useState("1 ctn of 1");
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Helper function to get stock status and color
+  const getStockStatus = (stock: number | undefined, threshold: number | undefined) => {
+    if (stock === undefined || stock === null) return { color: "text-gray-500", label: "N/A" };
+    if (stock <= 0) return { color: "text-red-600 font-semibold", label: `${stock} (OUT)` };
+    if (threshold !== undefined && stock <= threshold) return { color: "text-amber-600 font-semibold", label: `${stock} (LOW)` };
+    return { color: "text-green-600", label: `${stock}` };
+  };
 
   useEffect(() => {
     loadData();
@@ -383,11 +394,16 @@ export default function CreatePurchaseOrderPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 >
                   <option value="">Select material...</option>
-                  {filteredMaterials.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.supplier || "No supplier"})
-                    </option>
-                  ))}
+                  {filteredMaterials
+                    .sort((a, b) => (a.stockQuantity ?? 999) - (b.stockQuantity ?? 999))
+                    .map((m) => {
+                      const stockStatus = getStockStatus(m.stockQuantity, m.lowStockThreshold);
+                      return (
+                        <option key={m.id} value={m.id}>
+                          {m.name} • Stock: {stockStatus.label} • {m.supplier || "No supplier"}
+                        </option>
+                      );
+                    })}
                 </select>
               ) : (
                 <select
@@ -396,11 +412,16 @@ export default function CreatePurchaseOrderPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 >
                   <option value="">Select product...</option>
-                  {filteredProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.supplier || "No supplier"}) - {p.sku}
-                    </option>
-                  ))}
+                  {filteredProducts
+                    .sort((a, b) => (a.stockQuantity ?? 999) - (b.stockQuantity ?? 999))
+                    .map((p) => {
+                      const stockStatus = getStockStatus(p.stockQuantity, undefined);
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {p.name} • Stock: {stockStatus.label} • {p.sku} • {p.supplier || "No supplier"}
+                        </option>
+                      );
+                    })}
                 </select>
               )}
             </div>

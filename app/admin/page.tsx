@@ -297,14 +297,14 @@ export default function AdminDashboard() {
               </Link>
 
               <Link
-                href="/admin/purchase-orders/create"
+                href="/admin/purchase-orders"
                 className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <Truck className="w-6 h-6 text-blue-600" />
                   <h2 className="text-xl font-semibold">Purchase Orders</h2>
                 </div>
-                <p className="text-gray-600">Create supplier orders and manage inventory</p>
+                <p className="text-gray-600">View and manage supplier orders</p>
               </Link>
             </div>
           </div>
