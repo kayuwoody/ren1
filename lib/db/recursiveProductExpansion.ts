@@ -380,17 +380,26 @@ export function getSelectedComponents(
     const linkedHasXORGroups = linkedRecipe.some(r => r.selectionGroup);
     const linkedHasProducts = linkedRecipe.some(r => r.itemType === 'product');
 
+    // NEW: Check if it has VISIBLE sub-products (not hidden/private like packaging)
+    // If all linked products are hidden/private, treat this as a leaf product
+    const linkedHasVisibleProducts = linkedRecipe.some(r => {
+      if (r.itemType !== 'product' || !r.linkedProductId) return false;
+      const subProduct = getProduct(r.linkedProductId);
+      return subProduct && subProduct.category !== 'hidden' && subProduct.category !== 'private';
+    });
+
     console.log(`  🔍 Checking linked product "${linkedProd.name}" (depth=${depth}):`, {
       hasXORGroups: linkedHasXORGroups,
       hasProducts: linkedHasProducts,
+      hasVisibleProducts: linkedHasVisibleProducts,
       recipeItems: linkedRecipe.map(r => `${r.itemType}:${r.linkedProductName || r.materialName}`)
     });
 
-    // Only recurse if the product has OTHER products BUT NO XOR groups
+    // Only recurse if the product has VISIBLE products (not hidden/private) AND NO XOR groups
     // If it has XOR groups, it's a complete product with internal choices (like "Hot Americano") - don't expand
-    // If it only has materials, it's a leaf product - don't expand
-    if (linkedHasProducts && !linkedHasXORGroups) {
-      console.log(`    ↪️  Recursing into "${linkedProd.name}" (has nested products, no XOR)`);
+    // If it only has materials or hidden products, it's a leaf product - don't expand
+    if (linkedHasVisibleProducts && !linkedHasXORGroups) {
+      console.log(`    ↪️  Recursing into "${linkedProd.name}" (has visible nested products, no XOR)`);
       // This product is a bundle of other products - recurse to get them
       const nestedComponents = getSelectedComponents(
         item.linkedProductId,
