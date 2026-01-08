@@ -361,6 +361,20 @@ export function getSelectedComponents(
       if (selectedId !== item.linkedProductId) {
         return; // This item wasn't selected in the XOR group
       }
+
+      // XOR item was selected - add it directly without expanding into sub-components
+      // This matches how non-XOR mandatory items are displayed
+      const linkedProd = getProduct(item.linkedProductId!);
+      if (linkedProd && linkedProd.category !== 'hidden' && linkedProd.category !== 'private') {
+        console.log(`  ✅ Adding XOR-selected item directly: "${linkedProd.name}"`);
+        components.push({
+          productId: linkedProd.id,
+          productName: linkedProd.name,
+          quantity: item.quantity * quantity,
+          category: linkedProd.category || 'uncategorized',
+        });
+      }
+      return; // Don't process further - XOR items are added directly
     }
 
     // Only process linked products (not materials)
