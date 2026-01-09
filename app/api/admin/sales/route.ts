@@ -42,6 +42,16 @@ export async function GET(req: Request) {
           startDate.setDate(startDate.getDate() - 90);
           startDate.setUTCHours(0, 0, 0, 0);
           break;
+        case 'mtd':
+          // Month to date - start of current month
+          startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+          startDate.setUTCHours(0, 0, 0, 0);
+          break;
+        case 'ytd':
+          // Year to date - start of current year
+          startDate = new Date(endDate.getFullYear(), 0, 1);
+          startDate.setUTCHours(0, 0, 0, 0);
+          break;
         case 'all':
           startDate = new Date('2020-01-01');
           break;

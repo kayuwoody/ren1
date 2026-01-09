@@ -153,6 +153,8 @@ export default function SalesReportPage() {
                 <option value="7days">Last 7 Days</option>
                 <option value="30days">Last 30 Days</option>
                 <option value="90days">Last 90 Days</option>
+                <option value="mtd">Month to Date</option>
+                <option value="ytd">Year to Date</option>
                 <option value="all">All Time</option>
                 <option value="custom">Custom Range</option>
               </select>
