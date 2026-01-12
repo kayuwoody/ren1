@@ -361,6 +361,20 @@ export function getSelectedComponents(
       if (selectedId !== item.linkedProductId) {
         return; // This item wasn't selected in the XOR group
       }
+
+      // XOR item was selected - add it directly without expanding into sub-components
+      // This matches how non-XOR mandatory items are displayed
+      const linkedProd = getProduct(item.linkedProductId!);
+      if (linkedProd && linkedProd.category !== 'hidden' && linkedProd.category !== 'private') {
+        console.log(`  ✅ Adding XOR-selected item directly: "${linkedProd.name}"`);
+        components.push({
+          productId: linkedProd.id,
+          productName: linkedProd.name,
+          quantity: item.quantity * quantity,
+          category: linkedProd.category || 'uncategorized',
+        });
+      }
+      return; // Don't process further - XOR items are added directly
     }
 
     // Only process linked products (not materials)
@@ -380,17 +394,26 @@ export function getSelectedComponents(
     const linkedHasXORGroups = linkedRecipe.some(r => r.selectionGroup);
     const linkedHasProducts = linkedRecipe.some(r => r.itemType === 'product');
 
+    // NEW: Check if it has VISIBLE sub-products (not hidden/private like packaging)
+    // If all linked products are hidden/private, treat this as a leaf product
+    const linkedHasVisibleProducts = linkedRecipe.some(r => {
+      if (r.itemType !== 'product' || !r.linkedProductId) return false;
+      const subProduct = getProduct(r.linkedProductId);
+      return subProduct && subProduct.category !== 'hidden' && subProduct.category !== 'private';
+    });
+
     console.log(`  🔍 Checking linked product "${linkedProd.name}" (depth=${depth}):`, {
       hasXORGroups: linkedHasXORGroups,
       hasProducts: linkedHasProducts,
+      hasVisibleProducts: linkedHasVisibleProducts,
       recipeItems: linkedRecipe.map(r => `${r.itemType}:${r.linkedProductName || r.materialName}`)
     });
 
-    // Only recurse if the product has OTHER products BUT NO XOR groups
+    // Only recurse if the product has VISIBLE products (not hidden/private) AND NO XOR groups
     // If it has XOR groups, it's a complete product with internal choices (like "Hot Americano") - don't expand
-    // If it only has materials, it's a leaf product - don't expand
-    if (linkedHasProducts && !linkedHasXORGroups) {
-      console.log(`    ↪️  Recursing into "${linkedProd.name}" (has nested products, no XOR)`);
+    // If it only has materials or hidden products, it's a leaf product - don't expand
+    if (linkedHasVisibleProducts && !linkedHasXORGroups) {
+      console.log(`    ↪️  Recursing into "${linkedProd.name}" (has visible nested products, no XOR)`);
       // This product is a bundle of other products - recurse to get them
       const nestedComponents = getSelectedComponents(
         item.linkedProductId,

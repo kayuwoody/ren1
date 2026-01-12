@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
-import { Percent, DollarSign, Edit2, X, Tag, Shield, ArrowLeft } from "lucide-react";
+import { Percent, DollarSign, Edit2, X, Tag, Shield, ArrowLeft, Plus, Minus } from "lucide-react";
 import Link from "next/link";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cartItems, removeFromCart, updateItemDiscount } = useCart();
+  const { cartItems, removeFromCart, updateQuantity, updateItemDiscount } = useCart();
   const [error, setError] = useState("");
   const [isStaffMode, setIsStaffMode] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
@@ -176,7 +176,23 @@ export default function CheckoutPage() {
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
                       <p className="font-semibold text-lg">{item.name}</p>
-                      <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <button
+                          onClick={() => updateQuantity(index, item.quantity - 1)}
+                          className="w-7 h-7 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full transition"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-medium w-8 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => updateQuantity(index, item.quantity + 1)}
+                          className="w-7 h-7 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full transition"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
 
                       {/* Show expanded components (excluding hidden/private) */}
                       {visibleComponents.length > 0 && (

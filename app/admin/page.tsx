@@ -297,14 +297,14 @@ export default function AdminDashboard() {
               </Link>
 
               <Link
-                href="/admin/purchase-orders/create"
+                href="/admin/purchase-orders"
                 className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <Truck className="w-6 h-6 text-blue-600" />
                   <h2 className="text-xl font-semibold">Purchase Orders</h2>
                 </div>
-                <p className="text-gray-600">Create supplier orders and manage inventory</p>
+                <p className="text-gray-600">View and manage supplier orders</p>
               </Link>
             </div>
           </div>
@@ -333,6 +333,17 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-semibold">Sales Reports</h2>
                 </div>
                 <p className="text-blue-50">View revenue, analytics, and performance</p>
+              </Link>
+
+              <Link
+                href="/admin/sales/products"
+                className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Package className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Products Sold</h2>
+                </div>
+                <p className="text-purple-50">Product performance, margins, and trends</p>
               </Link>
             </div>
           </div>

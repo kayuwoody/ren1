@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Minus, Trash2, ArrowLeft } from "lucide-react";
 
 interface Material {
   id: string;
@@ -10,6 +10,8 @@ interface Material {
   purchaseUnit: string;
   purchaseCost: number;
   supplier?: string;
+  stockQuantity?: number;
+  lowStockThreshold?: number;
 }
 
 interface Product {
@@ -18,6 +20,7 @@ interface Product {
   sku: string;
   supplierCost: number;
   supplier?: string;
+  stockQuantity?: number;
 }
 
 interface POItem {
@@ -60,6 +63,14 @@ export default function CreatePurchaseOrderPage() {
   const [newItemNotes, setNewItemNotes] = useState("1 ctn of 1");
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Helper function to get stock status and color
+  const getStockStatus = (stock: number | undefined, threshold: number | undefined) => {
+    if (stock === undefined || stock === null) return { color: "text-gray-500", label: "N/A" };
+    if (stock <= 0) return { color: "text-red-600 font-semibold", label: `${stock} (OUT)` };
+    if (threshold !== undefined && stock <= threshold) return { color: "text-amber-600 font-semibold", label: `${stock} (LOW)` };
+    return { color: "text-green-600", label: `${stock}` };
+  };
 
   useEffect(() => {
     loadData();
@@ -148,6 +159,16 @@ export default function CreatePurchaseOrderPage() {
 
   const handleRemoveItem = (tempId: string) => {
     setItems(items.filter((item) => item.tempId !== tempId));
+  };
+
+  const handleUpdateItemQuantity = (tempId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      handleRemoveItem(tempId);
+      return;
+    }
+    setItems(items.map((item) =>
+      item.tempId === tempId ? { ...item, quantity: newQuantity } : item
+    ));
   };
 
   const handleMaterialSelect = (materialId: string) => {
@@ -383,11 +404,16 @@ export default function CreatePurchaseOrderPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 >
                   <option value="">Select material...</option>
-                  {filteredMaterials.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.supplier || "No supplier"})
-                    </option>
-                  ))}
+                  {filteredMaterials
+                    .sort((a, b) => (a.stockQuantity ?? 999) - (b.stockQuantity ?? 999))
+                    .map((m) => {
+                      const stockStatus = getStockStatus(m.stockQuantity, m.lowStockThreshold);
+                      return (
+                        <option key={m.id} value={m.id}>
+                          {m.name} • Stock: {stockStatus.label} • {m.supplier || "No supplier"}
+                        </option>
+                      );
+                    })}
                 </select>
               ) : (
                 <select
@@ -396,11 +422,16 @@ export default function CreatePurchaseOrderPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 >
                   <option value="">Select product...</option>
-                  {filteredProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.supplier || "No supplier"}) - {p.sku}
-                    </option>
-                  ))}
+                  {filteredProducts
+                    .sort((a, b) => (a.stockQuantity ?? 999) - (b.stockQuantity ?? 999))
+                    .map((p) => {
+                      const stockStatus = getStockStatus(p.stockQuantity, undefined);
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {p.name} • Stock: {stockStatus.label} • {p.sku} • {p.supplier || "No supplier"}
+                        </option>
+                      );
+                    })}
                 </select>
               )}
             </div>
@@ -490,10 +521,29 @@ export default function CreatePurchaseOrderPage() {
                         ? item.materialName
                         : item.productName}
                     </p>
-                    <p className="text-sm text-gray-600">
-                      {item.quantity} {item.unit} @ RM {item.unitCost.toFixed(2)} = RM{" "}
-                      {(item.quantity * item.unitCost).toFixed(2)}
-                    </p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleUpdateItemQuantity(item.tempId, item.quantity - 1)}
+                          className="w-7 h-7 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full transition"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-medium w-12 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => handleUpdateItemQuantity(item.tempId, item.quantity + 1)}
+                          className="w-7 h-7 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full transition"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <span className="text-sm text-gray-600">
+                        {item.unit} @ RM {item.unitCost.toFixed(2)} = RM{" "}
+                        {(item.quantity * item.unitCost).toFixed(2)}
+                      </span>
+                    </div>
                     {item.notes && (
                       <p className="text-xs text-gray-500 mt-1">{item.notes}</p>
                     )}
