@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Printer, CheckCircle, XCircle, Bluetooth, Clock, AlertCircle, FileText } from 'lucide-react';
+import { Printer, CheckCircle, XCircle, Bluetooth, Clock, AlertCircle, FileText, Tag } from 'lucide-react';
 import { printerManager, ThermalPrinter } from '@/lib/printerService';
+import { labelPrinter } from '@/lib/labelPrinterService';
 
 interface PrintLog {
   id: string;
-  type: 'receipt' | 'kitchen';
+  type: 'receipt' | 'kitchen' | 'label';
   orderId: string;
   timestamp: string;
   status: 'success' | 'failed';
@@ -16,11 +17,13 @@ interface PrintLog {
 export default function PrintersAdminPage() {
   const [receiptPrinter, setReceiptPrinter] = useState<any>(null);
   const [kitchenPrinter, setKitchenPrinter] = useState<any>(null);
+  const [kitchenLabelPrinter, setKitchenLabelPrinter] = useState<any>(null);
   const [bluetoothSupported, setBluetoothSupported] = useState(true);
   const [testResult, setTestResult] = useState<string>('');
   const [printLogs, setPrintLogs] = useState<PrintLog[]>([]);
   const [lastReceiptPrint, setLastReceiptPrint] = useState<string>('');
   const [lastKitchenPrint, setLastKitchenPrint] = useState<string>('');
+  const [lastLabelPrint, setLastLabelPrint] = useState<string>('');
 
   useEffect(() => {
     setBluetoothSupported(printerManager.isBluetoothSupported());
@@ -38,6 +41,14 @@ export default function PrintersAdminPage() {
     // Load last print times
     setLastReceiptPrint(localStorage.getItem('last_receipt_print') || '');
     setLastKitchenPrint(localStorage.getItem('last_kitchen_print') || '');
+    setLastLabelPrint(localStorage.getItem('last_label_print') || '');
+
+    // Check if label printer was previously paired
+    const savedLabelPrinter = localStorage.getItem('label_printer_name');
+    if (savedLabelPrinter) {
+      // We can't auto-reconnect label printer without user gesture, but show saved info
+      console.log('Previously paired label printer:', savedLabelPrinter);
+    }
 
     // Auto-reconnect to previously paired printers
     const reconnect = async () => {
@@ -74,6 +85,50 @@ export default function PrintersAdminPage() {
     } else if (log.type === 'kitchen') {
       setLastKitchenPrint(time);
       localStorage.setItem('last_kitchen_print', time);
+    } else if (log.type === 'label') {
+      setLastLabelPrint(time);
+      localStorage.setItem('last_label_print', time);
+    }
+  };
+
+  const handlePairLabelPrinter = async () => {
+    try {
+      const device = await labelPrinter.pair();
+      setKitchenLabelPrinter(device);
+      localStorage.setItem('label_printer_id', device.id);
+      localStorage.setItem('label_printer_name', device.name || 'Label Printer');
+      alert(`Label printer paired: ${device.name}`);
+    } catch (err: any) {
+      console.error('Label printer error:', err);
+      alert(`Failed to pair label printer: ${err.message}`);
+    }
+  };
+
+  const handleTestLabelPrint = async () => {
+    setTestResult('Printing test label...');
+    try {
+      if (!kitchenLabelPrinter) {
+        throw new Error('Label printer not paired. Please pair first.');
+      }
+
+      await labelPrinter.connect(kitchenLabelPrinter);
+      await labelPrinter.testPrint();
+      setTestResult('Test label printed!');
+
+      addPrintLog({
+        type: 'label',
+        orderId: 'TEST',
+        status: 'success',
+      });
+    } catch (err: any) {
+      setTestResult(`Failed: ${err.message}`);
+
+      addPrintLog({
+        type: 'label',
+        orderId: 'TEST',
+        status: 'failed',
+        error: err.message,
+      });
     }
   };
 
@@ -329,6 +384,76 @@ export default function PrintersAdminPage() {
         </div>
       </div>
 
+      {/* Kitchen Label Printer (CT221B) */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Tag className="w-6 h-6 text-orange-600" />
+          <h2 className="text-xl font-semibold">Kitchen Label Printer</h2>
+          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">CT221B / TSPL</span>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-gray-600">Status:</p>
+              <p className="font-semibold">
+                {kitchenLabelPrinter ? (
+                  <span className="text-green-600 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    {kitchenLabelPrinter.name || 'Paired'}
+                  </span>
+                ) : (
+                  <span className="text-gray-400 flex items-center gap-2">
+                    <XCircle className="w-4 h-4" />
+                    Not paired
+                  </span>
+                )}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-600 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                Last Print:
+              </p>
+              <p className="text-sm font-medium text-gray-800">
+                {formatTimestamp(lastLabelPrint)}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-orange-50 rounded-lg p-3 text-sm">
+            <p className="font-medium text-orange-900">Label Size: 15mm x 30mm</p>
+            <p className="text-orange-700 text-xs mt-1">One label per item - stick on cups/containers</p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              <button
+                onClick={handlePairLabelPrinter}
+                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition flex items-center gap-2"
+              >
+                <Bluetooth className="w-4 h-4" />
+                {kitchenLabelPrinter ? 'Re-pair' : 'Pair Printer'}
+              </button>
+
+              {kitchenLabelPrinter && (
+                <button
+                  onClick={handleTestLabelPrint}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+                >
+                  Test Print
+                </button>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            CT221B thermal label printer for individual item labels. Prints order # and item name on small labels (15x30mm) using TSPL commands.
+          </p>
+        </div>
+      </div>
+
       {/* Test Results */}
       {testResult && (
         <div className={`rounded-lg p-4 ${
@@ -358,14 +483,18 @@ export default function PrintersAdminPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Printer
-                      className={`w-4 h-4 ${
-                        log.type === 'receipt' ? 'text-blue-600' : 'text-purple-600'
-                      }`}
-                    />
+                    {log.type === 'label' ? (
+                      <Tag className="w-4 h-4 text-orange-600" />
+                    ) : (
+                      <Printer
+                        className={`w-4 h-4 ${
+                          log.type === 'receipt' ? 'text-blue-600' : 'text-purple-600'
+                        }`}
+                      />
+                    )}
                     <div>
                       <p className="text-sm font-medium">
-                        {log.type === 'receipt' ? 'Receipt' : 'Kitchen'} -{' '}
+                        {log.type === 'receipt' ? 'Receipt' : log.type === 'label' ? 'Label' : 'Kitchen'} -{' '}
                         Order #{log.orderId}
                       </p>
                       {log.error && (
