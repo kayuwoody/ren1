@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { labelPrinter } from "@/lib/labelPrinterService";
 
 interface OrderItem {
   id: number;
@@ -33,6 +34,11 @@ export default function KitchenDisplayPage() {
   // Track which items are being worked on (kitchen staff can click to mark)
   const [itemsInProgress, setItemsInProgress] = useState<Set<string>>(new Set());
 
+  // Label printing state
+  const [labelsPrinted, setLabelsPrinted] = useState<Set<number>>(new Set());
+  const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
+  const [labelPrinterConnected, setLabelPrinterConnected] = useState(false);
+
   // Track previous order IDs to detect new orders
   const previousOrderIds = useRef<Set<number>>(new Set());
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -57,6 +63,77 @@ export default function KitchenDisplayPage() {
       JSON.stringify(Array.from(itemsInProgress))
     );
   }, [itemsInProgress]);
+
+  // Load printed labels from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('kitchen_labels_printed');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setLabelsPrinted(new Set(parsed));
+      } catch (err) {
+        console.error('Failed to load printed labels:', err);
+      }
+    }
+  }, []);
+
+  // Save printed labels to localStorage
+  useEffect(() => {
+    localStorage.setItem(
+      'kitchen_labels_printed',
+      JSON.stringify(Array.from(labelsPrinted))
+    );
+  }, [labelsPrinted]);
+
+  // Connect to label printer (requires user gesture first time)
+  const connectLabelPrinter = async () => {
+    try {
+      const device = await labelPrinter.pair();
+      await labelPrinter.connect(device);
+      setLabelPrinterConnected(true);
+      console.log('🏷️ Label printer connected');
+      return true;
+    } catch (err: any) {
+      console.error('Label printer connection failed:', err);
+      alert(`Failed to connect label printer: ${err.message}`);
+      return false;
+    }
+  };
+
+  // Print labels for an order
+  const printLabelsForOrder = async (order: Order) => {
+    setPrintingOrderId(order.id);
+
+    try {
+      // Try to connect if not connected
+      if (!labelPrinter.isConnected()) {
+        const connected = await connectLabelPrinter();
+        if (!connected) {
+          setPrintingOrderId(null);
+          return;
+        }
+      }
+
+      // Print a label for each item (quantity times)
+      for (const item of order.line_items) {
+        for (let i = 0; i < item.quantity; i++) {
+          await labelPrinter.printKitchenLabel(order.number, item.name, 1);
+          // Small delay between labels
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+
+      // Mark order as printed
+      setLabelsPrinted(prev => new Set([...prev, order.id]));
+      console.log(`🏷️ Printed labels for order #${order.number}`);
+    } catch (err: any) {
+      console.error('Label printing failed:', err);
+      alert(`Failed to print labels: ${err.message}`);
+      setLabelPrinterConnected(false);
+    } finally {
+      setPrintingOrderId(null);
+    }
+  };
 
   // Toggle item in progress state
   const toggleItemInProgress = (orderId: number, itemId: number) => {
@@ -561,6 +638,29 @@ export default function KitchenDisplayPage() {
                       RM {parseFloat(order.total).toFixed(2)}
                     </span>
                   </div>
+                </div>
+
+                {/* Print Labels Button */}
+                <div className="mb-3">
+                  <button
+                    onClick={() => printLabelsForOrder(order)}
+                    disabled={printingOrderId === order.id}
+                    className={`w-full py-2 rounded-lg font-bold text-sm transition-all ${
+                      labelsPrinted.has(order.id)
+                        ? "bg-gray-200 text-gray-600 hover:bg-orange-100 hover:text-orange-700"
+                        : printingOrderId === order.id
+                        ? "bg-orange-300 text-orange-800 cursor-not-allowed"
+                        : "bg-orange-500 text-white hover:bg-orange-400 active:scale-95"
+                    }`}
+                  >
+                    {printingOrderId === order.id ? (
+                      "🏷️ Printing..."
+                    ) : labelsPrinted.has(order.id) ? (
+                      "🏷️ Reprint Labels"
+                    ) : (
+                      "🏷️ Print Labels"
+                    )}
+                  </button>
                 </div>
 
                 {/* Mark Ready Buttons */}
