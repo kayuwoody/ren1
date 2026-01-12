@@ -6,6 +6,7 @@ import { useCart } from '@/context/cartContext';
 import {
   ShoppingCart,
   Plus,
+  Minus,
   Trash2,
   Receipt,
   ArrowLeft,
@@ -34,7 +35,7 @@ import HoldOrderManager from '@/components/HoldOrderManager';
 
 export default function POSPage() {
   const router = useRouter();
-  const { cartItems, clearCart, updateItemDiscount, removeFromCart, loadCart } = useCart();
+  const { cartItems, clearCart, updateItemDiscount, removeFromCart, updateQuantity, loadCart } = useCart();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
     isOpen: boolean;
@@ -270,9 +271,23 @@ export default function POSPage() {
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
-                            <p className="text-sm text-gray-500">
-                              Quantity: {item.quantity}
-                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <button
+                                onClick={() => updateQuantity(index, item.quantity - 1)}
+                                className="w-7 h-7 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full transition"
+                                aria-label="Decrease quantity"
+                              >
+                                <Minus className="w-4 h-4" />
+                              </button>
+                              <span className="text-sm font-medium w-8 text-center">{item.quantity}</span>
+                              <button
+                                onClick={() => updateQuantity(index, item.quantity + 1)}
+                                className="w-7 h-7 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full transition"
+                                aria-label="Increase quantity"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </div>
 
                             {/* Show expanded components for bundles */}
                             {expandedComponents.length > 0 && (
