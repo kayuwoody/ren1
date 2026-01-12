@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Minus, Trash2, ArrowLeft } from "lucide-react";
 
 interface Material {
   id: string;
@@ -159,6 +159,16 @@ export default function CreatePurchaseOrderPage() {
 
   const handleRemoveItem = (tempId: string) => {
     setItems(items.filter((item) => item.tempId !== tempId));
+  };
+
+  const handleUpdateItemQuantity = (tempId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      handleRemoveItem(tempId);
+      return;
+    }
+    setItems(items.map((item) =>
+      item.tempId === tempId ? { ...item, quantity: newQuantity } : item
+    ));
   };
 
   const handleMaterialSelect = (materialId: string) => {
@@ -511,10 +521,29 @@ export default function CreatePurchaseOrderPage() {
                         ? item.materialName
                         : item.productName}
                     </p>
-                    <p className="text-sm text-gray-600">
-                      {item.quantity} {item.unit} @ RM {item.unitCost.toFixed(2)} = RM{" "}
-                      {(item.quantity * item.unitCost).toFixed(2)}
-                    </p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleUpdateItemQuantity(item.tempId, item.quantity - 1)}
+                          className="w-7 h-7 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full transition"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-medium w-12 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => handleUpdateItemQuantity(item.tempId, item.quantity + 1)}
+                          className="w-7 h-7 flex items-center justify-center bg-gray-200 hover:bg-gray-300 rounded-full transition"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <span className="text-sm text-gray-600">
+                        {item.unit} @ RM {item.unitCost.toFixed(2)} = RM{" "}
+                        {(item.quantity * item.unitCost).toFixed(2)}
+                      </span>
+                    </div>
                     {item.notes && (
                       <p className="text-xs text-gray-500 mt-1">{item.notes}</p>
                     )}
