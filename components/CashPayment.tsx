@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Bluetooth, Receipt } from "lucide-react";
+import { Bluetooth, Receipt, Tag } from "lucide-react";
 import { printerManager } from "@/lib/printerService";
+import { labelPrinter } from "@/lib/labelPrinterService";
 
 interface CashPaymentProps {
   orderID: number;
@@ -152,6 +153,38 @@ export default function CashPayment({
     }
   };
 
+  const handlePrintLabels = async () => {
+    if (!order) return;
+
+    setPrinting(true);
+    try {
+      // Connect to label printer if not already connected
+      if (!labelPrinter.isConnected()) {
+        await labelPrinter.pair();
+        await labelPrinter.connect();
+      }
+
+      // Print one label per item quantity
+      const lineItems = order.line_items || [];
+      for (const item of lineItems) {
+        const itemName = item.name || 'Unknown';
+        const quantity = item.quantity || 1;
+
+        for (let i = 0; i < quantity; i++) {
+          await labelPrinter.printKitchenLabel(order.number || orderID, itemName, 1);
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+
+      alert('Labels printed successfully!');
+    } catch (err: any) {
+      console.error('Failed to print labels:', err);
+      alert(`Failed to print labels: ${err.message}`);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const handleContinue = () => {
     onSuccess?.();
   };
@@ -184,22 +217,30 @@ export default function CashPayment({
               Print receipt? (Optional)
             </p>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={handlePrintReceipt}
                 disabled={printing}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors text-sm"
+                className="flex items-center justify-center gap-1 px-3 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors text-sm"
               >
                 <Bluetooth className="w-4 h-4" />
-                {printing ? 'Printing...' : 'Receipt'}
+                {printing ? '...' : 'Receipt'}
               </button>
               <button
                 onClick={handlePrintKitchen}
                 disabled={printing}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-400 transition-colors text-sm"
+                className="flex items-center justify-center gap-1 px-3 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-400 transition-colors text-sm"
               >
                 <Receipt className="w-4 h-4" />
-                {printing ? 'Printing...' : 'Kitchen'}
+                {printing ? '...' : 'Kitchen'}
+              </button>
+              <button
+                onClick={handlePrintLabels}
+                disabled={printing}
+                className="flex items-center justify-center gap-1 px-3 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-400 transition-colors text-sm"
+              >
+                <Tag className="w-4 h-4" />
+                {printing ? '...' : 'Labels'}
               </button>
             </div>
           </div>
