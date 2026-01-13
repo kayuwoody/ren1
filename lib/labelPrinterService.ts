@@ -9,6 +9,7 @@ export class LabelPrinter {
   private device: any = null;
   private characteristic: any = null;
   private server: any = null;
+  private static STORAGE_KEY = 'labelPrinterDeviceId';
 
   // Label dimensions in mm
   private labelWidth = 30;
@@ -16,22 +17,50 @@ export class LabelPrinter {
   private gapHeight = 2;
 
   /**
+   * Try to reconnect to previously paired device
+   */
+  async tryReconnect(): Promise<boolean> {
+    try {
+      const devices = await (navigator as any).bluetooth.getDevices();
+      const savedId = localStorage.getItem(LabelPrinter.STORAGE_KEY);
+
+      for (const device of devices) {
+        if (savedId && device.id === savedId) {
+          this.device = device;
+          await this.connect();
+          console.log('Reconnected to label printer:', device.name);
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      console.log('Could not reconnect:', err);
+      return false;
+    }
+  }
+
+  /**
    * Request bluetooth printer pairing
    */
   async pair(): Promise<any> {
+    // Try reconnect first
+    if (await this.tryReconnect()) {
+      return this.device;
+    }
+
     try {
-      // Try multiple service UUIDs that thermal printers commonly use
       const device = await (navigator as any).bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: [
-          '000018f0-0000-1000-8000-00805f9b34fb', // Common thermal printer service
-          '0000ff00-0000-1000-8000-00805f9b34fb', // Alternative service
-          '49535343-fe7d-4ae5-8fa9-9fafd205e455', // Nordic UART
-          '00001101-0000-1000-8000-00805f9b34fb', // Serial Port Profile
+          '000018f0-0000-1000-8000-00805f9b34fb',
+          '0000ff00-0000-1000-8000-00805f9b34fb',
+          '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+          '00001101-0000-1000-8000-00805f9b34fb',
         ]
       });
 
       this.device = device;
+      localStorage.setItem(LabelPrinter.STORAGE_KEY, device.id);
       console.log('Label printer paired:', device.name, 'ID:', device.id);
       return device;
     } catch (err) {
@@ -158,39 +187,54 @@ export class LabelPrinter {
    * 15mm tall x 30mm wide
    */
   async printKitchenLabel(orderNumber: string | number, itemName: string, quantity: number = 1): Promise<void> {
-    // Clean item name (remove emojis, special chars)
+    // Clean item name - ASCII only, no special chars
     const cleanName = itemName
-      .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
-      .replace(/[\u{2600}-\u{26FF}]/gu, '')
-      .replace(/[\u{2700}-\u{27BF}]/gu, '')
+      .replace(/[^\x20-\x7E]/g, '') // Only printable ASCII
       .trim();
 
     // For 30mm width at 8 dots/mm = 240 dots
-    // For 15mm height at 8 dots/mm = 120 dots
-    // Using small font (font "1" is typically 8x12 dots)
-    // Max ~25-28 chars width for small font
+    // Font "1" is ~8 dots wide, fits ~28 chars
+    // Split into 2 lines if needed
+    const maxLineChars = 26;
+    let line1 = cleanName;
+    let line2 = '';
+
+    if (cleanName.length > maxLineChars) {
+      // Try to break at word boundary
+      const words = cleanName.split(' ');
+      line1 = '';
+      line2 = '';
+      for (const word of words) {
+        if ((line1 + ' ' + word).trim().length <= maxLineChars) {
+          line1 = (line1 + ' ' + word).trim();
+        } else if ((line2 + ' ' + word).trim().length <= maxLineChars) {
+          line2 = (line2 + ' ' + word).trim();
+        }
+      }
+      if (!line1) line1 = cleanName.substring(0, maxLineChars);
+    }
 
     const orderText = `#${orderNumber}`;
-    const displayName = this.truncateText(cleanName, 18);
-    const qtyText = quantity > 1 ? `x${quantity}` : '';
 
-    // TSPL commands for CT221B
+    // TSPL commands for CT221B - using smallest font "1"
     const tspl = [
       `SIZE ${this.labelWidth} mm, ${this.labelHeight} mm`,
       `GAP ${this.gapHeight} mm, 0 mm`,
       'DIRECTION 1',
       'CLS',
-      // Order number - top, bold/larger
-      `TEXT 8,4,"2",0,1,1,"${orderText}"`,
-      // Item name - middle
-      `TEXT 8,40,"1",0,1,1,"${displayName}${qtyText}"`,
+      // Order number - top left, font 2 for visibility
+      `TEXT 4,2,"2",0,1,1,"${orderText}"`,
+      // Item name line 1
+      `TEXT 4,36,"1",0,1,1,"${line1}"`,
+      // Item name line 2 (if exists)
+      ...(line2 ? [`TEXT 4,52,"1",0,1,1,"${line2}"`] : []),
       'PRINT 1',
       ''
     ].join('\r\n');
 
     console.log('Sending TSPL:', tspl);
     await this.sendData(tspl);
-    console.log(`Label printed: ${orderText} - ${displayName}`);
+    console.log(`Label printed: ${orderText} - ${cleanName}`);
   }
 
   /**
