@@ -70,7 +70,7 @@ export class LabelPrinter {
   }
 
   /**
-   * Connect to paired printer
+   * Connect to paired printer with retry
    */
   async connect(device?: any): Promise<void> {
     try {
@@ -87,61 +87,87 @@ export class LabelPrinter {
         return;
       }
 
-      console.log('Connecting to label printer...');
-      this.server = await this.device.gatt.connect();
-
-      this.device.addEventListener('gattserverdisconnected', () => {
-        console.log('Label printer disconnected');
-        this.characteristic = null;
-        this.server = null;
-      });
-
-      // Try different service/characteristic combinations
-      const serviceUUIDs = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '0000ff00-0000-1000-8000-00805f9b34fb',
-        '49535343-fe7d-4ae5-8fa9-9fafd205e455',
-      ];
-
-      const characteristicUUIDs = [
-        '00002af1-0000-1000-8000-00805f9b34fb',
-        '0000ff02-0000-1000-8000-00805f9b34fb',
-        '49535343-8841-43f4-a8d4-ecbe34729bb3',
-      ];
-
-      for (const serviceUUID of serviceUUIDs) {
+      // Retry connection up to 3 times
+      let lastError;
+      for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          const service = await this.server.getPrimaryService(serviceUUID);
-          for (const charUUID of characteristicUUIDs) {
-            try {
-              this.characteristic = await service.getCharacteristic(charUUID);
-              console.log(`Connected using service ${serviceUUID}, characteristic ${charUUID}`);
-              return;
-            } catch (e) {
-              // Try next characteristic
-            }
+          console.log(`Connecting to label printer... (attempt ${attempt})`);
+
+          // Small delay before retry
+          if (attempt > 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
-          // If we got the service but no characteristic, try getting all characteristics
-          const chars = await service.getCharacteristics();
-          for (const char of chars) {
-            if (char.properties.write || char.properties.writeWithoutResponse) {
-              this.characteristic = char;
-              console.log(`Connected using service ${serviceUUID}, characteristic ${char.uuid}`);
-              return;
-            }
-          }
-        } catch (e) {
-          // Try next service
+
+          this.server = await this.device.gatt.connect();
+
+          this.device.addEventListener('gattserverdisconnected', () => {
+            console.log('Label printer disconnected');
+            this.characteristic = null;
+            this.server = null;
+          });
+
+          // Find writable characteristic
+          await this.findCharacteristic();
+          console.log('Label printer connected successfully');
+          return;
+        } catch (err) {
+          lastError = err;
+          console.log(`Connection attempt ${attempt} failed:`, err);
         }
       }
 
-      throw new Error('Could not find writable characteristic');
+      throw lastError || new Error('Connection failed after 3 attempts');
     } catch (err) {
       console.error('Label printer connection failed:', err);
       this.characteristic = null;
       this.server = null;
       throw err;
     }
+  }
+
+  /**
+   * Find writable characteristic
+   */
+  private async findCharacteristic(): Promise<void> {
+    const serviceUUIDs = [
+      '000018f0-0000-1000-8000-00805f9b34fb',
+      '0000ff00-0000-1000-8000-00805f9b34fb',
+      '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+    ];
+
+    const characteristicUUIDs = [
+      '00002af1-0000-1000-8000-00805f9b34fb',
+      '0000ff02-0000-1000-8000-00805f9b34fb',
+      '49535343-8841-43f4-a8d4-ecbe34729bb3',
+    ];
+
+    for (const serviceUUID of serviceUUIDs) {
+      try {
+        const service = await this.server.getPrimaryService(serviceUUID);
+        for (const charUUID of characteristicUUIDs) {
+          try {
+            this.characteristic = await service.getCharacteristic(charUUID);
+            console.log(`Using service ${serviceUUID}, characteristic ${charUUID}`);
+            return;
+          } catch (e) {
+            // Try next characteristic
+          }
+        }
+        // Try getting all characteristics
+        const chars = await service.getCharacteristics();
+        for (const char of chars) {
+          if (char.properties.write || char.properties.writeWithoutResponse) {
+            this.characteristic = char;
+            console.log(`Using service ${serviceUUID}, characteristic ${char.uuid}`);
+            return;
+          }
+        }
+      } catch (e) {
+        // Try next service
+      }
+    }
+
+    throw new Error('Could not find writable characteristic');
   }
 
   /**
