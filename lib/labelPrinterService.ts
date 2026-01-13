@@ -40,10 +40,15 @@ export class LabelPrinter {
   }
 
   /**
-   * Request bluetooth printer pairing
+   * Request bluetooth printer pairing (only if needed)
    */
   async pair(): Promise<any> {
-    // Try reconnect first
+    // If we already have a device, just return it
+    if (this.device) {
+      return this.device;
+    }
+
+    // Try reconnect to previously authorized device
     if (await this.tryReconnect()) {
       return this.device;
     }
