@@ -227,9 +227,9 @@ export class LabelPrinter {
     const orderText = `#${orderNumber}`;
 
     // Label is 30mm wide but ~3mm margins each side = 24mm usable = 192 dots
-    // Using font "1" which is ~12 dots wide = 16 chars max per line
-    // Using font "0" (monospace 8x12) = ~22 chars max
-    const maxCharsPerLine = 20;
+    // Based on actual test: "tuna cheese sandwich" (20 chars) cuts off at char 16
+    // So max ~14 chars per line to be safe
+    const maxCharsPerLine = 14;
     const fontSize = "1";
     const lineHeight = 20;
     const startY = 40;
