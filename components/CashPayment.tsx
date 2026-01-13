@@ -106,8 +106,9 @@ export default function CashPayment({
 
     setPrinting(true);
     try {
-      // Disconnect label printer first to free BT radio
+      // Disconnect label printer first and wait for BT stack to settle
       try { await labelPrinter.disconnect(); } catch (e) { /* ignore */ }
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       const printer = printerManager.getReceiptPrinter();
       let device = printerManager.getCachedDevice('receipt');
@@ -135,8 +136,9 @@ export default function CashPayment({
 
     setPrinting(true);
     try {
-      // Disconnect label printer first to free BT radio
+      // Disconnect label printer first and wait for BT stack to settle
       try { await labelPrinter.disconnect(); } catch (e) { /* ignore */ }
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       const printer = printerManager.getKitchenPrinter();
       let device = printerManager.getCachedDevice('kitchen');
@@ -164,15 +166,18 @@ export default function CashPayment({
 
     setPrinting(true);
     try {
-      // Disconnect receipt/kitchen printers first to free BT radio
+      // Disconnect receipt/kitchen printers first and wait for BT radio to be free
       try {
         const receiptPrinter = printerManager.getReceiptPrinter();
         await receiptPrinter.disconnect?.();
+      } catch (e) { /* ignore */ }
+      try {
         const kitchenPrinter = printerManager.getKitchenPrinter();
         await kitchenPrinter.disconnect?.();
-      } catch (e) {
-        // Ignore disconnect errors
-      }
+      } catch (e) { /* ignore */ }
+
+      // Wait for BT stack to settle before connecting to different device
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Connect to label printer
       if (!labelPrinter.isConnected()) {
