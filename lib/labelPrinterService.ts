@@ -184,7 +184,7 @@ export class LabelPrinter {
 
   /**
    * Print a single kitchen label
-   * 15mm tall x 30mm wide
+   * 15mm tall x 30mm wide (120 x 240 dots at 8 dpmm)
    */
   async printKitchenLabel(orderNumber: string | number, itemName: string, quantity: number = 1): Promise<void> {
     // Clean item name - ASCII only, no special chars
@@ -192,46 +192,73 @@ export class LabelPrinter {
       .replace(/[^\x20-\x7E]/g, '') // Only printable ASCII
       .trim();
 
-    // For 30mm width at 8 dots/mm = 240 dots
-    // Font "1" is ~8 dots wide, fits ~28 chars
-    // Split into 2 lines if needed
-    const maxLineChars = 26;
-    let line1 = cleanName;
-    let line2 = '';
-
-    if (cleanName.length > maxLineChars) {
-      // Try to break at word boundary
-      const words = cleanName.split(' ');
-      line1 = '';
-      line2 = '';
-      for (const word of words) {
-        if ((line1 + ' ' + word).trim().length <= maxLineChars) {
-          line1 = (line1 + ' ' + word).trim();
-        } else if ((line2 + ' ' + word).trim().length <= maxLineChars) {
-          line2 = (line2 + ' ' + word).trim();
-        }
-      }
-      if (!line1) line1 = cleanName.substring(0, maxLineChars);
-    }
-
     const orderText = `#${orderNumber}`;
 
-    // TSPL commands for CT221B - using smallest font "1"
-    const tspl = [
+    // Label is 30mm wide x 15mm tall = 240 x 120 dots at 8dpmm
+    // Calculate font size based on text length
+    // Font "1" = 8x12, "2" = 12x20, "3" = 16x24, "4" = 24x32, "5" = 32x48
+
+    let fontSize = "2"; // Default medium
+    let maxCharsPerLine = 18;
+    let lineHeight = 24;
+    let startY = 32;
+
+    if (cleanName.length <= 12) {
+      fontSize = "3"; // Larger font for short text
+      maxCharsPerLine = 12;
+      lineHeight = 28;
+      startY = 36;
+    } else if (cleanName.length <= 18) {
+      fontSize = "2";
+      maxCharsPerLine = 18;
+      lineHeight = 24;
+      startY = 36;
+    } else {
+      fontSize = "1"; // Smallest font for long text
+      maxCharsPerLine = 28;
+      lineHeight = 16;
+      startY = 32;
+    }
+
+    // Word wrap into lines
+    const lines: string[] = [];
+    const words = cleanName.split(' ');
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (testLine.length <= maxCharsPerLine) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word.length > maxCharsPerLine ? word.substring(0, maxCharsPerLine) : word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+
+    // Limit to 2-3 lines max depending on font
+    const maxLines = fontSize === "1" ? 3 : 2;
+    const printLines = lines.slice(0, maxLines);
+
+    // Build TSPL commands
+    const tsplLines = [
       `SIZE ${this.labelWidth} mm, ${this.labelHeight} mm`,
       `GAP ${this.gapHeight} mm, 0 mm`,
       'DIRECTION 1',
       'CLS',
-      // Order number - top left, font 2 for visibility
-      `TEXT 4,2,"2",0,1,1,"${orderText}"`,
-      // Item name line 1
-      `TEXT 4,36,"1",0,1,1,"${line1}"`,
-      // Item name line 2 (if exists)
-      ...(line2 ? [`TEXT 4,52,"1",0,1,1,"${line2}"`] : []),
-      'PRINT 1',
-      ''
-    ].join('\r\n');
+      // Order number at top
+      `TEXT 4,4,"2",0,1,1,"${orderText}"`,
+    ];
 
+    // Add text lines
+    printLines.forEach((line, i) => {
+      const y = startY + (i * lineHeight);
+      tsplLines.push(`TEXT 4,${y},"${fontSize}",0,1,1,"${line}"`);
+    });
+
+    tsplLines.push('PRINT 1', '');
+
+    const tspl = tsplLines.join('\r\n');
     console.log('Sending TSPL:', tspl);
     await this.sendData(tspl);
     console.log(`Label printed: ${orderText} - ${cleanName}`);
