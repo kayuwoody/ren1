@@ -106,6 +106,9 @@ export default function CashPayment({
 
     setPrinting(true);
     try {
+      // Disconnect label printer first to free BT radio
+      try { await labelPrinter.disconnect(); } catch (e) { /* ignore */ }
+
       const printer = printerManager.getReceiptPrinter();
       let device = printerManager.getCachedDevice('receipt');
 
@@ -132,6 +135,9 @@ export default function CashPayment({
 
     setPrinting(true);
     try {
+      // Disconnect label printer first to free BT radio
+      try { await labelPrinter.disconnect(); } catch (e) { /* ignore */ }
+
       const printer = printerManager.getKitchenPrinter();
       let device = printerManager.getCachedDevice('kitchen');
 
@@ -158,10 +164,19 @@ export default function CashPayment({
 
     setPrinting(true);
     try {
-      // Connect to label printer if not already connected
+      // Disconnect receipt/kitchen printers first to free BT radio
+      try {
+        const receiptPrinter = printerManager.getReceiptPrinter();
+        await receiptPrinter.disconnect?.();
+        const kitchenPrinter = printerManager.getKitchenPrinter();
+        await kitchenPrinter.disconnect?.();
+      } catch (e) {
+        // Ignore disconnect errors
+      }
+
+      // Connect to label printer
       if (!labelPrinter.isConnected()) {
         await labelPrinter.pair();
-        await labelPrinter.connect();
       }
 
       // Print one label per item quantity

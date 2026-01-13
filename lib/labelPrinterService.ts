@@ -211,6 +211,7 @@ export class LabelPrinter {
   /**
    * Print a single kitchen label
    * 15mm tall x 30mm wide (120 x 240 dots at 8 dpmm)
+   * Account for ~3mm physical margins on each side
    */
   async printKitchenLabel(orderNumber: string | number, itemName: string, quantity: number = 1): Promise<void> {
     // Clean item name - ASCII only, no special chars
@@ -220,31 +221,14 @@ export class LabelPrinter {
 
     const orderText = `#${orderNumber}`;
 
-    // Label is 30mm wide x 15mm tall = 240 x 120 dots at 8dpmm
-    // Calculate font size based on text length
-    // Font "1" = 8x12, "2" = 12x20, "3" = 16x24, "4" = 24x32, "5" = 32x48
-
-    let fontSize = "2"; // Default medium
-    let maxCharsPerLine = 18;
-    let lineHeight = 24;
-    let startY = 32;
-
-    if (cleanName.length <= 12) {
-      fontSize = "3"; // Larger font for short text
-      maxCharsPerLine = 12;
-      lineHeight = 28;
-      startY = 36;
-    } else if (cleanName.length <= 18) {
-      fontSize = "2";
-      maxCharsPerLine = 18;
-      lineHeight = 24;
-      startY = 36;
-    } else {
-      fontSize = "1"; // Smallest font for long text
-      maxCharsPerLine = 28;
-      lineHeight = 16;
-      startY = 32;
-    }
+    // Label is 30mm wide but ~3mm margins each side = 24mm usable = 192 dots
+    // Using font "1" which is ~12 dots wide = 16 chars max per line
+    // Using font "0" (monospace 8x12) = ~22 chars max
+    const maxCharsPerLine = 20;
+    const fontSize = "1";
+    const lineHeight = 20;
+    const startY = 40;
+    const leftMargin = 24; // ~3mm margin in dots
 
     // Word wrap into lines
     const lines: string[] = [];
@@ -257,14 +241,18 @@ export class LabelPrinter {
         currentLine = testLine;
       } else {
         if (currentLine) lines.push(currentLine);
-        currentLine = word.length > maxCharsPerLine ? word.substring(0, maxCharsPerLine) : word;
+        // Handle single long word
+        if (word.length > maxCharsPerLine) {
+          currentLine = word.substring(0, maxCharsPerLine);
+        } else {
+          currentLine = word;
+        }
       }
     }
     if (currentLine) lines.push(currentLine);
 
-    // Limit to 2-3 lines max depending on font
-    const maxLines = fontSize === "1" ? 3 : 2;
-    const printLines = lines.slice(0, maxLines);
+    // Max 3 lines for small label
+    const printLines = lines.slice(0, 3);
 
     // Build TSPL commands
     const tsplLines = [
@@ -273,13 +261,13 @@ export class LabelPrinter {
       'DIRECTION 1',
       'CLS',
       // Order number at top
-      `TEXT 4,4,"2",0,1,1,"${orderText}"`,
+      `TEXT ${leftMargin},8,"2",0,1,1,"${orderText}"`,
     ];
 
     // Add text lines
     printLines.forEach((line, i) => {
       const y = startY + (i * lineHeight);
-      tsplLines.push(`TEXT 4,${y},"${fontSize}",0,1,1,"${line}"`);
+      tsplLines.push(`TEXT ${leftMargin},${y},"${fontSize}",0,1,1,"${line}"`);
     });
 
     tsplLines.push('PRINT 1', '');
@@ -287,7 +275,7 @@ export class LabelPrinter {
     const tspl = tsplLines.join('\r\n');
     console.log('Sending TSPL:', tspl);
     await this.sendData(tspl);
-    console.log(`Label printed: ${orderText} - ${cleanName}`);
+    console.log(`Label printed: ${orderText} - ${cleanName} (${printLines.length} lines)`);
   }
 
   /**
