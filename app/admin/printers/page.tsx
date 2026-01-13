@@ -61,6 +61,20 @@ export default function PrintersAdminPage() {
         setKitchenPrinter(devices.kitchen);
         console.log('✅ Kitchen printer auto-reconnected on startup');
       }
+
+      // Try to reconnect label printer too
+      try {
+        const reconnected = await labelPrinter.tryReconnect();
+        if (reconnected) {
+          const info = labelPrinter.getDeviceInfo();
+          if (info) {
+            setKitchenLabelPrinter({ id: info.id, name: info.name });
+            console.log('✅ Label printer auto-reconnected on startup');
+          }
+        }
+      } catch (e) {
+        console.log('Label printer reconnect skipped');
+      }
     };
 
     reconnect();
