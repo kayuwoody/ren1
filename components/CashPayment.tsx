@@ -106,7 +106,22 @@ export default function CashPayment({
 
     setPrinting(true);
     try {
-      // Disconnect label printer first and wait for BT stack to settle
+      // Try local USB print server first (more reliable)
+      try {
+        const response = await fetch('http://localhost:9101/print', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order),
+        });
+        if (response.ok) {
+          alert('Receipt printed via USB!');
+          return;
+        }
+      } catch (e) {
+        console.log('USB print server not available, trying Bluetooth...');
+      }
+
+      // Fallback to Bluetooth
       try { await labelPrinter.disconnect(); } catch (e) { /* ignore */ }
       await new Promise(resolve => setTimeout(resolve, 300));
 
