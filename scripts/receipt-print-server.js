@@ -280,8 +280,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Test print
-  if (req.method === 'POST' && req.url === '/test') {
+  // Test print (accepts both GET and POST for easy browser testing)
+  if ((req.method === 'POST' || req.method === 'GET') && req.url === '/test') {
     try {
       const testOrder = {
         id: 'TEST',
