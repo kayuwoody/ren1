@@ -152,7 +152,19 @@ async function printRawWindows(data, printerName) {
 
     console.log(`Printing to: ${printerName}`);
 
-    // Method 1: Try direct copy to shared printer
+    // Method 1: Try USB port directly (most reliable for raw ESC/POS)
+    const ports = ['USB003', 'USB001', 'USB002', 'LPT1'];
+    for (const port of ports) {
+      try {
+        execSync(`copy /b "${tmpFile}" ${port}`, { encoding: 'utf8', shell: true });
+        fs.unlinkSync(tmpFile);
+        return { success: true, method: 'port', port };
+      } catch (e) {
+        // Try next port
+      }
+    }
+
+    // Method 2: Try direct copy to shared printer
     try {
       execSync(`copy /b "${tmpFile}" "\\\\%COMPUTERNAME%\\${printerName}"`, {
         encoding: 'utf8',
@@ -164,25 +176,13 @@ async function printRawWindows(data, printerName) {
       console.log('Direct copy failed, trying print command...');
     }
 
-    // Method 2: Use print command
+    // Method 3: Use print command (fallback)
     try {
       execSync(`print /D:"${printerName}" "${tmpFile}"`, { encoding: 'utf8', shell: true });
       fs.unlinkSync(tmpFile);
       return { success: true, method: 'print', printer: printerName };
     } catch (e) {
-      console.log('Print command failed, trying raw port...');
-    }
-
-    // Method 3: Try USB port directly if available
-    const ports = ['USB001', 'USB002', 'USB003', 'LPT1'];
-    for (const port of ports) {
-      try {
-        execSync(`copy /b "${tmpFile}" ${port}`, { encoding: 'utf8', shell: true });
-        fs.unlinkSync(tmpFile);
-        return { success: true, method: 'port', port };
-      } catch (e) {
-        // Try next port
-      }
+      console.log('Print command failed...');
     }
 
     throw new Error(`Could not print to ${printerName}. Try sharing the printer.`);
