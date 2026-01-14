@@ -18,17 +18,7 @@ const http = require('http');
 
 const PORT = 9101;
 
-// Try to load escpos (optional dependency)
-let escpos, USB;
-try {
-  escpos = require('escpos');
-  USB = require('escpos-usb');
-  escpos.USB = USB;
-  console.log('✅ escpos USB driver loaded');
-} catch (e) {
-  console.log('⚠️  escpos not installed. Run: npm install escpos escpos-usb');
-  console.log('   Will use fallback raw USB method');
-}
+// We'll use Windows raw printing directly - no escpos needed
 
 // USB Vendor/Product IDs for common thermal printers
 const KNOWN_PRINTERS = [
@@ -113,108 +103,91 @@ function buildEscPosReceipt(order) {
   return Buffer.from(result);
 }
 
-// Print using escpos library
-async function printWithEscpos(orderData) {
-  if (!escpos || !USB) {
-    throw new Error('escpos not installed');
-  }
-
-  const device = new USB();
-  const printer = new escpos.Printer(device);
-
-  return new Promise((resolve, reject) => {
-    device.open(function(err) {
-      if (err) {
-        reject(err);
-        return;
-      }
-
-      const order = orderData;
-      const lineItems = order.line_items || order.items || [];
-
-      printer
-        .font('a')
-        .align('ct')
-        .style('b')
-        .size(1, 1)
-        .text('COFFEE OASIS')
-        .text(`Receipt #${order.id || order.number}`)
-        .text(new Date(order.date_created || Date.now()).toLocaleString('en-MY'))
-        .text('')
-        .style('normal')
-        .align('lt')
-        .text('--------------------------------');
-
-      for (const item of lineItems) {
-        const name = (item.name || 'Unknown').substring(0, 24);
-        const qty = item.quantity || 1;
-        const price = parseFloat(item.total || item.price || 0).toFixed(2);
-        printer.text(`${qty}x ${name}`);
-        printer.text(`                      RM ${price}`);
-      }
-
-      printer
-        .text('--------------------------------')
-        .style('b')
-        .text(`                TOTAL: RM ${parseFloat(order.total || 0).toFixed(2)}`)
-        .style('normal')
-        .text('')
-        .text(`Paid by: ${order.payment_method_title || 'Cash'}`)
-        .text('')
-        .align('ct')
-        .text('Thank you!')
-        .text('Come again soon')
-        .text('')
-        .text('')
-        .cut()
-        .close(() => {
-          resolve({ success: true, method: 'escpos' });
-        });
-    });
-  });
-}
-
-// Fallback: Print raw bytes (Windows)
-async function printRawWindows(data) {
-  const fs = require('fs');
+// Find Windows printer name
+function findWindowsPrinter() {
   const { execSync } = require('child_process');
-
-  // Write to temp file
-  const tmpFile = `${process.env.TEMP || '/tmp'}/receipt-${Date.now()}.bin`;
-  fs.writeFileSync(tmpFile, data);
-
-  // Try to find printer and print
   try {
-    // List printers
-    const printers = execSync('wmic printer get name', { encoding: 'utf8' });
-    console.log('Available printers:', printers);
+    const output = execSync('wmic printer get name,portname', { encoding: 'utf8' });
+    const lines = output.split('\n').filter(l => l.trim());
 
-    // Find thermal/receipt printer
-    const printerLines = printers.split('\n').filter(l => l.trim());
-    let printerName = null;
-
-    for (const line of printerLines) {
+    for (const line of lines) {
       const name = line.trim();
       if (name.toLowerCase().includes('pos') ||
           name.toLowerCase().includes('thermal') ||
           name.toLowerCase().includes('receipt') ||
+          name.toLowerCase().includes('xprinter') ||
           name.toLowerCase().includes('58') ||
           name.toLowerCase().includes('80')) {
-        printerName = name;
-        break;
+        // Extract just the printer name (first column)
+        const printerName = name.split(/\s{2,}/)[0];
+        if (printerName && printerName !== 'Name') {
+          return printerName;
+        }
+      }
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Print raw bytes on Windows using file copy to printer port
+async function printRawWindows(data, printerName) {
+  const fs = require('fs');
+  const { execSync } = require('child_process');
+  const path = require('path');
+
+  // Write to temp file
+  const tmpFile = path.join(process.env.TEMP || '.', `receipt-${Date.now()}.bin`);
+  fs.writeFileSync(tmpFile, data);
+
+  try {
+    if (!printerName) {
+      printerName = findWindowsPrinter();
+    }
+
+    if (!printerName) {
+      throw new Error('No thermal printer found. Please share your printer or check printer name.');
+    }
+
+    console.log(`Printing to: ${printerName}`);
+
+    // Method 1: Try direct copy to shared printer
+    try {
+      execSync(`copy /b "${tmpFile}" "\\\\%COMPUTERNAME%\\${printerName}"`, {
+        encoding: 'utf8',
+        shell: true
+      });
+      fs.unlinkSync(tmpFile);
+      return { success: true, method: 'copy', printer: printerName };
+    } catch (e) {
+      console.log('Direct copy failed, trying print command...');
+    }
+
+    // Method 2: Use print command
+    try {
+      execSync(`print /D:"${printerName}" "${tmpFile}"`, { encoding: 'utf8', shell: true });
+      fs.unlinkSync(tmpFile);
+      return { success: true, method: 'print', printer: printerName };
+    } catch (e) {
+      console.log('Print command failed, trying raw port...');
+    }
+
+    // Method 3: Try USB port directly if available
+    const ports = ['USB001', 'USB002', 'USB003', 'LPT1'];
+    for (const port of ports) {
+      try {
+        execSync(`copy /b "${tmpFile}" ${port}`, { encoding: 'utf8', shell: true });
+        fs.unlinkSync(tmpFile);
+        return { success: true, method: 'port', port };
+      } catch (e) {
+        // Try next port
       }
     }
 
-    if (printerName) {
-      // Use Windows print command
-      execSync(`print /D:"${printerName}" "${tmpFile}"`, { encoding: 'utf8' });
-      fs.unlinkSync(tmpFile);
-      return { success: true, method: 'windows-print', printer: printerName };
-    }
-
-    throw new Error('No thermal printer found');
+    throw new Error(`Could not print to ${printerName}. Try sharing the printer.`);
   } catch (err) {
-    fs.unlinkSync(tmpFile);
+    try { fs.unlinkSync(tmpFile); } catch (e) {}
     throw err;
   }
 }
@@ -252,21 +225,8 @@ const server = http.createServer(async (req, res) => {
         const order = JSON.parse(body);
         console.log(`\n📄 Printing receipt for order #${order.id || order.number}`);
 
-        let result;
-
-        // Try escpos first
-        if (escpos && USB) {
-          try {
-            result = await printWithEscpos(order);
-          } catch (e) {
-            console.log('escpos failed, trying raw:', e.message);
-            const rawData = buildEscPosReceipt(order);
-            result = await printRawWindows(rawData);
-          }
-        } else {
-          const rawData = buildEscPosReceipt(order);
-          result = await printRawWindows(rawData);
-        }
+        const rawData = buildEscPosReceipt(order);
+        const result = await printRawWindows(rawData);
 
         console.log('✅ Receipt printed:', result);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -296,13 +256,8 @@ const server = http.createServer(async (req, res) => {
 
       console.log('\n🧪 Test print...');
 
-      let result;
-      if (escpos && USB) {
-        result = await printWithEscpos(testOrder);
-      } else {
-        const rawData = buildEscPosReceipt(testOrder);
-        result = await printRawWindows(rawData);
-      }
+      const rawData = buildEscPosReceipt(testOrder);
+      const result = await printRawWindows(rawData);
 
       console.log('✅ Test print complete:', result);
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -315,19 +270,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // List USB devices (debug)
-  if (req.method === 'GET' && req.url === '/devices') {
+  // List printers
+  if (req.method === 'GET' && req.url === '/printers') {
     try {
-      const usb = require('usb');
-      const devices = usb.getDeviceList().map(d => ({
-        vendor: d.deviceDescriptor.idVendor.toString(16),
-        product: d.deviceDescriptor.idProduct.toString(16)
-      }));
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ devices }));
+      const { execSync } = require('child_process');
+      const output = execSync('wmic printer get name,portname', { encoding: 'utf8' });
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end(output);
     } catch (err) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'USB library not available' }));
+      res.end(JSON.stringify({ error: err.message }));
     }
     return;
   }
@@ -341,9 +293,20 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n🧾 Receipt Print Server running on http://localhost:${PORT}`);
   console.log('\nEndpoints:');
   console.log('  GET  /health   - Health check');
+  console.log('  GET  /printers - List Windows printers');
+  console.log('  GET  /test     - Print test receipt');
   console.log('  POST /print    - Print receipt (send order JSON)');
-  console.log('  POST /test     - Print test receipt');
-  console.log('  GET  /devices  - List USB devices');
-  console.log('\nTo install USB driver:');
-  console.log('  npm install escpos escpos-usb');
+
+  // Show detected printer
+  const printer = findWindowsPrinter();
+  if (printer) {
+    console.log(`\n✅ Detected printer: ${printer}`);
+  } else {
+    console.log('\n⚠️  No thermal printer detected. Available printers:');
+    try {
+      const { execSync } = require('child_process');
+      const output = execSync('wmic printer get name', { encoding: 'utf8' });
+      console.log(output);
+    } catch (e) {}
+  }
 });
