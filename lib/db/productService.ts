@@ -174,15 +174,18 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     console.log(`🔄 Syncing ${wcProduct.name} - Preserving supplier: "${existing.supplier}"`);
   }
 
-  // Preserve local stock quantity if product exists (local DB is source of truth for stock)
-  // Only sync stock from WooCommerce for new products to avoid race conditions
-  const stockQuantity = existing
-    ? (existing.stockQuantity ?? 0) // Preserve existing local stock
-    : (wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0); // Use WC stock for new products
+  // Use WooCommerce stock as the source of truth
+  // WooCommerce is always updated (by itself for online orders, or by our app for POS orders)
+  // This ensures stock stays in sync even when orders come through WooCommerce directly
+  const wcStockQuantity = wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0;
+  const stockQuantity = wcStockQuantity;
 
   // Debug logging for stock sync
   if (existing && wcProduct.manage_stock) {
-    console.log(`📦 Stock sync for "${wcProduct.name}": DB=${existing.stockQuantity}, WC=${wcProduct.stock_quantity}, Using=${stockQuantity}`);
+    const localStock = existing.stockQuantity ?? 0;
+    if (localStock !== wcStockQuantity) {
+      console.log(`📦 Stock sync for "${wcProduct.name}": Local=${localStock} → WC=${wcStockQuantity} (updating to match WC)`);
+    }
   }
 
   if (existing && (supplierCost > 0 || unitCost > 0)) {
@@ -198,7 +201,7 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     basePrice: parseFloat(wcProduct.price) || 0,
     supplierCost, // Preserve existing supplierCost (local field)
     unitCost, // Preserve existing unitCost from recipes
-    stockQuantity, // Preserve existing stock quantity (local DB is source of truth)
+    stockQuantity, // Use WooCommerce stock as source of truth
     manageStock: wcProduct.manage_stock ?? false, // Store whether WooCommerce tracks inventory
     supplier, // Preserve existing supplier (local field)
     imageUrl: wcProduct.images?.[0]?.src,
