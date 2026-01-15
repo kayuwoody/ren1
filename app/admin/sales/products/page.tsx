@@ -597,7 +597,7 @@ export default function ProductsSoldPage() {
                                     <tr key={saleIndex} className="hover:bg-gray-100">
                                       <td className="px-3 py-2 font-medium">
                                         <Link
-                                          href={`/admin/orders/${sale.orderId}`}
+                                          href={`/orders/${sale.orderId}`}
                                           className="text-blue-600 hover:underline"
                                           onClick={(e) => e.stopPropagation()}
                                         >
