@@ -595,8 +595,14 @@ export default function ProductsSoldPage() {
                                 <tbody className="divide-y divide-gray-200">
                                   {product.sales.map((sale, saleIndex) => (
                                     <tr key={saleIndex} className="hover:bg-gray-100">
-                                      <td className="px-3 py-2 font-medium text-blue-600">
-                                        #{sale.orderNumber}
+                                      <td className="px-3 py-2 font-medium">
+                                        <Link
+                                          href={`/admin/orders/${sale.orderId}`}
+                                          className="text-blue-600 hover:underline"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          #{sale.orderNumber}
+                                        </Link>
                                       </td>
                                       <td className="px-3 py-2 text-gray-600">
                                         {new Date(sale.date).toLocaleDateString('en-MY', {
