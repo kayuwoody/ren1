@@ -145,7 +145,20 @@ export async function recordProductSale(
         console.warn(`${indent}⚠️  Linked product "${productName}" has no recipe!`);
       }
     }
-    return consumptions; // Return base cost consumption if any
+
+    // Still deduct stock for products with no recipe (e.g., supplier-bought items like pies)
+    if (depth === 0) {
+      deductLocalProductStock(productId, quantitySold, productName);
+      console.log(`${indent}📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
+
+      // Log stock comparison for root product
+      if (product.wcId) {
+        console.log(`\n📊 Stock Comparison After Consumption:`);
+        await logStockComparison(productId, product.wcId, productName);
+      }
+    }
+
+    return consumptions;
   }
 
   // Process each recipe item
