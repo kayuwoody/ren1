@@ -340,6 +340,45 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_consumption_date ON InventoryConsumption(consumedAt);
   `);
 
+  // Stock Check Log (audit trail for stock checks)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS StockCheckLog (
+      id TEXT PRIMARY KEY,
+      checkDate TEXT NOT NULL DEFAULT (datetime('now')),
+      itemsChecked INTEGER NOT NULL DEFAULT 0,
+      itemsAdjusted INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Stock Check Log Items (individual item adjustments)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS StockCheckLogItem (
+      id TEXT PRIMARY KEY,
+      stockCheckLogId TEXT NOT NULL,
+      itemType TEXT NOT NULL,
+      itemId TEXT NOT NULL,
+      itemName TEXT NOT NULL,
+      supplier TEXT,
+      previousStock REAL NOT NULL,
+      countedStock REAL NOT NULL,
+      difference REAL NOT NULL,
+      unit TEXT NOT NULL,
+      note TEXT,
+      wcSynced INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (stockCheckLogId) REFERENCES StockCheckLog(id) ON DELETE CASCADE
+    );
+  `);
+
+  // Indexes for stock check logs
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_stock_check_log_date ON StockCheckLog(checkDate);
+    CREATE INDEX IF NOT EXISTS idx_stock_check_log_item_log ON StockCheckLogItem(stockCheckLogId);
+    CREATE INDEX IF NOT EXISTS idx_stock_check_log_item_id ON StockCheckLogItem(itemId);
+  `);
+
   // Initialize purchase order tables
   try {
     const { initPurchaseOrderTables } = require('./purchaseOrderSchema');

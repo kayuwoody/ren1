@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Package, Download, Save, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Search, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Package, Download, Save, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Search, RefreshCw, History, Clock } from 'lucide-react';
 
 interface StockCheckItem {
   id: string;
@@ -21,6 +21,29 @@ interface StockInput {
   note: string;
 }
 
+interface StockCheckLog {
+  id: string;
+  checkDate: string;
+  itemsChecked: number;
+  itemsAdjusted: number;
+  notes?: string;
+  createdAt: string;
+}
+
+interface StockCheckLogItem {
+  id: string;
+  itemType: 'product' | 'material';
+  itemId: string;
+  itemName: string;
+  supplier?: string;
+  previousStock: number;
+  countedStock: number;
+  difference: number;
+  unit: string;
+  note?: string;
+  wcSynced: boolean;
+}
+
 export default function StockCheckPage() {
   const [items, setItems] = useState<StockCheckItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +54,10 @@ export default function StockCheckPage() {
   const [collapsedSuppliers, setCollapsedSuppliers] = useState<Set<string>>(new Set());
   const [showOnlyDiff, setShowOnlyDiff] = useState(false);
   const [updateResult, setUpdateResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [logs, setLogs] = useState<StockCheckLog[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<{ log: StockCheckLog; items: StockCheckLogItem[] } | null>(null);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -53,9 +80,42 @@ export default function StockCheckPage() {
     }
   }, []);
 
+  const fetchLogs = useCallback(async () => {
+    setLoadingLogs(true);
+    try {
+      const res = await fetch('/api/admin/stock-check/logs?limit=10');
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.logs);
+      }
+    } catch (err) {
+      console.error('Failed to fetch logs:', err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, []);
+
+  const fetchLogDetails = async (logId: string) => {
+    try {
+      const res = await fetch(`/api/admin/stock-check/logs/${logId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedLog(data.log);
+      }
+    } catch (err) {
+      console.error('Failed to fetch log details:', err);
+    }
+  };
+
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
+
+  useEffect(() => {
+    if (showLogs && logs.length === 0) {
+      fetchLogs();
+    }
+  }, [showLogs, logs.length, fetchLogs]);
 
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
@@ -142,6 +202,10 @@ export default function StockCheckPage() {
         setStockInputs(newInputs);
         // Refresh items to show updated stock
         await fetchItems();
+        // Refresh logs if visible
+        if (showLogs) {
+          await fetchLogs();
+        }
       } else {
         setUpdateResult({ success: false, message: data.error || 'Update failed' });
       }
@@ -451,6 +515,126 @@ export default function StockCheckPage() {
               </div>
             );
           })}
+        </div>
+
+        {/* Stock Check History */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            className="w-full px-6 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition"
+          >
+            <div className="flex items-center gap-3">
+              <History className="w-5 h-5 text-gray-600" />
+              <span className="font-semibold text-lg">Stock Check History</span>
+              {logs.length > 0 && (
+                <span className="text-sm text-gray-500">({logs.length} recent)</span>
+              )}
+            </div>
+            {showLogs ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          </button>
+
+          {showLogs && (
+            <div className="p-4">
+              {loadingLogs ? (
+                <p className="text-gray-500 text-center py-4">Loading history...</p>
+              ) : logs.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No stock check history yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {logs.map(log => (
+                    <div
+                      key={log.id}
+                      className="border rounded-lg overflow-hidden"
+                    >
+                      <button
+                        onClick={() => {
+                          if (selectedLog?.log.id === log.id) {
+                            setSelectedLog(null);
+                          } else {
+                            fetchLogDetails(log.id);
+                          }
+                        }}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition"
+                      >
+                        <div className="flex items-center gap-4">
+                          <Clock className="w-4 h-4 text-gray-400" />
+                          <div className="text-left">
+                            <p className="font-medium">
+                              {new Date(log.checkDate).toLocaleDateString('en-MY', {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {log.itemsChecked} items checked, {log.itemsAdjusted} adjusted
+                            </p>
+                          </div>
+                        </div>
+                        {selectedLog?.log.id === log.id ? (
+                          <ChevronUp className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+
+                      {selectedLog?.log.id === log.id && selectedLog.items && (
+                        <div className="border-t bg-gray-50 p-4">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-xs text-gray-500 uppercase">
+                                <th className="text-left pb-2">Item</th>
+                                <th className="text-right pb-2">Previous</th>
+                                <th className="text-right pb-2">Counted</th>
+                                <th className="text-right pb-2">Diff</th>
+                                <th className="text-left pb-2 pl-4">Note</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {selectedLog.items.map(item => (
+                                <tr key={item.id}>
+                                  <td className="py-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`px-1.5 py-0.5 text-xs rounded ${
+                                        item.itemType === 'product' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                                      }`}>
+                                        {item.itemType === 'product' ? 'P' : 'M'}
+                                      </span>
+                                      <span>{item.itemName}</span>
+                                      {item.wcSynced && (
+                                        <span className="text-xs text-green-600">(WC)</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-2 text-right text-gray-500">
+                                    {item.previousStock.toFixed(item.unit === 'pcs' ? 0 : 1)} {item.unit}
+                                  </td>
+                                  <td className="py-2 text-right font-medium">
+                                    {item.countedStock.toFixed(item.unit === 'pcs' ? 0 : 1)} {item.unit}
+                                  </td>
+                                  <td className={`py-2 text-right font-semibold ${
+                                    item.difference > 0 ? 'text-green-600' : item.difference < 0 ? 'text-red-600' : 'text-gray-400'
+                                  }`}>
+                                    {item.difference > 0 ? '+' : ''}{item.difference.toFixed(item.unit === 'pcs' ? 0 : 1)}
+                                  </td>
+                                  <td className="py-2 pl-4 text-gray-500 truncate max-w-[150px]">
+                                    {item.note || '-'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Bottom action bar for mobile */}
