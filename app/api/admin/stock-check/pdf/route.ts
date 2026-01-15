@@ -81,9 +81,14 @@ export async function GET() {
       return a.localeCompare(b);
     });
 
-    // Sort items within each supplier by name
+    // Sort items within each supplier by category, then by name
     for (const supplier of sortedSuppliers) {
-      groupedBySupplier[supplier].sort((a, b) => a.name.localeCompare(b.name));
+      groupedBySupplier[supplier].sort((a, b) => {
+        if (a.category !== b.category) {
+          return a.category.localeCompare(b.category);
+        }
+        return a.name.localeCompare(b.name);
+      });
     }
 
     // Create PDF

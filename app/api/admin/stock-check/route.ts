@@ -59,13 +59,16 @@ export async function GET() {
       });
     }
 
-    // Sort by supplier, then by name
+    // Sort by supplier, then by category, then by name
     items.sort((a, b) => {
       if (a.supplier !== b.supplier) {
         // Put "Unassigned" at the end
         if (a.supplier === 'Unassigned') return 1;
         if (b.supplier === 'Unassigned') return -1;
         return a.supplier.localeCompare(b.supplier);
+      }
+      if (a.category !== b.category) {
+        return a.category.localeCompare(b.category);
       }
       return a.name.localeCompare(b.name);
     });
