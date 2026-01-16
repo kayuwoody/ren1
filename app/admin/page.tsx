@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -344,6 +344,17 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-semibold">Products Sold</h2>
                 </div>
                 <p className="text-purple-50">Product performance, margins, and trends</p>
+              </Link>
+
+              <Link
+                href="/admin/stock-check"
+                className="bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <ClipboardList className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Stock Check</h2>
+                </div>
+                <p className="text-teal-50">Physical inventory count and stock update</p>
               </Link>
             </div>
           </div>
