@@ -1,8 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Package, DollarSign, TrendingUp, TrendingDown, Download, Percent, Award, Star } from 'lucide-react';
+import { ArrowLeft, Package, DollarSign, TrendingUp, TrendingDown, Download, Percent, Award, Star, ChevronDown, ChevronRight } from 'lucide-react';
+
+interface SaleDetail {
+  orderId: number;
+  orderNumber: string;
+  date: string;
+  quantity: number;
+  price: number;
+  cogs: number;
+}
 
 interface ProductData {
   name: string;
@@ -15,6 +24,7 @@ interface ProductData {
   avgCogs: number;
   avgProfit: number;
   discountTotal: number;
+  sales: SaleDetail[];
 }
 
 interface ProductsReport {
@@ -56,6 +66,19 @@ export default function ProductsSoldPage() {
   const [sortField, setSortField] = useState<SortField>('quantity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (productName: string) => {
+    setExpandedProducts(prev => {
+      const next = new Set(prev);
+      if (next.has(productName)) {
+        next.delete(productName);
+      } else {
+        next.add(productName);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     fetchReport();
@@ -514,32 +537,101 @@ export default function ProductsSoldPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {sortedProducts.map((product, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium">{product.name}</td>
-                    <td className="px-6 py-4 text-sm text-right font-semibold text-purple-600">
-                      {product.quantity}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right">
-                      RM {product.revenue.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right text-red-600">
-                      RM {product.cogs.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right font-bold text-green-600">
-                      RM {product.profit.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right">
-                      <MarginBadge margin={product.margin} />
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right text-gray-600">
-                      RM {product.avgPrice.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right text-gray-600">
-                      RM {product.avgProfit.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
+                {sortedProducts.map((product, index) => {
+                  const isExpanded = expandedProducts.has(product.name);
+                  return (
+                    <React.Fragment key={index}>
+                      <tr
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => toggleExpanded(product.name)}
+                      >
+                        <td className="px-6 py-4 text-sm font-medium">
+                          <div className="flex items-center gap-2">
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4 text-gray-400" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-gray-400" />
+                            )}
+                            {product.name}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-right font-semibold text-purple-600">
+                          {product.quantity}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-right">
+                          RM {product.revenue.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-right text-red-600">
+                          RM {product.cogs.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-right font-bold text-green-600">
+                          RM {product.profit.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-right">
+                          <MarginBadge margin={product.margin} />
+                        </td>
+                        <td className="px-6 py-4 text-sm text-right text-gray-600">
+                          RM {product.avgPrice.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-right text-gray-600">
+                          RM {product.avgProfit.toFixed(2)}
+                        </td>
+                      </tr>
+                      {isExpanded && product.sales && product.sales.length > 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-0 py-0 bg-gray-50">
+                            <div className="px-8 py-3">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-xs text-gray-500 uppercase">
+                                    <th className="px-3 py-2 text-left">Order #</th>
+                                    <th className="px-3 py-2 text-left">Date</th>
+                                    <th className="px-3 py-2 text-right">Qty</th>
+                                    <th className="px-3 py-2 text-right">Unit Price</th>
+                                    <th className="px-3 py-2 text-right">Unit COGS</th>
+                                    <th className="px-3 py-2 text-right">Unit Profit</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {product.sales.map((sale, saleIndex) => (
+                                    <tr key={saleIndex} className="hover:bg-gray-100">
+                                      <td className="px-3 py-2 font-medium">
+                                        <Link
+                                          href={`/orders/${sale.orderId}`}
+                                          className="text-blue-600 hover:underline"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          #{sale.orderNumber}
+                                        </Link>
+                                      </td>
+                                      <td className="px-3 py-2 text-gray-600">
+                                        {new Date(sale.date).toLocaleDateString('en-MY', {
+                                          day: 'numeric',
+                                          month: 'short',
+                                          year: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                        })}
+                                      </td>
+                                      <td className="px-3 py-2 text-right">{sale.quantity}</td>
+                                      <td className="px-3 py-2 text-right">RM {sale.price.toFixed(2)}</td>
+                                      <td className="px-3 py-2 text-right text-red-600">
+                                        RM {sale.cogs.toFixed(2)}
+                                      </td>
+                                      <td className="px-3 py-2 text-right text-green-600">
+                                        RM {(sale.price - sale.cogs).toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

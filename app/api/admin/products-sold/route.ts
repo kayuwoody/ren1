@@ -6,6 +6,15 @@ import { handleApiError } from '@/lib/api/error-handler';
 // Force dynamic rendering for this API route
 export const dynamic = 'force-dynamic';
 
+interface SaleDetail {
+  orderId: number;
+  orderNumber: string;
+  date: string;
+  quantity: number;
+  price: number;
+  cogs: number;
+}
+
 interface ProductData {
   name: string;
   quantity: number;
@@ -17,6 +26,7 @@ interface ProductData {
   avgCogs: number;
   avgProfit: number;
   discountTotal: number;
+  sales: SaleDetail[];
 }
 
 export async function GET(req: Request) {
@@ -164,6 +174,7 @@ export async function GET(req: Request) {
             avgCogs: 0,
             avgProfit: 0,
             discountTotal: 0,
+            sales: [],
           };
         }
 
@@ -173,6 +184,16 @@ export async function GET(req: Request) {
         productStats[productName].profit += (itemRevenue - itemCOGS);
         productStats[productName].discountTotal += itemDiscountShare;
 
+        // Add sale detail
+        productStats[productName].sales.push({
+          orderId: order.id,
+          orderNumber: order.number || String(order.id),
+          date: order.date_created,
+          quantity: item.quantity,
+          price: finalPrice,
+          cogs: itemCOGS / item.quantity,
+        });
+
         totalRevenue += itemRevenue;
         totalCOGS += itemCOGS;
         totalProfit += (itemRevenue - itemCOGS);
@@ -181,13 +202,14 @@ export async function GET(req: Request) {
       });
     });
 
-    // Calculate averages and margins
+    // Calculate averages and margins, sort sales by date descending
     const products = Object.values(productStats).map(p => ({
       ...p,
       margin: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0,
       avgPrice: p.quantity > 0 ? p.revenue / p.quantity : 0,
       avgCogs: p.quantity > 0 ? p.cogs / p.quantity : 0,
       avgProfit: p.quantity > 0 ? p.profit / p.quantity : 0,
+      sales: p.sales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     }));
 
     // Sort by quantity sold (default)
