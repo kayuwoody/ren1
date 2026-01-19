@@ -57,7 +57,7 @@ export default function CashPayment({
 
     try {
       // Update order status to processing (payment received)
-      const response = await fetch(`/api/update-order/${orderID}`, {
+      const response = await fetch(`/api/orders/${orderID}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

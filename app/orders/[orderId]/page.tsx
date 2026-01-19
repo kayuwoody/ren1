@@ -161,7 +161,7 @@ export default function OrderDetailPage() {
           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
           onClick={async () => {
             try {
-              const res = await fetch(`/api/update-order/${order.id}`, {
+              const res = await fetch(`/api/orders/${order.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'processing' }),
@@ -249,7 +249,7 @@ export default function OrderDetailPage() {
 
               try {
                 // 1. Mark order as completed
-                const res = await fetch(`/api/update-order/${order.id}`, {
+                const res = await fetch(`/api/orders/${order.id}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ status: 'completed' }),
