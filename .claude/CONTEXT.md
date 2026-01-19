@@ -287,3 +287,15 @@ location.reload()
 ---
 
 **For detailed docs**: See `AI_ASSISTANT_GUIDE.md`, `BUNDLE_COMPONENT_OPTIMIZATION.md`, `CRITICAL_FUNCTIONS.md`
+
+---
+
+## Architecture & Roadmap
+
+**See `.claude/ARCHITECTURE_ROADMAP.md`** for:
+- Target architecture (removing WooCommerce)
+- Customer-facing PWA plans
+- Locker kiosk integration
+- Customer accounts & loyalty system
+- Implementation priorities
+- Database migration path (SQLite → PostgreSQL)
