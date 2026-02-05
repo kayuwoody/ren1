@@ -74,9 +74,39 @@ export async function PATCH(
     // Broadcast order update to kitchen displays whenever status changes
     broadcastOrderUpdate();
 
-    // NOTE: Inventory consumption is now recorded when the order is CREATED (in create-with-payment route)
-    // This matches WooCommerce's behavior of immediately decrementing stock on order creation
-    // No need to record consumption again when status changes to 'processing'
+    // 4b) If order just moved to processing (payment confirmed), record inventory consumption
+    // Stock is ONLY deducted when payment is confirmed, not when order is created
+    if (body.status === 'processing' && existing.status !== 'processing') {
+      try {
+        // Prepare line items for consumption API
+        const lineItems = existing.line_items.map((item: any) => ({
+          productId: item.product_id,
+          productName: item.name,
+          quantity: item.quantity,
+          orderItemId: item.id,
+          meta_data: item.meta_data,
+        }));
+
+        // Call consumption API to deduct stock from SQLite
+        const consumptionResponse = await fetch(`${req.url.split('/api')[0]}/api/orders/consumption`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId,
+            lineItems,
+          }),
+        });
+
+        if (!consumptionResponse.ok) {
+          console.error(`⚠️ Failed to record inventory consumption for order ${orderId}:`, await consumptionResponse.text());
+        } else {
+          console.log(`✅ Inventory consumption recorded for order #${orderId}`);
+        }
+      } catch (consumptionErr) {
+        console.error(`❌ Error calling consumption API for order ${orderId}:`, consumptionErr);
+        // Don't fail the order update if consumption recording fails
+      }
+    }
 
     // 5) If order is now ready, send push notification
     if (body.status === 'ready-for-pickup') {

@@ -59,38 +59,7 @@ export async function POST(req: Request) {
       meta_data,
     });
 
-    console.log(`✅ Order created: #${order.id}`);
-
-    // IMMEDIATELY update local SQLite inventory to match WooCommerce's auto-deduction
-    // WooCommerce automatically decrements stock when order is created, so SQLite must do the same
-    // This ensures SQLite (source of truth) stays in sync with WooCommerce
-    try {
-      const consumptionPayload = {
-        orderId: order.id.toString(),
-        lineItems: order.line_items.map((item: any) => ({
-          productId: item.product_id,
-          productName: item.name,
-          quantity: item.quantity,
-          orderItemId: item.id,
-          meta_data: item.meta_data,
-        })),
-      };
-
-      const consumptionResponse = await fetch(`${new URL(req.url).origin}/api/orders/consumption`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(consumptionPayload),
-      });
-
-      if (!consumptionResponse.ok) {
-        console.error(`⚠️ Failed to record inventory consumption for order ${order.id}:`, await consumptionResponse.text());
-      } else {
-        console.log(`✅ SQLite inventory updated for order #${order.id}`);
-      }
-    } catch (consumptionErr) {
-      console.error(`❌ Error calling consumption API for order ${order.id}:`, consumptionErr);
-      // Don't fail the order if consumption recording fails - order is already created in WooCommerce
-    }
+    console.log(`✅ Order created: #${order.id} (pending payment)`);
 
     // Extract payment information
     const payment = getPaymentInfo(order);
