@@ -518,7 +518,7 @@ export default function RecipesPage() {
               className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition text-sm font-medium disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Syncing...' : 'Sync from WooCommerce'}
+              {syncing ? 'Refreshing...' : 'Refresh Products'}
             </button>
             <button
               onClick={syncToVercelBlob}
@@ -535,7 +535,7 @@ export default function RecipesPage() {
             {filteredProducts.length === 0 ? (
               <div className="p-4 text-center text-gray-500">
                 <p>No products found</p>
-                <p className="text-xs mt-1">Click sync to load from WooCommerce</p>
+                <p className="text-xs mt-1">Try refreshing or adjusting your search</p>
               </div>
             ) : (
               <div className="divide-y">

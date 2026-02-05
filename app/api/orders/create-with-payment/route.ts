@@ -59,6 +59,8 @@ export async function POST(req: Request) {
       meta_data,
     });
 
+    console.log(`✅ Order created: #${order.id} (pending payment)`);
+
     // Extract payment information
     const payment = getPaymentInfo(order);
 
@@ -74,7 +76,7 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log(`✅ Order created: #${order.id}, Payment URL: ${payment.paymentURL}`);
+    console.log(`💳 Payment URL ready: ${payment.paymentURL}`);
 
     return NextResponse.json({
       success: true,
