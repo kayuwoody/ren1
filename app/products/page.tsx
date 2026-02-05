@@ -336,7 +336,7 @@ const ProductListPage: React.FC = () => {
 
             {/* Product info */}
             <div className="p-3">
-              <h3 className="font-semibold text-gray-900 mb-1 line-clamp-1">{product.name}</h3>
+              <h3 className="font-semibold text-gray-900 mb-1 line-clamp-3">{product.name}</h3>
               {/* Category tag */}
               {product.categories && product.categories.length > 0 && (
                 <p className="text-xs text-gray-500 mb-1">
