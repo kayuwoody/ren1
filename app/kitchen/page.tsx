@@ -225,7 +225,7 @@ export default function KitchenDisplayPage() {
       // For delivery: keep in processing with out_for_delivery flag
       const status = readyType === "pickup" ? "ready-for-pickup" : "processing";
 
-      const response = await fetch(`/api/update-order/${orderId}`, {
+      const response = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

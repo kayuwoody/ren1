@@ -61,7 +61,7 @@ export default function DeliveryPage() {
   const markDelivered = async (orderId: number) => {
     setCompletingOrderId(orderId);
     try {
-      const response = await fetch(`/api/update-order/${orderId}`, {
+      const response = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

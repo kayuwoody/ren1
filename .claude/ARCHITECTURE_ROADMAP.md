@@ -142,6 +142,64 @@ Coffee Oasis is evolving from a WooCommerce-dependent POS to a unified, self-hos
 - Membership tiers
 - Promo eligibility
 
+### 6. WebSocket for Real-Time (Replacing SSE)
+
+**Decision:** Replace Server-Sent Events with WebSocket for all real-time communication.
+
+**Rationale:**
+- SSE is one-way (server → client only)
+- WebSocket is bidirectional (needed for locker sync)
+- Single infrastructure serves: kitchen display, customer display, locker sync
+- Better connection management and reconnection handling
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      WebSocket Server                           │
+│                      (Main POS)                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Channels:                                                      │
+│  ├── kitchen      → Order updates for kitchen display           │
+│  ├── customer     → Cart sync for customer display              │
+│  ├── locker:{id}  → Sync channel per locker                     │
+│  └── admin        → Real-time stats for dashboard               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+         │              │              │              │
+         ▼              ▼              ▼              ▼
+    ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐
+    │ Kitchen │   │Customer │   │ Locker  │   │ Locker  │
+    │ Display │   │ Display │   │   001   │   │   002   │
+    └─────────┘   └─────────┘   └─────────┘   └─────────┘
+```
+
+**Message Types:**
+
+```typescript
+// Server → Client
+interface ServerMessage {
+  type: 'order_update' | 'product_update' | 'inventory_update' | 'cart_update';
+  channel: string;
+  payload: any;
+  timestamp: string;
+}
+
+// Client → Server (locker pushing orders)
+interface ClientMessage {
+  type: 'new_order' | 'pickup_complete' | 'heartbeat';
+  lockerId?: string;
+  payload: any;
+}
+```
+
+**Implementation:**
+- Use `ws` package for Node.js WebSocket server
+- Custom route handler at `/api/ws` or separate WebSocket server
+- Client reconnection with exponential backoff
+- Heartbeat to detect stale connections
+
 ---
 
 ## Ordering Channels
@@ -342,10 +400,26 @@ CREATE TABLE PromoUsage (
 
 ## Implementation Roadmap
 
+### Phase 0: Infrastructure (Do First)
+
+**Rationale:** Complete infrastructure changes before forking locker branch. This ensures:
+- Locker inherits WebSocket infrastructure (no duplicate work)
+- Locker branch has no WooCommerce code to strip
+- Clean fork point with modern stack
+
+| Task | Priority | Notes |
+|------|----------|-------|
+| WebSocket server | P0 | Replace SSE, foundation for locker sync |
+| WooCommerce removal | P0 | Remove sync code, use local DB as source of truth |
+| Direct Fiuu integration | P0 | Unblocks all channels |
+| Service extraction | P1 | Isolate business logic from routes |
+| Route consolidation | P1 | ✓ Done - merged redundant endpoints |
+
+**After Phase 0:** Fork `locker` branch from clean codebase.
+
 ### Phase 1: Foundation
 | Task | Priority | Notes |
 |------|----------|-------|
-| Direct Fiuu integration | P0 | Unblocks all channels |
 | Customer auth (NextAuth.js) | P0 | Foundation for accounts |
 | Customer database tables | P1 | Schema additions above |
 | Order-customer linking | P1 | Associate orders with accounts |
@@ -361,10 +435,12 @@ CREATE TABLE PromoUsage (
 ### Phase 3: Locker Integration
 | Task | Priority | Notes |
 |------|----------|-------|
-| Locker/compartment data model | P0 | Schema additions |
+| Fork locker branch | P0 | After Phase 0 complete |
+| Locker sync client | P0 | WebSocket client + offline queue |
+| Hardware abstraction | P1 | GPIO/serial drivers |
+| Locker/compartment data model | P1 | Schema additions |
 | Locker management admin UI | P1 | Add/edit lockers, view status |
 | Pickup code generation | P1 | Secure 6-digit codes |
-| Locker IoT API | P1 | Unlock endpoint |
 | Kiosk mode UI | P2 | Fullscreen, touch-optimized |
 
 ### Phase 4: Loyalty & Promos
@@ -375,15 +451,7 @@ CREATE TABLE PromoUsage (
 | Promo code system | P2 | Create, validate, apply |
 | Membership tiers | P2 | Auto-upgrade based on spend |
 
-### Phase 5: WooCommerce Removal
-| Task | Priority | Notes |
-|------|----------|-------|
-| Migrate remaining WC data | P1 | Historical orders if needed |
-| Remove WC sync code | P1 | Clean up lib/wooClient.ts etc |
-| Remove WC dependencies | P2 | package.json cleanup |
-| Update documentation | P2 | Remove WC references |
-
-### Phase 6: Scale (Future)
+### Phase 5: Scale (Future)
 | Task | Priority | Notes |
 |------|----------|-------|
 | PostgreSQL migration | P2 | When multi-location needed |
@@ -401,9 +469,9 @@ CREATE TABLE PromoUsage (
 | Database | SQLite | SQLite → PostgreSQL | Later |
 | Payments | Fiuu via WC | Fiuu direct | Yes |
 | Auth | None (staff only) | NextAuth.js | Add |
-| Real-time | SSE | SSE | No |
+| Real-time | SSE | **WebSocket** | Yes |
 | Mobile | N/A | PWA | Add |
-| E-commerce | WooCommerce | None (self-built) | Remove |
+| E-commerce | WooCommerce | **None (removed)** | Remove |
 
 ---
 
