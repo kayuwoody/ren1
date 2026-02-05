@@ -299,8 +299,8 @@ const ProductListPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Responsive grid - 3 cols on mobile, scales up on larger screens */}
-      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      {/* Responsive grid - 3 cols fixed on mobile, auto-fill on larger screens */}
+      <div className="grid gap-3 grid-cols-3 md:[grid-template-columns:repeat(auto-fill,minmax(150px,1fr))]">
         {filteredProducts.map(product => {
           const isOutOfStock = product.manage_stock && (product.stock_quantity ?? 0) === 0;
           return (
