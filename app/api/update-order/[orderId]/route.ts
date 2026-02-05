@@ -74,37 +74,9 @@ export async function PATCH(
     // Broadcast order update to kitchen displays whenever status changes
     broadcastOrderUpdate();
 
-    // 4b) If order just moved to processing, record inventory consumption
-    if (body.status === 'processing' && existing.status !== 'processing') {
-      try {
-
-        // Prepare line items for consumption API
-        const lineItems = existing.line_items.map((item: any) => ({
-          productId: item.product_id,
-          productName: item.name,
-          quantity: item.quantity,
-          orderItemId: item.id,
-          meta_data: item.meta_data,
-        }));
-
-        // Call consumption API
-        const consumptionResponse = await fetch(`${req.url.split('/api')[0]}/api/orders/consumption`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId,
-            lineItems,
-          }),
-        });
-
-        if (!consumptionResponse.ok) {
-          console.error(`Failed to record inventory consumption:`, await consumptionResponse.text());
-        }
-      } catch (consumptionErr) {
-        console.error('   ⚠️ Error calling consumption API:', consumptionErr);
-        // Don't fail the order update if consumption recording fails
-      }
-    }
+    // NOTE: Inventory consumption is now recorded when the order is CREATED (in create-with-payment route)
+    // This matches WooCommerce's behavior of immediately decrementing stock on order creation
+    // No need to record consumption again when status changes to 'processing'
 
     // 5) If order is now ready, send push notification
     if (body.status === 'ready-for-pickup') {
