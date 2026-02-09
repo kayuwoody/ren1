@@ -15,42 +15,62 @@ export async function GET(req: Request) {
     const hideStaffMeals = searchParams.get('hideStaffMeals') === 'true';
 
     // Calculate date range
+    // Get current time in GMT+8 (Malaysia timezone)
+    const now = new Date();
+    const utc8Now = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    const currentYear = utc8Now.getUTCFullYear();
+    const currentMonth = utc8Now.getUTCMonth();
+    const currentDay = utc8Now.getUTCDate();
+
     let startDate = new Date();
     let endDate = new Date();
 
-    // IMPORTANT: Use UTC methods to avoid timezone issues
-    // Set endDate to end of day in UTC (23:59:59.999 UTC)
-    endDate.setUTCHours(23, 59, 59, 999);
+    // Set endDate to end of current day in GMT+8 (converted to UTC)
+    // GMT+8 23:59:59 = UTC 15:59:59 same day
+    endDate = new Date(Date.UTC(currentYear, currentMonth, currentDay, 23, 59, 59, 999) - (8 * 60 * 60 * 1000));
 
     if (startDateParam && endDateParam) {
-      startDate = new Date(startDateParam);
-      startDate.setUTCHours(0, 0, 0, 0); // Start of day in UTC
-      endDate = new Date(endDateParam);
-      endDate.setUTCHours(23, 59, 59, 999); // End of day in UTC
+      // Custom date range - parse as GMT+8 dates
+      const startParts = startDateParam.split('-');
+      const endParts = endDateParam.split('-');
+
+      startDate = new Date(Date.UTC(
+        parseInt(startParts[0]),
+        parseInt(startParts[1]) - 1,
+        parseInt(startParts[2]),
+        0, 0, 0, 0
+      ) - (8 * 60 * 60 * 1000));
+
+      endDate = new Date(Date.UTC(
+        parseInt(endParts[0]),
+        parseInt(endParts[1]) - 1,
+        parseInt(endParts[2]),
+        23, 59, 59, 999
+      ) - (8 * 60 * 60 * 1000));
     } else {
       // Calculate based on range
       switch (range) {
         case '7days':
-          startDate.setDate(startDate.getDate() - 7);
-          startDate.setUTCHours(0, 0, 0, 0);
+          // Start from 7 days ago at midnight GMT+8
+          startDate = new Date(Date.UTC(currentYear, currentMonth, currentDay - 7, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
           break;
         case '30days':
-          startDate.setDate(startDate.getDate() - 30);
-          startDate.setUTCHours(0, 0, 0, 0);
+          // Start from 30 days ago at midnight GMT+8
+          startDate = new Date(Date.UTC(currentYear, currentMonth, currentDay - 30, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
           break;
         case '90days':
-          startDate.setDate(startDate.getDate() - 90);
-          startDate.setUTCHours(0, 0, 0, 0);
+          // Start from 90 days ago at midnight GMT+8
+          startDate = new Date(Date.UTC(currentYear, currentMonth, currentDay - 90, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
           break;
         case 'mtd':
-          // Month to date - start of current month
-          startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-          startDate.setUTCHours(0, 0, 0, 0);
+          // Month to date - start of current month in GMT+8
+          // First day of current month at midnight GMT+8, converted to UTC
+          startDate = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
           break;
         case 'ytd':
-          // Year to date - start of current year
-          startDate = new Date(endDate.getFullYear(), 0, 1);
-          startDate.setUTCHours(0, 0, 0, 0);
+          // Year to date - start of current year in GMT+8
+          // January 1st of current year at midnight GMT+8, converted to UTC
+          startDate = new Date(Date.UTC(currentYear, 0, 1, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
           break;
         case 'all':
           startDate = new Date('2020-01-01');
