@@ -174,17 +174,17 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     console.log(`🔄 Syncing ${wcProduct.name} - Preserving supplier: "${existing.supplier}"`);
   }
 
-  // Use WooCommerce stock as the source of truth
-  // WooCommerce is always updated (by itself for online orders, or by our app for POS orders)
-  // This ensures stock stays in sync even when orders come through WooCommerce directly
-  const wcStockQuantity = wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0;
-  const stockQuantity = wcStockQuantity;
+  // PRESERVE local SQLite stock as source of truth
+  // SQLite is updated when orders are paid (via consumption API)
+  // Only use WooCommerce stock for NEW products that don't exist in SQLite yet
+  const stockQuantity = existing?.stockQuantity ?? (wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0);
 
-  // Debug logging for stock sync
+  // Debug logging for stock preservation
   if (existing && wcProduct.manage_stock) {
     const localStock = existing.stockQuantity ?? 0;
-    if (localStock !== wcStockQuantity) {
-      console.log(`📦 Stock sync for "${wcProduct.name}": Local=${localStock} → WC=${wcStockQuantity} (updating to match WC)`);
+    const wcStock = wcProduct.stock_quantity ?? 0;
+    if (localStock !== wcStock) {
+      console.log(`📦 Stock preservation for "${wcProduct.name}": Local=${localStock} (KEPT), WC=${wcStock} (ignored)`);
     }
   }
 
