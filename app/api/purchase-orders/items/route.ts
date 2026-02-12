@@ -3,6 +3,8 @@ import { getAllProducts } from '@/lib/db/productService';
 import { getAllMaterials } from '@/lib/db/materialService';
 import { handleApiError } from '@/lib/api/error-handler';
 
+export const dynamic = 'force-dynamic'; // Prevent Next.js from caching responses
+
 /**
  * GET /api/purchase-orders/items
  *
