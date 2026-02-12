@@ -14,6 +14,7 @@ export interface Product {
   manageStock: boolean;
   comboPriceOverride?: number;
   supplier?: string;
+  quantityPerCarton?: number;
   imageUrl?: string;
   createdAt: string;
   updatedAt: string;
@@ -93,7 +94,7 @@ export function upsertProduct(
     const stmt = db.prepare(`
       UPDATE Product
       SET wcId = ?, name = ?, sku = ?, category = ?, basePrice = ?,
-          supplierCost = ?, unitCost = ?, stockQuantity = ?, manageStock = ?, supplier = ?, imageUrl = ?, updatedAt = ?
+          supplierCost = ?, unitCost = ?, stockQuantity = ?, manageStock = ?, supplier = ?, quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
       WHERE id = ?
     `);
 
@@ -108,6 +109,7 @@ export function upsertProduct(
       product.stockQuantity,
       product.manageStock ? 1 : 0,
       product.supplier || null,
+      product.quantityPerCarton || null,
       product.imageUrl || null,
       now,
       id
@@ -116,8 +118,8 @@ export function upsertProduct(
     // Insert new product
     const stmt = db.prepare(`
       INSERT INTO Product (id, wcId, name, sku, category, basePrice, supplierCost, unitCost,
-                          stockQuantity, manageStock, supplier, imageUrl, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          stockQuantity, manageStock, supplier, quantityPerCarton, imageUrl, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -132,6 +134,7 @@ export function upsertProduct(
       product.stockQuantity,
       product.manageStock ? 1 : 0,
       product.supplier || null,
+      product.quantityPerCarton || null,
       product.imageUrl || null,
       now,
       now
@@ -168,6 +171,7 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
   const supplierCost = existing?.supplierCost ?? 0;
   const unitCost = existing?.unitCost ?? 0;
   const supplier = existing?.supplier ?? undefined; // Preserve supplier
+  const quantityPerCarton = existing?.quantityPerCarton ?? undefined; // Preserve carton quantity
 
   // Debug logging for supplier sync
   if (existing?.supplier) {
@@ -204,6 +208,7 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     stockQuantity, // Use WooCommerce stock as source of truth
     manageStock: wcProduct.manage_stock ?? false, // Store whether WooCommerce tracks inventory
     supplier, // Preserve existing supplier (local field)
+    quantityPerCarton, // Preserve existing carton quantity (local field)
     imageUrl: wcProduct.images?.[0]?.src,
   });
 

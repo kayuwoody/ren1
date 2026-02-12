@@ -27,6 +27,7 @@ export async function GET(req: Request) {
         unitCost: product.unitCost,
         comboPriceOverride: product.comboPriceOverride,
         supplier: product.supplier,
+        quantityPerCarton: product.quantityPerCarton ?? null,
         imageUrl: product.imageUrl,
         stockQuantity: product.stockQuantity ?? null,
         manageStock: product.manageStock ?? false,

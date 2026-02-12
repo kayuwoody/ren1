@@ -228,6 +228,21 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Add quantityPerCarton column if it doesn't exist
+  try {
+    const tableInfo = db.prepare('PRAGMA table_info(Product)').all() as Array<{ name: string }>;
+    const hasQuantityPerCarton = tableInfo.some(col => col.name === 'quantityPerCarton');
+
+    if (tableInfo.length > 0 && !hasQuantityPerCarton) {
+      console.log('🔄 Adding quantityPerCarton column to Product table...');
+      db.exec(`ALTER TABLE Product ADD COLUMN quantityPerCarton INTEGER`);
+      console.log('✅ quantityPerCarton column added');
+      console.log('📝 Note: Number of units per carton for purchase order calculations');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
   // Material Price History (audit trail for cost changes)
   db.exec(`
     CREATE TABLE IF NOT EXISTS MaterialPriceHistory (

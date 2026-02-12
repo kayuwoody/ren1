@@ -67,6 +67,8 @@ export default function RecipesPage() {
   const [newComboPrice, setNewComboPrice] = useState('');
   const [editingSupplier, setEditingSupplier] = useState(false);
   const [newSupplier, setNewSupplier] = useState('');
+  const [editingQuantityPerCarton, setEditingQuantityPerCarton] = useState(false);
+  const [newQuantityPerCarton, setNewQuantityPerCarton] = useState('');
   const [updatingStock, setUpdatingStock] = useState(false);
   const [syncingBlob, setSyncingBlob] = useState(false);
   const hasFetchedRef = useRef(false);
@@ -320,6 +322,51 @@ export default function RecipesPage() {
     } catch (error) {
       console.error('Failed to update supplier:', error);
       alert('Failed to update supplier. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateQuantityPerCarton() {
+    if (!selectedProduct) return;
+
+    // Parse quantity (allow empty to clear)
+    const quantity = newQuantityPerCarton.trim() ? parseInt(newQuantityPerCarton.trim()) : null;
+
+    // Validate quantity
+    if (quantity !== null && (isNaN(quantity) || quantity < 1)) {
+      alert('Quantity per carton must be a positive number');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/products/${selectedProduct.id}/quantity-per-carton`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantityPerCarton: quantity }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update quantity per carton');
+      }
+
+      // Update local state
+      setSelectedProduct({ ...selectedProduct, quantityPerCarton: quantity || undefined });
+      setProducts(products.map(p =>
+        p.id === selectedProduct.id ? { ...p, quantityPerCarton: quantity || undefined } : p
+      ));
+
+      setEditingQuantityPerCarton(false);
+      setNewQuantityPerCarton('');
+      if (quantity) {
+        alert(`Quantity per carton updated to ${quantity}`);
+      } else {
+        alert('Quantity per carton removed');
+      }
+    } catch (error) {
+      console.error('Failed to update quantity per carton:', error);
+      alert('Failed to update quantity per carton. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -624,6 +671,24 @@ export default function RecipesPage() {
                         }}
                         className="text-purple-600 hover:text-purple-800"
                         title="Edit supplier"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Qty per Carton</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-lg font-semibold text-indigo-600">
+                        {selectedProduct.quantityPerCarton ? `${selectedProduct.quantityPerCarton} pcs` : 'Not set'}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setNewQuantityPerCarton(selectedProduct.quantityPerCarton?.toString() || '');
+                          setEditingQuantityPerCarton(true);
+                        }}
+                        className="text-indigo-600 hover:text-indigo-800"
+                        title="Edit quantity per carton"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -1018,6 +1083,67 @@ export default function RecipesPage() {
                   onClick={updateSupplier}
                   disabled={saving}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Quantity Per Carton Modal */}
+        {editingQuantityPerCarton && selectedProduct && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-xl font-semibold mb-4">Quantity Per Carton</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Set how many units of <strong>{selectedProduct.name}</strong> come in one carton.
+                <br />
+                This will auto-calculate carton information in purchase orders.
+              </p>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantity (pieces per carton)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={newQuantityPerCarton}
+                  onChange={(e) => setNewQuantityPerCarton(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="e.g., 4, 12, 24"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Current: {selectedProduct.quantityPerCarton ? `${selectedProduct.quantityPerCarton} pcs/carton` : 'Not set'}
+                </p>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-indigo-800">
+                  <strong>Example:</strong>
+                  <br />• Set to 4: When ordering 12 units, PO notes will show "3 cartons of 4 (12 pcs)"
+                  <br />• Leave empty to disable auto-calculation
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setEditingQuantityPerCarton(false);
+                    setNewQuantityPerCarton('');
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateQuantityPerCarton}
+                  disabled={saving}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : 'Save'}
                 </button>
