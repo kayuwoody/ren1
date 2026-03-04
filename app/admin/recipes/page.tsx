@@ -15,6 +15,7 @@ interface Product {
   supplier?: string;
   stockQuantity?: number | null;
   manageStock?: boolean;
+  quantityPerCarton?: number | null;
 }
 
 interface Material {
