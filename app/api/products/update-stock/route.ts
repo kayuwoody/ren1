@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/init';
 import { wcApi } from '@/lib/wooClient';
 import { handleApiError, validationError, notFoundError } from '@/lib/api/error-handler';
+import { logStockMovement } from '@/lib/db/stockMovementService';
 
 /**
  * POST /api/products/update-stock
@@ -44,9 +45,24 @@ export async function POST(req: Request) {
 
     // Update local database
     const beforeUpdate = db.prepare('SELECT stockQuantity FROM Product WHERE id = ?').get(productId) as { stockQuantity: number } | undefined;
+    const stockBefore = beforeUpdate?.stockQuantity || 0;
     db.prepare('UPDATE Product SET stockQuantity = ? WHERE id = ?').run(stockQuantity, productId);
     const afterUpdate = db.prepare('SELECT stockQuantity FROM Product WHERE id = ?').get(productId) as { stockQuantity: number } | undefined;
-    console.log(`✅ Updated local stock for ${product.name}: ${beforeUpdate?.stockQuantity} → ${stockQuantity} (verified: ${afterUpdate?.stockQuantity})`);
+    console.log(`✅ Updated local stock for ${product.name}: ${stockBefore} → ${stockQuantity} (verified: ${afterUpdate?.stockQuantity})`);
+
+    // Log stock movement if stock actually changed
+    if (stockBefore !== stockQuantity) {
+      logStockMovement({
+        itemType: 'product',
+        itemId: productId,
+        itemName: product.name,
+        movementType: 'manual_adjustment',
+        quantityChange: stockQuantity - stockBefore,
+        stockBefore,
+        stockAfter: stockQuantity,
+        referenceNote: 'Manual adjustment (Recipes page)',
+      });
+    }
 
     // Update WooCommerce if product has wcId and manages stock
     if (product.wcId && product.manageStock) {
