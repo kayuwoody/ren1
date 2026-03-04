@@ -21,6 +21,7 @@ interface Product {
   supplierCost: number;
   supplier?: string;
   stockQuantity?: number;
+  quantityPerCarton?: number;
 }
 
 interface POItem {
@@ -186,6 +187,22 @@ export default function CreatePurchaseOrderPage() {
     if (product) {
       setNewItemUnit("pcs");
       setNewItemUnitCost(product.supplierCost);
+
+      // Auto-calculate initial notes based on quantityPerCarton
+      if (product.quantityPerCarton && product.quantityPerCarton > 0) {
+        const qty = newItemQuantity;
+        const cartons = Math.floor(qty / product.quantityPerCarton);
+        const remainder = qty % product.quantityPerCarton;
+        if (cartons > 0 && remainder === 0) {
+          setNewItemNotes(`${cartons} carton${cartons > 1 ? 's' : ''} of ${product.quantityPerCarton} (${qty} pcs)`);
+        } else if (cartons > 0) {
+          setNewItemNotes(`${cartons} carton${cartons > 1 ? 's' : ''} of ${product.quantityPerCarton} + ${remainder} pcs (${qty} pcs)`);
+        } else {
+          setNewItemNotes(`${qty} pcs`);
+        }
+      } else {
+        setNewItemNotes(`${newItemQuantity} pcs`);
+      }
     }
   };
 
@@ -446,7 +463,27 @@ export default function CreatePurchaseOrderPage() {
                 onChange={(e) => {
                   const qty = parseFloat(e.target.value);
                   setNewItemQuantity(qty);
-                  setNewItemNotes(`1 ctn of ${qty}`);
+
+                  // Auto-calculate notes based on quantityPerCarton for products
+                  if (newItemType === "product" && selectedProductId) {
+                    const product = products.find((p) => p.id === selectedProductId);
+                    if (product?.quantityPerCarton && product.quantityPerCarton > 0 && qty > 0) {
+                      const cartons = Math.floor(qty / product.quantityPerCarton);
+                      const remainder = qty % product.quantityPerCarton;
+                      if (cartons > 0 && remainder === 0) {
+                        setNewItemNotes(`${cartons} carton${cartons > 1 ? 's' : ''} of ${product.quantityPerCarton} (${qty} pcs)`);
+                      } else if (cartons > 0) {
+                        setNewItemNotes(`${cartons} carton${cartons > 1 ? 's' : ''} of ${product.quantityPerCarton} + ${remainder} pcs (${qty} pcs)`);
+                      } else {
+                        setNewItemNotes(`${qty} pcs`);
+                      }
+                    } else {
+                      setNewItemNotes(`${qty} pcs`);
+                    }
+                  } else {
+                    // For materials, use simple format
+                    setNewItemNotes(`${qty} pcs`);
+                  }
                 }}
                 min="0"
                 step="0.01"
