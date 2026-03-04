@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/init';
-import { updateBranchStock, syncLegacyStockColumns } from '@/lib/db/branchStockService';
+import { updateBranchStock, getBranchStock, syncLegacyStockColumns } from '@/lib/db/branchStockService';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 import { handleApiError, validationError, notFoundError } from '@/lib/api/error-handler';
+import { logStockMovement } from '@/lib/db/stockMovementService';
 
 /**
  * POST /api/products/update-stock
@@ -39,8 +40,8 @@ export async function POST(req: Request) {
       return notFoundError(`Product not found: ${productId}`, '/api/products/update-stock');
     }
 
-    const previousStock = product.stockQuantity;
     const branchId = getBranchIdFromRequest(req);
+    const stockBefore = getBranchStock(branchId, 'product', productId);
 
     // Update BranchStock (sole source of truth)
     updateBranchStock(branchId, 'product', productId, stockQuantity);
@@ -48,7 +49,21 @@ export async function POST(req: Request) {
     // Sync legacy columns
     syncLegacyStockColumns();
 
-    console.log(`✅ Updated stock for ${product.name}: ${previousStock} → ${stockQuantity} (branch: ${branchId})`);
+    // Log stock movement if stock actually changed
+    if (stockBefore !== stockQuantity) {
+      logStockMovement({
+        itemType: 'product',
+        itemId: productId,
+        itemName: product.name,
+        movementType: 'manual_adjustment',
+        quantityChange: stockQuantity - stockBefore,
+        stockBefore,
+        stockAfter: stockQuantity,
+        referenceNote: 'Manual adjustment (Recipes page)',
+      });
+    }
+
+    console.log(`✅ Updated stock for ${product.name}: ${stockBefore} → ${stockQuantity} (branch: ${branchId})`);
 
     return NextResponse.json({
       success: true,

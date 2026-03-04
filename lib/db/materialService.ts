@@ -1,6 +1,7 @@
 import { db, initDatabase } from './init';
 import { v4 as uuidv4 } from 'uuid';
 import { getLowStockItems, initBranchStockForItem } from './branchStockService';
+import { logStockMovement } from './stockMovementService';
 
 // Ensure database is initialized
 initDatabase();
@@ -75,6 +76,20 @@ export function upsertMaterial(
     // Record price change if cost changed
     if (existing.costPerUnit !== costPerUnit) {
       recordPriceChange(id, existing.purchaseCost, material.purchaseCost, existing.costPerUnit, costPerUnit, material.purchaseQuantity);
+    }
+
+    // Log stock movement if stock changed
+    if (existing.stockQuantity !== material.stockQuantity) {
+      logStockMovement({
+        itemType: 'material',
+        itemId: id,
+        itemName: material.name,
+        movementType: 'manual_adjustment',
+        quantityChange: material.stockQuantity - existing.stockQuantity,
+        stockBefore: existing.stockQuantity,
+        stockAfter: material.stockQuantity,
+        referenceNote: 'Manual adjustment (Materials page)',
+      });
     }
   } else {
     // Insert new material
