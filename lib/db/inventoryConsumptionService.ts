@@ -4,6 +4,7 @@ import { getProductRecipe } from './recipeService';
 import { getMaterial, updateMaterialStock } from './materialService';
 import { getProduct, getProductByWcId } from './productService';
 import { wcApi } from '../wooClient';
+import { logStockMovement } from './stockMovementService';
 
 // Ensure database is initialized
 initDatabase();
@@ -148,7 +149,7 @@ export async function recordProductSale(
 
     // Still deduct stock for products with no recipe (e.g., supplier-bought items like pies)
     if (depth === 0) {
-      deductLocalProductStock(productId, quantitySold, productName);
+      deductLocalProductStock(productId, quantitySold, productName, orderId, `Sale: Order ${orderId}`);
       console.log(`${indent}📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
 
       // Log stock comparison for root product
@@ -251,7 +252,7 @@ export async function recordProductSale(
       console.log(`${indent}      💾 Stored consumption: orderItemId=${orderItemId || 'null'}, material=${recipeItem.materialName}`);
 
       consumptions.push(consumption);
-      deductMaterialStock(recipeItem.materialId, quantityConsumed);
+      deductMaterialStock(recipeItem.materialId, quantityConsumed, orderId, `Sale: Order ${orderId}`);
     } else if (recipeItem.itemType === 'product' && recipeItem.linkedProductId) {
       // Linked product - record the product itself AND recursively process its materials
       console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
@@ -315,7 +316,7 @@ export async function recordProductSale(
         consumptions.push(linkedProductConsumption);
 
         // Deduct local DB inventory for linked products
-        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name);
+        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name, orderId, `Sale: Order ${orderId}`);
 
         // Deduct WooCommerce inventory for ALL linked products
         // These are component products that WooCommerce doesn't automatically deduct
@@ -346,7 +347,7 @@ export async function recordProductSale(
 
   // Deduct local DB stock for the main product (only at root level, not for linked products)
   if (depth === 0) {
-    deductLocalProductStock(productId, quantitySold, productName);
+    deductLocalProductStock(productId, quantitySold, productName, orderId, `Sale: Order ${orderId}`);
     console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
 
     // Log stock comparison for root product (WC was auto-deducted when order was created)
@@ -362,14 +363,15 @@ export async function recordProductSale(
 /**
  * Deduct material from stock
  */
-function deductMaterialStock(materialId: string, quantity: number): void {
+function deductMaterialStock(materialId: string, quantity: number, orderId?: string, orderRef?: string): void {
   const material = getMaterial(materialId);
   if (!material) {
     console.error(`❌ Material ${materialId} not found - cannot deduct stock`);
     return;
   }
 
-  const newStock = material.stockQuantity - quantity;
+  const stockBefore = material.stockQuantity;
+  const newStock = stockBefore - quantity;
 
   // Allow negative stock (backorder) but log warning
   if (newStock < 0) {
@@ -382,6 +384,19 @@ function deductMaterialStock(materialId: string, quantity: number): void {
   }
 
   updateMaterialStock(materialId, newStock);
+
+  // Log stock movement
+  logStockMovement({
+    itemType: 'material',
+    itemId: materialId,
+    itemName: material.name,
+    movementType: 'sale',
+    quantityChange: -quantity,
+    stockBefore,
+    stockAfter: newStock,
+    referenceId: orderId,
+    referenceNote: orderRef,
+  });
 }
 
 /**
@@ -389,7 +404,7 @@ function deductMaterialStock(materialId: string, quantity: number): void {
  * NOTE: Always updates local stock unconditionally (like PO receiving does)
  * The WC sync in deductWooProductStock will check WC's manage_stock independently
  */
-function deductLocalProductStock(productId: string, quantity: number, productName: string): void {
+function deductLocalProductStock(productId: string, quantity: number, productName: string, orderId?: string, orderRef?: string): void {
   const product = getProduct(productId);
   if (!product) {
     console.error(`❌ Product ${productId} not found - cannot deduct local stock`);
@@ -412,6 +427,19 @@ function deductLocalProductStock(productId: string, quantity: number, productNam
   if (newStock < 0) {
     console.warn(`   ⚠️  Local DB: ${productName} stock went negative: ${newStock}`);
   }
+
+  // Log stock movement
+  logStockMovement({
+    itemType: 'product',
+    itemId: productId,
+    itemName: productName,
+    movementType: 'sale',
+    quantityChange: -quantity,
+    stockBefore: currentStock,
+    stockAfter: newStock,
+    referenceId: orderId,
+    referenceNote: orderRef,
+  });
 }
 
 /**

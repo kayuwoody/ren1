@@ -6,6 +6,7 @@
 
 import { db } from './init';
 import { v4 as uuidv4 } from 'uuid';
+import { logStockMovement } from './stockMovementService';
 
 export interface StockCheckLog {
   id: string;
@@ -93,6 +94,22 @@ export function createStockCheckLog(input: CreateStockCheckLogInput): StockCheck
       item.wcSynced ? 1 : 0,
       now
     );
+
+    // Log stock movement for items that were actually adjusted
+    if (difference !== 0) {
+      logStockMovement({
+        itemType: item.itemType,
+        itemId: item.itemId,
+        itemName: item.itemName,
+        movementType: 'stock_check',
+        quantityChange: difference,
+        stockBefore: item.previousStock,
+        stockAfter: item.countedStock,
+        referenceId: logId,
+        referenceNote: `Stock Check`,
+        notes: item.note,
+      });
+    }
   }
 
   return {

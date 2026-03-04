@@ -13,6 +13,7 @@ import {
   generatePONumber,
 } from './purchaseOrderSchema';
 import { wcApi } from '../wooClient';
+import { logStockMovement } from './stockMovementService';
 
 interface CreatePurchaseOrderInput {
   supplier: string;
@@ -293,20 +294,53 @@ export async function markPurchaseOrderReceived(id: string): Promise<PurchaseOrd
   // Update inventory for materials and products
   for (const item of order.items) {
     if (item.itemType === 'material' && item.materialId) {
+      // Get current stock before update
+      const currentMaterial = db.prepare('SELECT stockQuantity, name FROM Material WHERE id = ?').get(item.materialId) as { stockQuantity: number; name: string } | undefined;
+      const stockBefore = currentMaterial?.stockQuantity || 0;
+
       // Update local material stock
       db.prepare('UPDATE Material SET stockQuantity = stockQuantity + ? WHERE id = ?')
         .run(item.quantity, item.materialId);
       console.log(`   ✅ Material: ${item.materialName} +${item.quantity} ${item.unit}`);
+
+      // Log stock movement
+      logStockMovement({
+        itemType: 'material',
+        itemId: item.materialId,
+        itemName: item.materialName || currentMaterial?.name || 'Unknown',
+        movementType: 'po_received',
+        quantityChange: item.quantity,
+        stockBefore,
+        stockAfter: stockBefore + item.quantity,
+        referenceId: order.id,
+        referenceNote: `PO: ${order.poNumber}`,
+      });
     } else if (item.itemType === 'product' && item.productId) {
+      // Get current stock before update
+      const currentProduct = db.prepare('SELECT stockQuantity, wcId, name FROM Product WHERE id = ?').get(item.productId) as { stockQuantity: number; wcId?: number; name: string } | undefined;
+      const stockBefore = currentProduct?.stockQuantity || 0;
+
       // Update local product stock
       db.prepare('UPDATE Product SET stockQuantity = stockQuantity + ? WHERE id = ?')
         .run(item.quantity, item.productId);
       console.log(`   ✅ Local Product: ${item.productName} +${item.quantity}`);
 
+      // Log stock movement
+      logStockMovement({
+        itemType: 'product',
+        itemId: item.productId,
+        itemName: item.productName || currentProduct?.name || 'Unknown',
+        movementType: 'po_received',
+        quantityChange: item.quantity,
+        stockBefore,
+        stockAfter: stockBefore + item.quantity,
+        referenceId: order.id,
+        referenceNote: `PO: ${order.poNumber}`,
+      });
+
       // Update WooCommerce stock if product has wcId
-      const product = db.prepare('SELECT wcId, name FROM Product WHERE id = ?').get(item.productId) as { wcId?: number; name: string } | undefined;
-      if (product?.wcId) {
-        await addWooProductStock(product.wcId, item.quantity, product.name);
+      if (currentProduct?.wcId) {
+        await addWooProductStock(currentProduct.wcId, item.quantity, currentProduct.name);
       } else {
         console.log(`   ℹ️  Product "${item.productName}" has no WooCommerce ID - skipping WooCommerce sync`);
       }
