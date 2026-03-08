@@ -21,10 +21,35 @@ export function initPurchaseOrderTables() {
       orderDate TEXT,
       expectedDeliveryDate TEXT,
       receivedDate TEXT,
+      branchId TEXT REFERENCES Branch(id),
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // Migration: Add branchId to PurchaseOrder table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(PurchaseOrder)").all() as any[];
+    const hasBranchId = tableInfo.some((col: any) => col.name === 'branchId');
+    if (tableInfo.length > 0 && !hasBranchId) {
+      console.log('Adding branchId column to PurchaseOrder table...');
+      db.exec(`ALTER TABLE PurchaseOrder ADD COLUMN branchId TEXT REFERENCES Branch(id)`);
+      db.exec(`UPDATE PurchaseOrder SET branchId = 'branch-main' WHERE branchId IS NULL`);
+      console.log('branchId column added to PurchaseOrder table');
+    }
+  } catch (e) { /* column already exists */ }
+
+  // Migration: Add branchId to PurchaseOrderItem table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(PurchaseOrderItem)").all() as any[];
+    const hasBranchId = tableInfo.some((col: any) => col.name === 'branchId');
+    if (tableInfo.length > 0 && !hasBranchId) {
+      console.log('Adding branchId column to PurchaseOrderItem table...');
+      db.exec(`ALTER TABLE PurchaseOrderItem ADD COLUMN branchId TEXT REFERENCES Branch(id)`);
+      db.exec(`UPDATE PurchaseOrderItem SET branchId = 'branch-main' WHERE branchId IS NULL`);
+      console.log('branchId column added to PurchaseOrderItem table');
+    }
+  } catch (e) { /* column already exists */ }
 
   // Purchase Order Items table
   db.exec(`
@@ -56,6 +81,7 @@ export function initPurchaseOrderTables() {
     CREATE INDEX IF NOT EXISTS idx_purchase_order_supplier ON PurchaseOrder(supplier);
     CREATE INDEX IF NOT EXISTS idx_purchase_order_status ON PurchaseOrder(status);
     CREATE INDEX IF NOT EXISTS idx_purchase_order_date ON PurchaseOrder(orderDate);
+    CREATE INDEX IF NOT EXISTS idx_purchase_order_branch ON PurchaseOrder(branchId);
     CREATE INDEX IF NOT EXISTS idx_purchase_order_item_po ON PurchaseOrderItem(purchaseOrderId);
     CREATE INDEX IF NOT EXISTS idx_purchase_order_item_material ON PurchaseOrderItem(materialId);
     CREATE INDEX IF NOT EXISTS idx_purchase_order_item_product ON PurchaseOrderItem(productId);
@@ -99,6 +125,7 @@ export interface PurchaseOrder {
   orderDate?: string;
   expectedDeliveryDate?: string;
   receivedDate?: string;
+  branchId?: string;
   createdAt: string;
   updatedAt: string;
 }

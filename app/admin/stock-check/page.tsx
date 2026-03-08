@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Package, Download, Save, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Search, RefreshCw, History, Clock } from 'lucide-react';
+import { useBranch } from '@/context/branchContext';
 
 interface StockCheckItem {
   id: string;
@@ -45,6 +46,7 @@ interface StockCheckLogItem {
 }
 
 export default function StockCheckPage() {
+  const { branchFetch, currentBranch } = useBranch();
   const [items, setItems] = useState<StockCheckItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,7 +64,7 @@ export default function StockCheckPage() {
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/stock-check');
+      const res = await branchFetch('/api/admin/stock-check');
       if (res.ok) {
         const data = await res.json();
         setItems(data.items);
@@ -78,7 +80,7 @@ export default function StockCheckPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [branchFetch]);
 
   const fetchLogs = useCallback(async () => {
     setLoadingLogs(true);
@@ -109,7 +111,7 @@ export default function StockCheckPage() {
 
   useEffect(() => {
     fetchItems();
-  }, [fetchItems]);
+  }, [fetchItems, currentBranch]);
 
   useEffect(() => {
     if (showLogs && logs.length === 0) {
@@ -182,7 +184,7 @@ export default function StockCheckPage() {
         note: stockInputs[item.id].note || undefined,
       }));
 
-      const res = await fetch('/api/admin/stock-check', {
+      const res = await branchFetch('/api/admin/stock-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updates }),

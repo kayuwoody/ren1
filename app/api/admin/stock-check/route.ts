@@ -5,6 +5,8 @@ import { createStockCheckLog } from '@/lib/db/stockCheckLogService';
 import { db } from '@/lib/db/init';
 import { wcApi } from '@/lib/wooClient';
 import { handleApiError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
+import { getBranchStock, updateBranchStock } from '@/lib/db/branchStockService';
 
 export interface StockCheckItem {
   id: string;
@@ -23,8 +25,9 @@ export interface StockCheckItem {
  *
  * Get all items (products and materials) for stock checking
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     const products = getAllProducts();
     const materials = getAllMaterials();
 
@@ -33,6 +36,8 @@ export async function GET() {
     // Add products that have stock management enabled
     for (const product of products) {
       if (product.manageStock) {
+        // Read from BranchStock (source of truth); fallback to legacy column
+        const branchStock = getBranchStock(branchId, 'product', product.id);
         items.push({
           id: product.id,
           type: 'product',
@@ -40,7 +45,7 @@ export async function GET() {
           sku: product.sku,
           category: product.category,
           supplier: product.supplier || 'Unassigned',
-          currentStock: product.stockQuantity,
+          currentStock: branchStock,
           unit: 'pcs',
         });
       }
@@ -48,13 +53,14 @@ export async function GET() {
 
     // Add all materials
     for (const material of materials) {
+      const branchStock = getBranchStock(branchId, 'material', material.id);
       items.push({
         id: material.id,
         type: 'material',
         name: material.name,
         category: material.category,
         supplier: material.supplier || 'Unassigned',
-        currentStock: material.stockQuantity,
+        currentStock: branchStock,
         unit: material.purchaseUnit,
         lowStockThreshold: material.lowStockThreshold,
       });
@@ -96,6 +102,7 @@ interface StockUpdateItem {
  */
 export async function POST(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     const { updates } = await req.json() as { updates: StockUpdateItem[] };
 
     if (!updates || !Array.isArray(updates)) {
@@ -136,9 +143,11 @@ export async function POST(req: Request) {
             continue;
           }
 
-          const previousStock = product.stockQuantity;
+          const previousStock = getBranchStock(branchId, 'product', update.id) || product.stockQuantity;
 
-          // Update local database
+          // Update BranchStock (source of truth)
+          updateBranchStock(branchId, 'product', update.id, update.countedStock);
+          // Update legacy column
           db.prepare('UPDATE Product SET stockQuantity = ?, updatedAt = ? WHERE id = ?')
             .run(update.countedStock, new Date().toISOString(), update.id);
           console.log(`✅ Stock check: Updated local stock for ${product.name}: ${previousStock} → ${update.countedStock}`);
@@ -179,9 +188,11 @@ export async function POST(req: Request) {
             continue;
           }
 
-          const previousStock = material.stockQuantity;
+          const previousStock = getBranchStock(branchId, 'material', update.id) || material.stockQuantity;
 
-          // Reuse existing updateMaterialStock from materialService
+          // Update BranchStock (source of truth)
+          updateBranchStock(branchId, 'material', update.id, update.countedStock);
+          // Update legacy column
           updateMaterialStock(update.id, update.countedStock);
           console.log(`✅ Stock check: Updated material stock for ${material.name}: ${previousStock} → ${update.countedStock}`);
           results.push({ id: update.id, name: material.name, success: true });
@@ -214,7 +225,7 @@ export async function POST(req: Request) {
     // Create stock check log if there were successful updates
     let logId: string | undefined;
     if (logItems.length > 0) {
-      const log = createStockCheckLog({ items: logItems });
+      const log = createStockCheckLog({ items: logItems, branchId });
       logId = log.id;
       console.log(`📋 Stock check log created: ${logId} (${logItems.length} items)`);
     }

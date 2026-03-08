@@ -4,6 +4,8 @@ import { getProductRecipe } from './recipeService';
 import { getMaterial, updateMaterialStock } from './materialService';
 import { getProduct, getProductByWcId } from './productService';
 import { wcApi } from '../wooClient';
+import { adjustBranchStock } from './branchStockService';
+import { getDefaultBranch } from './branchService';
 
 // Ensure database is initialized
 initDatabase();
@@ -44,8 +46,12 @@ export async function recordProductSale(
     selectedOptional: string[];
   },
   depth: number = 0,
-  parentChain: string = ''
+  parentChain: string = '',
+  branchId?: string
 ): Promise<InventoryConsumption[]> {
+  if (!branchId) {
+    try { branchId = getDefaultBranch().id; } catch { branchId = 'branch-main'; }
+  }
   const consumptions: InventoryConsumption[] = [];
   const indent = '  '.repeat(depth);
 
@@ -104,8 +110,8 @@ export async function recordProductSale(
       INSERT INTO InventoryConsumption
       (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
        materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-       unit, costPerUnit, totalCost, consumedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       unit, costPerUnit, totalCost, consumedAt, branchId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -124,7 +130,8 @@ export async function recordProductSale(
       'unit',
       product.supplierCost,
       baseCostConsumption.totalCost,
-      now
+      now,
+      branchId
     );
 
     consumptions.push(baseCostConsumption);
@@ -148,7 +155,7 @@ export async function recordProductSale(
 
     // Still deduct stock for products with no recipe (e.g., supplier-bought items like pies)
     if (depth === 0) {
-      deductLocalProductStock(productId, quantitySold, productName);
+      deductLocalProductStock(productId, quantitySold, productName, branchId);
       console.log(`${indent}📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
 
       // Log stock comparison for root product
@@ -225,8 +232,8 @@ export async function recordProductSale(
         INSERT INTO InventoryConsumption
         (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
          materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-         unit, costPerUnit, totalCost, consumedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         unit, costPerUnit, totalCost, consumedAt, branchId)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -245,13 +252,14 @@ export async function recordProductSale(
         recipeItem.unit,
         recipeItem.costPerUnit || 0,
         consumption.totalCost,
-        now
+        now,
+        branchId
       );
 
       console.log(`${indent}      💾 Stored consumption: orderItemId=${orderItemId || 'null'}, material=${recipeItem.materialName}`);
 
       consumptions.push(consumption);
-      deductMaterialStock(recipeItem.materialId, quantityConsumed);
+      deductMaterialStock(recipeItem.materialId, quantityConsumed, branchId!);
     } else if (recipeItem.itemType === 'product' && recipeItem.linkedProductId) {
       // Linked product - record the product itself AND recursively process its materials
       console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
@@ -288,8 +296,8 @@ export async function recordProductSale(
           INSERT INTO InventoryConsumption
           (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
            materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-           unit, costPerUnit, totalCost, consumedAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           unit, costPerUnit, totalCost, consumedAt, branchId)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         stmt.run(
@@ -308,14 +316,15 @@ export async function recordProductSale(
           'unit',
           0, // Cost is 0 - actual cost tracked via materials
           0, // Cost is 0 - actual cost tracked via materials
-          now
+          now,
+          branchId
         );
 
         console.log(`${indent}      💾 Stored linked product (visibility only): ${recipeItem.linkedProductName} x${quantityConsumed}`);
         consumptions.push(linkedProductConsumption);
 
         // Deduct local DB inventory for linked products
-        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name);
+        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name, branchId);
 
         // Deduct WooCommerce inventory for ALL linked products
         // These are component products that WooCommerce doesn't automatically deduct
@@ -335,7 +344,8 @@ export async function recordProductSale(
           orderItemId,
           bundleSelection,  // Pass selections through to handle nested XORs
           depth + 1,
-          chain
+          chain,
+          branchId
         );
         consumptions.push(...linkedConsumptions);
       } else {
@@ -346,7 +356,7 @@ export async function recordProductSale(
 
   // Deduct local DB stock for the main product (only at root level, not for linked products)
   if (depth === 0) {
-    deductLocalProductStock(productId, quantitySold, productName);
+    deductLocalProductStock(productId, quantitySold, productName, branchId);
     console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
 
     // Log stock comparison for root product (WC was auto-deducted when order was created)
@@ -360,40 +370,46 @@ export async function recordProductSale(
 }
 
 /**
- * Deduct material from stock
+ * Deduct material from stock (both legacy column and BranchStock)
  */
-function deductMaterialStock(materialId: string, quantity: number): void {
+function deductMaterialStock(materialId: string, quantity: number, branchId: string): void {
   const material = getMaterial(materialId);
   if (!material) {
     console.error(`❌ Material ${materialId} not found - cannot deduct stock`);
     return;
   }
 
-  const newStock = material.stockQuantity - quantity;
+  // Update BranchStock (source of truth)
+  const newBranchStock = adjustBranchStock(branchId, 'material', materialId, -quantity);
 
-  // Allow negative stock (backorder) but log warning
-  if (newStock < 0) {
-    console.warn(`⚠️  Material ${material.name} stock went negative: ${newStock} ${material.purchaseUnit}`);
+  if (newBranchStock < 0) {
+    console.warn(`⚠️  Material ${material.name} branch stock went negative: ${newBranchStock} ${material.purchaseUnit}`);
+  }
+  if (newBranchStock <= material.lowStockThreshold && newBranchStock > material.lowStockThreshold - quantity) {
+    console.warn(`🔔 Low stock alert: ${material.name} = ${newBranchStock} ${material.purchaseUnit} (threshold: ${material.lowStockThreshold})`);
   }
 
-  // Log low stock warning
-  if (newStock <= material.lowStockThreshold && newStock > material.lowStockThreshold - quantity) {
-    console.warn(`🔔 Low stock alert: ${material.name} = ${newStock} ${material.purchaseUnit} (threshold: ${material.lowStockThreshold})`);
-  }
-
-  updateMaterialStock(materialId, newStock);
+  // Also update legacy column for backward compatibility
+  updateMaterialStock(materialId, newBranchStock);
 }
 
 /**
- * Deduct product from local DB stock
- * NOTE: Always updates local stock unconditionally (like PO receiving does)
- * The WC sync in deductWooProductStock will check WC's manage_stock independently
+ * Deduct product from local DB stock and BranchStock
  */
-function deductLocalProductStock(productId: string, quantity: number, productName: string): void {
+function deductLocalProductStock(productId: string, quantity: number, productName: string, branchId?: string): void {
   const product = getProduct(productId);
   if (!product) {
     console.error(`❌ Product ${productId} not found - cannot deduct local stock`);
     return;
+  }
+
+  // Update BranchStock if branchId is available
+  if (branchId) {
+    const newBranchStock = adjustBranchStock(branchId, 'product', productId, -quantity);
+    console.log(`   📦 BranchStock: ${productName} → ${newBranchStock}`);
+    if (newBranchStock < 0) {
+      console.warn(`   ⚠️  BranchStock: ${productName} went negative: ${newBranchStock}`);
+    }
   }
 
   const currentStock = product.stockQuantity || 0;
@@ -408,7 +424,6 @@ function deductLocalProductStock(productId: string, quantity: number, productNam
   const verified = db.prepare('SELECT stockQuantity FROM Product WHERE id = ?').get(productId) as { stockQuantity: number } | undefined;
   console.log(`   ✅ Local DB verified: ${productName} stock = ${verified?.stockQuantity}`);
 
-  // Log warnings
   if (newStock < 0) {
     console.warn(`   ⚠️  Local DB: ${productName} stock went negative: ${newStock}`);
   }

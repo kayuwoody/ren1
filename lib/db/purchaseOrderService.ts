@@ -13,12 +13,14 @@ import {
   generatePONumber,
 } from './purchaseOrderSchema';
 import { wcApi } from '../wooClient';
+import { adjustBranchStock } from './branchStockService';
 
 interface CreatePurchaseOrderInput {
   supplier: string;
   notes?: string;
   orderDate?: string;
   expectedDeliveryDate?: string;
+  branchId?: string;
   items: Array<{
     itemType: 'material' | 'product';
     materialId?: string;
@@ -93,8 +95,8 @@ export function createPurchaseOrder(input: CreatePurchaseOrderInput): PurchaseOr
 
   // Insert purchase order
   db.prepare(`
-    INSERT INTO PurchaseOrder (id, poNumber, supplier, status, totalAmount, notes, orderDate, expectedDeliveryDate, createdAt, updatedAt)
-    VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)
+    INSERT INTO PurchaseOrder (id, poNumber, supplier, status, totalAmount, notes, orderDate, expectedDeliveryDate, branchId, createdAt, updatedAt)
+    VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     poNumber,
@@ -103,6 +105,7 @@ export function createPurchaseOrder(input: CreatePurchaseOrderInput): PurchaseOr
     input.notes || null,
     input.orderDate || null,
     input.expectedDeliveryDate || null,
+    input.branchId || 'branch-main',
     now,
     now
   );
@@ -149,10 +152,12 @@ export function createPurchaseOrder(input: CreatePurchaseOrderInput): PurchaseOr
 }
 
 /**
- * Get all purchase orders
+ * Get all purchase orders, optionally filtered by branch
  */
-export function getAllPurchaseOrders(): PurchaseOrderWithItems[] {
-  const orders = db.prepare('SELECT * FROM PurchaseOrder ORDER BY createdAt DESC').all() as PurchaseOrder[];
+export function getAllPurchaseOrders(branchId?: string): PurchaseOrderWithItems[] {
+  const orders = branchId
+    ? db.prepare('SELECT * FROM PurchaseOrder WHERE branchId = ? ORDER BY createdAt DESC').all(branchId) as PurchaseOrder[]
+    : db.prepare('SELECT * FROM PurchaseOrder ORDER BY createdAt DESC').all() as PurchaseOrder[];
 
   return orders.map(order => {
     const items = db.prepare('SELECT * FROM PurchaseOrderItem WHERE purchaseOrderId = ?').all(order.id) as PurchaseOrderItem[];
@@ -291,16 +296,21 @@ export async function markPurchaseOrderReceived(id: string): Promise<PurchaseOrd
   console.log(`📦 Receiving PO ${order.poNumber} - Updating inventory...`);
 
   // Update inventory for materials and products
+  const branchId = order.branchId || 'branch-main';
   for (const item of order.items) {
     if (item.itemType === 'material' && item.materialId) {
       // Update local material stock
       db.prepare('UPDATE Material SET stockQuantity = stockQuantity + ? WHERE id = ?')
         .run(item.quantity, item.materialId);
+      // Update BranchStock
+      adjustBranchStock(branchId, 'material', item.materialId, item.quantity);
       console.log(`   ✅ Material: ${item.materialName} +${item.quantity} ${item.unit}`);
     } else if (item.itemType === 'product' && item.productId) {
       // Update local product stock
       db.prepare('UPDATE Product SET stockQuantity = stockQuantity + ? WHERE id = ?')
         .run(item.quantity, item.productId);
+      // Update BranchStock
+      adjustBranchStock(branchId, 'product', item.productId, item.quantity);
       console.log(`   ✅ Local Product: ${item.productName} +${item.quantity}`);
 
       // Update WooCommerce stock if product has wcId

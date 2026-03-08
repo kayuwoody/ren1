@@ -26,6 +26,45 @@ export function initDatabase() {
     return;
   }
   isInitialized = true;
+
+  // Branch table (must be created first — referenced by other tables)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS Branch (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      code TEXT NOT NULL UNIQUE,
+      address TEXT,
+      phone TEXT,
+      isDefault INTEGER NOT NULL DEFAULT 0,
+      isActive INTEGER NOT NULL DEFAULT 1,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Seed default branch if none exists
+  db.exec(`
+    INSERT OR IGNORE INTO Branch (id, name, code, isDefault, isActive)
+    VALUES ('branch-main', 'Main Branch', 'MAIN', 1, 1);
+  `);
+
+  // Per-branch stock table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS BranchStock (
+      id TEXT PRIMARY KEY,
+      branchId TEXT NOT NULL,
+      itemType TEXT NOT NULL,
+      itemId TEXT NOT NULL,
+      stockQuantity REAL NOT NULL DEFAULT 0,
+      lowStockThreshold REAL NOT NULL DEFAULT 0,
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(branchId, itemType, itemId),
+      FOREIGN KEY (branchId) REFERENCES Branch(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_branch_stock_branch ON BranchStock(branchId);
+    CREATE INDEX IF NOT EXISTS idx_branch_stock_item ON BranchStock(itemType, itemId);
+  `);
+
   // Products table
   db.exec(`
     CREATE TABLE IF NOT EXISTS Product (
@@ -393,6 +432,92 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_stock_check_log_item_log ON StockCheckLogItem(stockCheckLogId);
     CREATE INDEX IF NOT EXISTS idx_stock_check_log_item_id ON StockCheckLogItem(itemId);
   `);
+
+  // Migration: Add branchId to Order table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(\"Order\")").all() as any[];
+    const hasBranchId = tableInfo.some((col: any) => col.name === 'branchId');
+    if (tableInfo.length > 0 && !hasBranchId) {
+      console.log('Adding branchId column to Order table...');
+      db.exec(`ALTER TABLE "Order" ADD COLUMN branchId TEXT REFERENCES Branch(id)`);
+      db.exec(`UPDATE "Order" SET branchId = 'branch-main' WHERE branchId IS NULL`);
+      console.log('branchId column added to Order table');
+    }
+  } catch (e) { /* column already exists */ }
+
+  // Migration: Add branchId to OrderItem table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(OrderItem)").all() as any[];
+    const hasBranchId = tableInfo.some((col: any) => col.name === 'branchId');
+    if (tableInfo.length > 0 && !hasBranchId) {
+      console.log('Adding branchId column to OrderItem table...');
+      db.exec(`ALTER TABLE OrderItem ADD COLUMN branchId TEXT REFERENCES Branch(id)`);
+      db.exec(`UPDATE OrderItem SET branchId = 'branch-main' WHERE branchId IS NULL`);
+      console.log('branchId column added to OrderItem table');
+    }
+  } catch (e) { /* column already exists */ }
+
+  // Migration: Add branchId to InventoryConsumption table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(InventoryConsumption)").all() as any[];
+    const hasBranchId = tableInfo.some((col: any) => col.name === 'branchId');
+    if (tableInfo.length > 0 && !hasBranchId) {
+      console.log('Adding branchId column to InventoryConsumption table...');
+      db.exec(`ALTER TABLE InventoryConsumption ADD COLUMN branchId TEXT REFERENCES Branch(id)`);
+      db.exec(`UPDATE InventoryConsumption SET branchId = 'branch-main' WHERE branchId IS NULL`);
+      console.log('branchId column added to InventoryConsumption table');
+    }
+  } catch (e) { /* column already exists */ }
+
+  // Migration: Add branchId to StockCheckLog table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(StockCheckLog)").all() as any[];
+    const hasBranchId = tableInfo.some((col: any) => col.name === 'branchId');
+    if (tableInfo.length > 0 && !hasBranchId) {
+      console.log('Adding branchId column to StockCheckLog table...');
+      db.exec(`ALTER TABLE StockCheckLog ADD COLUMN branchId TEXT REFERENCES Branch(id)`);
+      db.exec(`UPDATE StockCheckLog SET branchId = 'branch-main' WHERE branchId IS NULL`);
+      console.log('branchId column added to StockCheckLog table');
+    }
+  } catch (e) { /* column already exists */ }
+
+  // Migration: Add branchId to StockCheckLogItem table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(StockCheckLogItem)").all() as any[];
+    const hasBranchId = tableInfo.some((col: any) => col.name === 'branchId');
+    if (tableInfo.length > 0 && !hasBranchId) {
+      console.log('Adding branchId column to StockCheckLogItem table...');
+      db.exec(`ALTER TABLE StockCheckLogItem ADD COLUMN branchId TEXT REFERENCES Branch(id)`);
+      db.exec(`UPDATE StockCheckLogItem SET branchId = 'branch-main' WHERE branchId IS NULL`);
+      console.log('branchId column added to StockCheckLogItem table');
+    }
+  } catch (e) { /* column already exists */ }
+
+  // Indexes for branchId columns on core tables
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_order_branch ON "Order"(branchId);
+    CREATE INDEX IF NOT EXISTS idx_order_item_branch ON OrderItem(branchId);
+    CREATE INDEX IF NOT EXISTS idx_consumption_branch ON InventoryConsumption(branchId);
+    CREATE INDEX IF NOT EXISTS idx_stock_check_log_branch ON StockCheckLog(branchId);
+  `);
+
+  // Migration: Seed BranchStock from existing Material/Product stock (run once)
+  try {
+    const hasBranchStock = db.prepare("SELECT COUNT(*) as c FROM BranchStock").get() as { c: number };
+    if (hasBranchStock.c === 0) {
+      console.log('Seeding BranchStock from existing Material and Product stock...');
+      db.exec(`
+        INSERT OR IGNORE INTO BranchStock (id, branchId, itemType, itemId, stockQuantity, lowStockThreshold)
+        SELECT 'bs-mat-' || id, 'branch-main', 'material', id, stockQuantity, lowStockThreshold
+        FROM Material;
+
+        INSERT OR IGNORE INTO BranchStock (id, branchId, itemType, itemId, stockQuantity, lowStockThreshold)
+        SELECT 'bs-prod-' || id, 'branch-main', 'product', id, stockQuantity, 0
+        FROM Product WHERE manageStock = 1;
+      `);
+      console.log('BranchStock seeded');
+    }
+  } catch (e) { /* table may not have data yet */ }
 
   // Initialize purchase order tables
   try {

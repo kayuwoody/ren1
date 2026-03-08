@@ -4,15 +4,17 @@ import {
   getAllPurchaseOrders,
 } from '@/lib/db/purchaseOrderService';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
 /**
  * GET /api/purchase-orders
  *
  * List all purchase orders with their items
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const purchaseOrders = getAllPurchaseOrders();
+    const branchId = getBranchIdFromRequest(req);
+    const purchaseOrders = getAllPurchaseOrders(branchId);
     return NextResponse.json(purchaseOrders);
   } catch (error) {
     return handleApiError(error, '/api/purchase-orders');
@@ -42,7 +44,9 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     const body = await req.json();
+    body.branchId = body.branchId || branchId;
 
     // Validation
     if (!body.supplier) {

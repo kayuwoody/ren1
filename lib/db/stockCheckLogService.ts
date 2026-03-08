@@ -38,6 +38,7 @@ export interface StockCheckLogWithItems extends StockCheckLog {
 
 export interface CreateStockCheckLogInput {
   notes?: string;
+  branchId?: string;
   items: {
     itemType: 'product' | 'material';
     itemId: string;
@@ -65,10 +66,10 @@ export function createStockCheckLog(input: CreateStockCheckLogInput): StockCheck
 
   // Insert the main log entry
   const insertLog = db.prepare(`
-    INSERT INTO StockCheckLog (id, checkDate, itemsChecked, itemsAdjusted, notes, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO StockCheckLog (id, checkDate, itemsChecked, itemsAdjusted, notes, branchId, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  insertLog.run(logId, now, input.items.length, itemsAdjusted, input.notes || null, now);
+  insertLog.run(logId, now, input.items.length, itemsAdjusted, input.notes || null, input.branchId || 'branch-main', now);
 
   // Insert all log items
   const insertItem = db.prepare(`

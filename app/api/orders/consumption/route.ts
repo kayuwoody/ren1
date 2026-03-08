@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { recordProductSale, calculateProductCOGS } from '@/lib/db/inventoryConsumptionService';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
 /**
  * POST /api/orders/consumption
@@ -8,6 +9,7 @@ import { handleApiError, validationError } from '@/lib/api/error-handler';
  */
 export async function POST(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     const { orderId, lineItems } = await req.json();
 
     if (!orderId || !Array.isArray(lineItems)) {
@@ -65,7 +67,10 @@ export async function POST(req: Request) {
         productName,
         quantity,
         orderItemId,
-        bundleSelection
+        bundleSelection,
+        0,
+        '',
+        branchId
       );
 
       results.push({

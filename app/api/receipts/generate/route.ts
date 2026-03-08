@@ -3,6 +3,8 @@ import { getWooOrder } from '@/lib/orderService';
 import { generateReceiptHTML } from '@/lib/receiptGenerator';
 import { uploadReceiptHTML } from '@/lib/ftpUpload';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
+import { getBranch } from '@/lib/db/branchService';
 
 /**
  * POST /api/receipts/generate
@@ -30,8 +32,13 @@ export async function POST(req: Request) {
       return validationError(`Order #${orderId} not found`, '/api/receipts/generate');
     }
 
+    // Get branch info for receipt
+    const branchId = getBranchIdFromRequest(req);
+    const branch = getBranch(branchId);
+    const branchInfo = branch ? { name: branch.name, address: branch.address, phone: branch.phone, code: branch.code } : undefined;
+
     // Generate static HTML
-    const htmlContent = generateReceiptHTML(order);
+    const htmlContent = generateReceiptHTML(order, branchInfo);
     console.log(`✅ Generated HTML receipt (${htmlContent.length} bytes)`);
 
     // Upload to FTP
