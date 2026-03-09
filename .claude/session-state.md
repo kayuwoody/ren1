@@ -38,24 +38,30 @@
 3. **No branchId validation** — getBranchIdFromRequest doesn't verify branch exists (NOTE: may have been fixed — branchHelper.ts on our branch DOES validate)
 4. **Fragile positional args** — recordProductSale(orderId, ..., 0, '', branchId) is brittle
 
+## Role
+
+This is the **architect/planning session**. We do NOT implement here — we plan, review, and produce instruction docs for code sub-agents.
+
 ## Current Task
 
 - ✅ Spec doc findings replaced with correct fork-branch findings
 - ✅ Both service-layer and API/frontend reviews completed against fork branch
 - ✅ Findings independently validated against earlier summary — substantially aligned
-- Next: User decisions on open questions, then implementation plan for remaining gaps
+- ✅ Open questions resolved (defaults agreed)
+- In progress: Writing implementation instruction doc for code agents
 
-## Open Questions (need user decisions)
+## Resolved Decisions
 
-1. Dual-write vs BranchStock-only
-2. WooCommerce multi-branch strategy
-3. PO number scope (global vs branch-scoped)
-4. Timezone per branch
-5. Suppliers scope
-6. Cart localStorage isolation
+1. **BranchStock-only** — stop dual-writing. Legacy columns become computed aggregates (SUM across branches). Fixes corruption bug.
+2. **WooCommerce** — deprioritized entirely. Moving away from WC. No multi-branch WC logic needed.
+3. **PO numbers** — globally unique, branch-prefixed (e.g., `MAIN-PO-2026-001`, `PJ1-PO-2026-001`).
+4. **Timezone** — UTC+8 hardcoded. Add schema column for future, don't wire it up.
+5. **Suppliers** — global scope. No change needed.
+6. **Cart isolation** — not relevant for local POS (each server = one branch). Future server-based POS for web/app orders will handle this.
 
 ## Process Notes
 
 - Always write findings to files immediately, don't keep them only in conversation
 - Before major actions, state which branch you're looking at
 - If findings contradict earlier discussion, STOP and reconcile — don't proceed
+- Sub-agents do the implementation. This session produces instruction docs.
