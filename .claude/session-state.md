@@ -40,10 +40,10 @@
 
 ## Current Task
 
-- **WRONG findings were written to spec doc** — based on current branch (no implementation) instead of fork branch
-- Need to: Replace findings in spec doc with correct fork-branch findings
-- Then: Complete the API/frontend review of fork branch
-- Then: Update spec with all findings, open questions, and decisions needed
+- ✅ Spec doc findings replaced with correct fork-branch findings
+- ✅ Both service-layer and API/frontend reviews completed against fork branch
+- ✅ Findings independently validated against earlier summary — substantially aligned
+- Next: User decisions on open questions, then implementation plan for remaining gaps
 
 ## Open Questions (need user decisions)
 

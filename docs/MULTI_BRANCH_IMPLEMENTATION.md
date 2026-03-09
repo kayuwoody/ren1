@@ -427,128 +427,84 @@ Update these to include branch info:
 
 ## Code Review Findings (March 2026)
 
-This section captures findings from reviewing the actual codebase against the spec above. Findings are grouped by layer.
+Review of implementation on branch `origin/claude/fork-multi-branch-kR5aM` (22 files changed, 938 insertions) against this spec. **Coverage: ~55-60%.**
 
-### Service Layer Findings
+### What's Implemented (on fork branch)
 
-#### `lib/db/inventoryConsumptionService.ts`
-- **6 exported functions**: `recordProductSale`, `getOrderConsumptions`, `getProductConsumptions`, `getMaterialConsumptions`, `getConsumptionSummary`, `calculateProductCOGS`
-- **Direct stock writes**:
-  - `deductMaterialStock()` calls `updateMaterialStock()` on global `Material.stockQuantity`
-  - `deductLocalProductStock()` writes raw SQL: `UPDATE Product SET stockQuantity = ? WHERE id = ?`
-  - Inconsistent pattern — materials use a service function, products use raw SQL
-- **All functions lack branchId**: `recordProductSale()` is the main entry point and has no branch context; all consumption records are inserted without branchId
-- **All query functions are global**: `getOrderConsumptions`, `getProductConsumptions`, `getMaterialConsumptions`, `getConsumptionSummary` — no branch filtering
-- **Refactor opportunity**: Stock deduction logic is duplicated across three functions with similar patterns
+#### Schema & Infrastructure — Complete
+- Branch table, BranchStock table, branchId migrations on all 7 scoped tables
+- Indexes, seeding, default branch creation
+- `branchService.ts` — full CRUD, `setDefaultBranch()` uses `db.transaction()`
+- `branchStockService.ts` — `getBranchStock`, `updateBranchStock`, `adjustBranchStock`, `getLowStockItems`, `initBranchStockForNewBranch`
+- `branchHelper.ts` — `getBranchIdFromRequest()` with branch validation and fallback to default
 
-#### `lib/db/stockCheckLogService.ts`
-- **6 exported functions**: `createStockCheckLog`, `getAllStockCheckLogs`, `getStockCheckLogs`, `getStockCheckLogWithItems`, `getItemStockHistory`, `deleteStockCheckLog`
-- **No direct stock writes** — this is an audit log only
-- **All functions lack branchId**: No branch filtering on any query, no branchId on insert
-- **No access control**: Any user can view/delete any branch's stock check logs
+#### Services — Partially Updated
+- **`inventoryConsumptionService.ts`** — `recordProductSale()` accepts optional `branchId`, uses `adjustBranchStock()` for deductions
+- **`purchaseOrderService.ts`** — `createPurchaseOrder()` accepts `branchId`, `markPurchaseOrderReceived()` reads `order.branchId`, calls `adjustBranchStock()`
+- **`stockCheckLogService.ts`** — `createStockCheckLog()` accepts optional `branchId`, defaults to `'branch-main'`
 
-#### `lib/db/purchaseOrderService.ts`
-- **8 exported functions**: `createPurchaseOrder`, `getAllPurchaseOrders`, `getPurchaseOrder`, `getPurchaseOrderByNumber`, `updatePurchaseOrder`, `markPurchaseOrderReceived`, `updatePurchaseOrderItems`, `deletePurchaseOrder`, plus `getSuppliers`
-- **Direct stock writes in `markPurchaseOrderReceived()`**:
-  - `UPDATE Material SET stockQuantity = stockQuantity + ? WHERE id = ?`
-  - `UPDATE Product SET stockQuantity = stockQuantity + ? WHERE id = ?`
-  - Also calls `addWooProductStock()` for WC-linked products
-- **CRITICAL**: `markPurchaseOrderReceived()` has no branch context — which branch's inventory gets the stock?
-- **PO number generation**: May conflict across branches if not branch-scoped
-- **`getSuppliers()`**: Aggregates from ALL materials/products globally
+#### API Routes — Partially Updated
+- `GET/POST /api/admin/stock-check` — uses `getBranchIdFromRequest()`, reads/writes BranchStock
+- `POST /api/orders/consumption` — passes branchId to `recordProductSale()`
+- `GET/POST /api/purchase-orders` — filters by branchId on GET, tags on POST
+- `POST /api/receipts/generate` — includes branch name/address/phone in receipt
+- `GET/POST /api/admin/branches` + `PUT /api/admin/branches/[id]` — new CRUD routes
 
-#### `lib/db/materialService.ts`
-- **10 exported functions**: `upsertMaterial`, `updateMaterialPrice`, `getMaterial`, `getAllMaterials`, `getMaterialsByCategory`, `listMaterials`, `deleteMaterial`, `getMaterialPriceHistory`, `updateMaterialStock`, `getLowStockMaterials`
-- **Direct stock writes**: `updateMaterialStock()` updates `Material.stockQuantity` directly; `upsertMaterial()` writes stockQuantity on both insert and update
-- **`getLowStockMaterials()`**: Returns global low-stock items — needs branch scoping
-- **Spec question**: Materials are global catalog items, but stock is per-branch. The `upsertMaterial()` function writes to the global stockQuantity column — after migration, this column becomes stale. Need to decide: keep writing to both (dual-write) or stop writing to global column?
+#### Frontend — Partially Updated
+- `context/branchContext.tsx` — React context with `branchFetch()` helper (adds `X-Branch-Id` header), sessionStorage persistence
+- `app/layout.tsx` — wraps app in `BranchProvider` (nested inside `CartProvider`)
+- `app/admin/page.tsx` — branch selector dropdown (shows when 2+ branches), displays current branch name
+- `app/admin/branches/page.tsx` — new branch management CRUD page
+- `app/admin/stock-check/page.tsx` — uses `branchFetch()` for all API calls
+- `app/admin/purchase-orders/page.tsx` — uses `branchFetch()` for list/actions
+- `app/admin/purchase-orders/create/page.tsx` — includes `branchId` in PO creation
+- `lib/receiptGenerator.ts` — accepts `branch?: BranchInfo`, renders in receipt header
 
-#### `lib/db/productService.ts`
-- **9 exported functions**: `getProduct`, `getProductByWcId`, `getProductBySku`, `getAllProducts`, `getProductsByCategory`, `upsertProduct`, `updateProductCost`, `deleteProduct`, `syncProductFromWooCommerce`
-- **Direct stock writes**: `upsertProduct()` writes stockQuantity; `syncProductFromWooCommerce()` has complex stock preservation logic
-- **WooCommerce sync concern**: `syncProductFromWooCommerce()` assumes single WC instance and single source of truth for stock — multi-branch may need separate WC stock per branch or central WC with branch mapping
-- **Stock preservation logic** (line ~182): Comment says "SQLite is updated when orders are paid (via consumption API)" — but that consumption API has no branch context
+### Major Gaps (not updated on fork)
 
-### API Route Findings
+#### 9 API routes still global (no branchId):
+- `POST /api/orders/create-with-payment` — orders created without branch tag
+- `GET /api/admin/orders` — returns all orders globally
+- `GET /api/admin/sales` — aggregates all sales, no branch filter
+- `GET /api/admin/sales/daily` — same
+- `GET /api/admin/daily-stats` — same
+- `GET /api/admin/products-sold` — same
+- `GET /api/admin/materials` — returns Material.stockQuantity (not BranchStock)
+- `GET /api/products` — returns Product.stockQuantity (not BranchStock)
+- `GET /api/products/[id]/cogs` — COGS calculation unscoped
 
-#### `POST /api/orders/create-with-payment`
-- Walk-in order detection hardcoded to specific POS customer ID via `getPosCustomerId()`
-- Single store assumption — no branch routing
-- Needs branchId in request body or header
+#### 5 frontend pages untouched:
+- `app/admin/pos/page.tsx` — POS page doesn't use `branchFetch()`
+- `app/admin/orders/page.tsx` — orders page unfiltered
+- `app/admin/sales/page.tsx` — sales reports unfiltered
+- `app/admin/sales/daily/page.tsx` — daily sales unfiltered
+- `app/admin/materials/page.tsx` — shows global stock, not branch stock
 
-#### `POST /api/orders/consumption`
-- Calls `recordProductSale()` — which lacks branchId (see service findings above)
-- Has bundle support (`_is_bundle`, `_bundle_mandatory`, `_bundle_optional` metadata)
-- No branch context passed through
+#### 2 services never modified:
+- `materialService.ts` — all stock functions write to `Material.stockQuantity` only, no BranchStock awareness
+- `productService.ts` — all stock functions write to `Product.stockQuantity` only, no BranchStock awareness
 
-#### `GET /api/admin/orders`
-- Hardcoded: `status: 'any'`, `orderby: 'date'`, `order: 'desc'`
-- Fetches ALL orders globally — no branch filter
-- No query params at all currently
+#### Other gaps:
+- `cartContext.tsx` — not updated to include branchId
+- PO PDF (`purchase-orders/[id]/pdf`) — no branch info
+- Stock check PDF (`admin/stock-check/pdf`) — no branch info
+- Branch indicator only on dashboard, not in a shared admin header
 
-#### `GET/POST /api/admin/stock-check` — **HIGHEST PRIORITY**
-- **GET**: Reads `product.stockQuantity` and `material.stockQuantity` directly (not from BranchStock)
-- **POST**: Updates `Product.stockQuantity` via raw SQL, calls `updateMaterialStock()`, syncs to WooCommerce
-- Completely single-branch — 5 different API calls from the frontend all need branch context
+### Bugs Found
 
-#### `GET /api/admin/daily-stats`
-- Hardcoded UTC+8 timezone — no geographic/branch context
-- No query params, no branch filtering
+1. **Legacy column corruption** — When a sale happens, `inventoryConsumptionService` calls both `adjustBranchStock()` (correct) and `updateMaterialStock()` / raw `UPDATE Product SET stockQuantity` (legacy). The legacy column gets overwritten with the branch-specific value. In multi-branch, `Material.stockQuantity` would reflect whichever branch sold last — not total stock. Same issue in `purchaseOrderService.markPurchaseOrderReceived()`.
 
-#### `GET /api/admin/sales`
-- Accepts: `range` (7days|30days|90days|mtd|ytd|all), `start`, `end`, `hideStaffMeals`
-- Reads COGS from consumption records globally — no branch filter
-- Hardcoded UTC+8 timezone
+2. **Dual-write without transaction** — The BranchStock update and legacy column update are separate operations with no transaction wrapper. A crash between them causes data divergence.
 
-#### `GET /api/admin/sales/daily`
-- Accepts: `date` (YYYY-MM-DD)
-- Same global aggregation pattern as `/api/admin/sales`
+3. **PO route allows client branchId override** — `POST /api/purchase-orders` uses `body.branchId = body.branchId || branchId` which lets a client override the branch via body field. Should enforce server-side: `body.branchId = branchId`.
 
-#### `GET/POST /api/purchase-orders`
-- GET returns all POs globally, POST creates without branchId
-- Stock update happens on receive (separate endpoint)
+4. **Redundant branchId passing on PO create** — `app/admin/purchase-orders/create/page.tsx` sends branchId in both the request body AND via the `X-Branch-Id` header (through `branchFetch()`). The API should use one source, not both.
 
-#### `POST /api/purchase-orders/[id]/receive`
-- Calls `markPurchaseOrderReceived()` — which updates global stock (see service findings)
-- **CRITICAL**: No branch context for inventory update
-
-#### Previously reviewed routes (from earlier agent):
-- `GET /api/admin/products-sold` — global aggregation, no branch filter, reads COGS from global consumption
-- `GET /api/admin/materials` — returns global materials list, stockQuantity from Material table
-- `GET /api/products` — returns products with stockQuantity from Product table (not BranchStock)
-- `GET /api/admin/stock-check/pdf` — reads from `getAllProducts()` and `getAllMaterials()` globally
-- `GET /api/purchase-orders/[id]/pdf` — no branch info in PDF output
-
-### Frontend Findings
-
-#### Data Fetching Pattern
-- **All pages use raw `fetch()`** — no shared API client, no SWR, no custom hooks
-- This means branch context injection requires updating every single fetch call individually
-- **Recommendation from spec is correct**: Create a `useBranchFetch()` hook or fetch wrapper
-
-#### Key Frontend Files
-
-| File | API Calls | Branch Impact | Complexity |
-|------|-----------|---------------|------------|
-| `context/cartContext.tsx` | 1 (POST /api/cart/current) | Cart sync needs branchId; localStorage key 'cart' could scope to branch | Medium |
-| `app/admin/page.tsx` | 2 (heartbeat, daily-stats) | Both need branch context; auto-refreshes every 30s | Low-Medium |
-| `app/layout.tsx` | 0 (wraps CartProvider) | Add BranchProvider here | Very Low |
-| `app/admin/pos/page.tsx` | 1 (COGS endpoint) | COGS calculation needs branch context for stock | High complexity |
-| `app/admin/materials/page.tsx` | 1 (materials list) | Stock quantities must be branch-specific | Medium |
-| `app/admin/stock-check/page.tsx` | **5 API calls** | All 5 must be branch-scoped; highest-touch frontend file | Very High |
-| `app/admin/purchase-orders/page.tsx` | **6+ API calls** | List, CSV, PDF, receive, update, delete all need branch | High |
-| `app/admin/purchase-orders/create/page.tsx` | 3 (items, suppliers, create) | PO creation must be branch-tagged | High |
-| `app/admin/sales/page.tsx` | 1 (sales with date range) | COGS/profit must be branch-scoped | Medium-High |
-| `app/admin/orders/page.tsx` | 2 (orders, customers) | Orders must filter by branch | High |
-| `lib/receiptGenerator.ts` | 0 (HTML template) | Add branch name/address to header | Low |
-
-#### No admin-specific layout found
-- There is no `app/admin/layout.tsx` — the root `app/layout.tsx` wraps `CartProvider`
-- Branch selector and BranchProvider would need to be added at root layout or a new admin layout
+5. **Fragile positional args** — `recordProductSale(orderId, ..., 0, '', branchId)` passes branchId as a trailing positional arg through many empty placeholders. Should be an options object.
 
 ### Open Questions Requiring Decision
 
-1. **Dual-write vs BranchStock-only**: After migration, do we keep writing to `Material.stockQuantity` and `Product.stockQuantity` for backward compatibility, or stop writing to them entirely? (Spec says "stop writing" but this breaks any code path we miss)
+1. **Dual-write vs BranchStock-only**: After migration, do we keep writing to `Material.stockQuantity` and `Product.stockQuantity` for backward compatibility, or stop writing to them entirely? The fork currently does both, which causes Bug #1. Spec says "stop writing" but this breaks any code path we miss.
 
 2. **WooCommerce multi-branch strategy**: Current code syncs stock to/from a single WooCommerce instance. Options:
    - Single WC, sum of all branch stock = WC stock
@@ -567,8 +523,7 @@ This section captures findings from reviewing the actual codebase against the sp
 
 The spec is **largely accurate** and well-structured. Key corrections/additions needed:
 
-1. **Spec lists `app/admin/sales/daily/page.tsx`** — verify this file exists (the agent found `/api/admin/sales/daily/route.ts` but the page may be at a different path)
-2. **Spec Step 8 route table is incomplete** — missing routes:
+1. **Spec Step 8 route table is incomplete** — missing routes that also need branch scoping:
    - `GET /api/admin/stock-check/logs` (pagination endpoint)
    - `GET /api/admin/stock-check/logs/[id]` (single log detail)
    - `GET /api/admin/stock-check/pdf` (PDF generation)
@@ -582,6 +537,6 @@ The spec is **largely accurate** and well-structured. Key corrections/additions 
    - `GET /api/admin/customers` (used by orders page)
    - `GET /api/products/[id]/cogs` (COGS calculation in POS)
    - `POST /api/cart/current` (cart sync)
-3. **Spec doesn't mention `app/admin/layout.tsx` doesn't exist** — assumes wrapping at admin layout level but only root layout exists
-4. **Spec underestimates stock-check complexity** — 5 API calls from frontend, highest-touch file for migration
-5. **Spec doesn't address inconsistent stock write patterns** — products use raw SQL in some places, materials use service functions; should be standardized before adding branch logic
+2. **Spec doesn't address dual-write problem** — the legacy column corruption is the most critical bug and needs an explicit strategy in the spec
+3. **Spec doesn't address inconsistent stock write patterns** — products use raw SQL in some places, materials use service functions; should be standardized before adding branch logic
+4. **`materialService.ts` and `productService.ts` are the hardest remaining work** — they are the source-of-truth services and touching them affects every consumer
