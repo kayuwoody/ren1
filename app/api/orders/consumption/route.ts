@@ -60,18 +60,16 @@ export async function POST(req: Request) {
       const cogsData = calculateProductCOGS(productId, quantity, bundleSelection);
       totalCOGS += cogsData.totalCOGS;
 
-      // Record material consumption, deduct from stock, and update WooCommerce inventory
-      const consumptions = await recordProductSale(
+      // Record material consumption and deduct from BranchStock
+      const consumptions = await recordProductSale({
         orderId,
-        productId,
+        wcProductId: productId,
         productName,
-        quantity,
+        quantitySold: quantity,
         orderItemId,
         bundleSelection,
-        0,
-        '',
-        branchId
-      );
+        branchId,
+      });
 
       results.push({
         productId,

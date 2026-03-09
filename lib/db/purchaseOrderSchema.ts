@@ -90,15 +90,15 @@ export function initPurchaseOrderTables() {
 
 /**
  * Generate next PO number
- * Format: PO-YYYY-MM-NNNN (e.g., PO-2025-11-0001)
+ * Format: {BRANCH_CODE}-PO-YYYY-MM-NNNN (e.g., MAIN-PO-2026-03-0001)
  */
-export function generatePONumber(): string {
+export function generatePONumber(branchCode: string = 'MAIN'): string {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
 
-  // Get the latest PO number for this month
-  const prefix = `PO-${year}-${month}-`;
+  // Get the latest PO number for this branch+month to avoid collisions
+  const prefix = `${branchCode}-PO-${year}-${month}-`;
   const latest = db.prepare(`
     SELECT poNumber FROM PurchaseOrder
     WHERE poNumber LIKE ?

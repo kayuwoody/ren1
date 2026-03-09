@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Edit2, Trash2, Package, AlertCircle } from 'lucide-react';
+import { useBranch } from '@/context/branchContext';
 
 interface Material {
   id: string;
@@ -20,6 +21,7 @@ interface Material {
 }
 
 export default function MaterialsPage() {
+  const { branchFetch } = useBranch();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState<'all' | 'ingredient' | 'packaging' | 'consumable'>('all');
@@ -36,7 +38,7 @@ export default function MaterialsPage() {
       const url = filterCategory === 'all'
         ? '/api/admin/materials'
         : `/api/admin/materials?category=${filterCategory}`;
-      const res = await fetch(url);
+      const res = await branchFetch(url);
       const data = await res.json();
       setMaterials(data.materials || []);
     } catch (error) {

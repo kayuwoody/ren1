@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { wcApi } from "@/lib/wooClient";
 import { getAllProducts, syncProductFromWooCommerce, getProductByWcId, deleteProduct } from "@/lib/db/productService";
+import { getBranchIdFromRequest } from "@/lib/api/branchHelper";
+import { getBranchStock } from "@/lib/db/branchStockService";
 
 export const dynamic = "force-dynamic"; // ensures this API route runs fresh each time
 
@@ -18,6 +20,7 @@ export const dynamic = "force-dynamic"; // ensures this API route runs fresh eac
  * - force_sync=true: Force fetch from WooCommerce even if cache exists
  */
 export async function GET(req: Request) {
+  const branchId = getBranchIdFromRequest(req);
   const url = new URL(req.url);
   const forceSync = url.searchParams.get('force_sync') === 'true';
 
@@ -35,13 +38,14 @@ export async function GET(req: Request) {
       );
 
       // Convert local products to WooCommerce format for compatibility
+      // Use BranchStock for branch-specific stock quantity
       const wcFormatProducts = visibleProducts.map(product => ({
         id: product.wcId,
         name: product.name,
         sku: product.sku,
         price: product.basePrice.toString(),
         regular_price: product.basePrice.toString(),
-        stock_quantity: product.stockQuantity,
+        stock_quantity: getBranchStock(branchId, 'product', product.id),
         manage_stock: product.manageStock, // Use actual manage_stock value from WooCommerce
         images: product.imageUrl ? [{ src: product.imageUrl }] : [],
         categories: [{ slug: product.category, name: product.category }],
@@ -132,7 +136,7 @@ export async function GET(req: Request) {
           sku: product.sku,
           price: product.basePrice.toString(),
           regular_price: product.basePrice.toString(),
-          stock_quantity: product.stockQuantity,
+          stock_quantity: getBranchStock(branchId, 'product', product.id),
           manage_stock: product.manageStock, // Use actual manage_stock value from WooCommerce
           images: product.imageUrl ? [{ src: product.imageUrl }] : [],
           categories: [{ slug: product.category, name: product.category }],

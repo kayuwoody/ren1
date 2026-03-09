@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createWooOrder } from "@/lib/orderService";
 import { getPaymentInfo } from "@/lib/paymentService";
 import { getPosCustomerId } from "@/lib/posCustomer";
+import { getBranchIdFromRequest } from "@/lib/api/branchHelper";
 
 /**
  * POST /api/orders/create-with-payment
@@ -21,8 +22,15 @@ import { getPosCustomerId } from "@/lib/posCustomer";
  */
 export async function POST(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     const body = await req.json();
     let { line_items, userId, guestId, billing, shipping, meta_data } = body;
+
+    // Tag order with branchId in meta_data
+    meta_data = [
+      ...(Array.isArray(meta_data) ? meta_data : []),
+      { key: '_branch_id', value: branchId },
+    ];
 
     // Validation
     if (!line_items || !Array.isArray(line_items) || line_items.length === 0) {

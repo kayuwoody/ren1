@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/cartContext';
+import { useBranch } from '@/context/branchContext';
 import {
   ShoppingCart,
   Plus,
@@ -36,6 +37,7 @@ import HoldOrderManager from '@/components/HoldOrderManager';
 export default function POSPage() {
   const router = useRouter();
   const { cartItems, clearCart, updateItemDiscount, removeFromCart, updateQuantity, loadCart } = useCart();
+  const { branchFetch } = useBranch();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
     isOpen: boolean;
@@ -82,7 +84,7 @@ export default function POSPage() {
             params.append('selectedOptional', JSON.stringify(item.bundle.selectedOptional));
           }
 
-          const response = await fetch(`/api/products/${item.productId}/cogs?${params}`);
+          const response = await branchFetch(`/api/products/${item.productId}/cogs?${params}`);
           if (response.ok) {
             const data = await response.json();
             // Use cart item index as key, not productId (bundles share productId)

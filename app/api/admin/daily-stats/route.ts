@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
 // Force dynamic rendering to prevent caching - we need real-time stats
 export const dynamic = 'force-dynamic';
@@ -14,8 +15,9 @@ export const dynamic = 'force-dynamic';
  * - Pending orders
  */
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     // Get current date in UTC+8 (Malaysia time)
     const now = new Date();
     const utc8Time = new Date(now.getTime() + (8 * 60 * 60 * 1000));
@@ -55,6 +57,10 @@ export async function GET() {
     let itemsSold = 0;
 
     todayOrders.forEach((order: any) => {
+      // Filter by branch: include orders with matching _branch_id or legacy orders with no tag
+      const orderBranchId = getMetaValue(order.meta_data, '_branch_id', '');
+      if (orderBranchId && orderBranchId !== branchId) return;
+
       // Add to revenue (only completed/processing/ready-for-pickup orders)
       if (['completed', 'processing', 'ready-for-pickup'].includes(order.status)) {
         // Use _final_total from metadata if available (accounts for discounts)

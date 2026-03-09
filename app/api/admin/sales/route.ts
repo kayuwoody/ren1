@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 import { handleApiError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
 // Force dynamic rendering for this API route
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     const { searchParams } = new URL(req.url);
     const range = searchParams.get('range') || '7days';
     const startDateParam = searchParams.get('start');
@@ -85,9 +87,15 @@ export async function GET(req: Request) {
     });
 
     // Fetch all orders (using pagination helper)
-    const allOrders = await fetchAllWooPages('orders', {
+    const allOrdersRaw = await fetchAllWooPages('orders', {
       after: startDate.toISOString(),
       before: endDate.toISOString(),
+    });
+
+    // Filter by branch: include orders with matching _branch_id, or legacy orders with no tag
+    const allOrders = allOrdersRaw.filter((order) => {
+      const orderBranchId = getMetaValue(order.meta_data, '_branch_id', '');
+      return !orderBranchId || orderBranchId === branchId;
     });
 
     console.log(`📦 Fetched ${allOrders.length} total orders from WooCommerce`);

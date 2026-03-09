@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { wcApi } from '@/lib/wooClient';
 import { recordProductSale } from '@/lib/db/inventoryConsumptionService';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
 /**
  * POST /api/debug/recreate-consumptions
@@ -9,6 +10,7 @@ import { handleApiError, validationError } from '@/lib/api/error-handler';
  */
 export async function POST(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     const { orderIds } = await req.json();
 
     if (!Array.isArray(orderIds) || orderIds.length === 0) {
@@ -64,14 +66,15 @@ export async function POST(req: Request) {
         }
 
         // Record consumption
-        const consumptions = await recordProductSale(
-          String(orderId),
-          String(product_id),
-          name,
-          quantity,
-          String(orderItemId),
-          bundleSelection
-        );
+        const consumptions = await recordProductSale({
+          orderId: String(orderId),
+          wcProductId: String(product_id),
+          productName: name,
+          quantitySold: quantity,
+          orderItemId: String(orderItemId),
+          bundleSelection,
+          branchId,
+        });
 
         const itemCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
         totalCOGS += itemCOGS;

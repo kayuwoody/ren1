@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 import { handleApiError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
 // Force dynamic rendering for this API route
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,7 @@ interface ProductData {
 
 export async function GET(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     const { searchParams } = new URL(req.url);
     const range = searchParams.get('range') || '7days';
     const startDateParam = searchParams.get('start');
@@ -112,10 +114,13 @@ export async function GET(req: Request) {
       before: endDate.toISOString(),
     });
 
-    // Filter valid orders
-    let orders = allOrders.filter(
-      (order) => order.status === 'completed' || order.status === 'processing' || order.status === 'ready-for-pickup'
-    );
+    // Filter valid orders scoped to current branch
+    let orders = allOrders.filter((order) => {
+      const statusOk = order.status === 'completed' || order.status === 'processing' || order.status === 'ready-for-pickup';
+      const orderBranchId = getMetaValue(order.meta_data, '_branch_id', '');
+      const branchOk = !orderBranchId || orderBranchId === branchId;
+      return statusOk && branchOk;
+    });
 
     // Filter out staff meals if requested
     if (hideStaffMeals) {

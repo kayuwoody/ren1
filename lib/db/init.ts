@@ -48,6 +48,15 @@ export function initDatabase() {
     VALUES ('branch-main', 'Main Branch', 'MAIN', 1, 1);
   `);
 
+  // Migration: Add timezone column to Branch table (future use only)
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Branch)").all() as any[];
+    const hasTimezone = tableInfo.some((col: any) => col.name === 'timezone');
+    if (tableInfo.length > 0 && !hasTimezone) {
+      db.exec(`ALTER TABLE Branch ADD COLUMN timezone TEXT DEFAULT 'Asia/Kuala_Lumpur'`);
+    }
+  } catch (e) {}
+
   // Per-branch stock table
   db.exec(`
     CREATE TABLE IF NOT EXISTS BranchStock (

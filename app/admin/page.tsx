@@ -42,7 +42,7 @@ interface DailyStats {
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { currentBranch, branches, setBranch } = useBranch();
+  const { currentBranch, branches, setBranch, branchFetch } = useBranch();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [lockers, setLockers] = useState<LockerStatus[]>([]);
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
 
   const fetchDailyStats = async () => {
     try {
-      const res = await fetch('/api/admin/daily-stats');
+      const res = await branchFetch('/api/admin/daily-stats');
       if (res.ok) {
         const data = await res.json();
         setDailyStats(data);

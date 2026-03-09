@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, DollarSign, TrendingUp, ShoppingCart, Calendar, Download, Percent } from 'lucide-react';
+import { useBranch } from '@/context/branchContext';
 
 interface SalesReport {
   totalRevenue: number;
@@ -21,6 +22,7 @@ interface SalesReport {
 }
 
 export default function SalesReportPage() {
+  const { branchFetch } = useBranch();
   const [report, setReport] = useState<SalesReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('7days'); // 7days, 30days, 90days, all
@@ -40,7 +42,7 @@ export default function SalesReportPage() {
         url = `/api/admin/sales?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}`;
       }
 
-      const res = await fetch(url);
+      const res = await branchFetch(url);
       if (res.ok) {
         const data = await res.json();
         setReport(data);

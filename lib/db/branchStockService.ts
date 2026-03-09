@@ -102,3 +102,25 @@ export function initBranchStockForNewBranch(branchId: string): void {
     `).run(uuidv4(), branchId, p.id, now);
   }
 }
+
+/**
+ * Sync legacy Material.stockQuantity and Product.stockQuantity columns
+ * with the SUM of BranchStock quantities across all branches.
+ *
+ * Call after PO receiving or stock checks (NOT on every sale — too frequent).
+ * This is a safety net for any code that still reads legacy columns directly.
+ */
+export function syncLegacyStockColumns(): void {
+  db.exec(`
+    UPDATE Material SET stockQuantity = COALESCE(
+      (SELECT SUM(bs.stockQuantity) FROM BranchStock bs
+       WHERE bs.itemType = 'material' AND bs.itemId = Material.id), 0
+    )
+  `);
+  db.exec(`
+    UPDATE Product SET stockQuantity = COALESCE(
+      (SELECT SUM(bs.stockQuantity) FROM BranchStock bs
+       WHERE bs.itemType = 'product' AND bs.itemId = Product.id), 0
+    ) WHERE manageStock = 1
+  `);
+}
