@@ -6,7 +6,7 @@
 - **Sub-agents do all implementation.** You write instruction docs, review findings, and decide next steps.
 - **The sub-agent's code branch is `claude/fork-multi-branch-kR5aM`.** That's where all implementation lives. Let it continue building there.
 - **Our branch (`claude/pos-multi-branch-support-YS4Qr`) is planning-only.** It holds spec docs, instruction docs, and review findings. No code changes.
-- **Before acting, read this file completely.** Then read the "Resume Here" section.
+- **On every session resume:** Read this file first, then tell the user what you understand the current status to be and ask them to confirm before taking any action. Do NOT claim you have context. Do NOT act until confirmed.
 
 ---
 
