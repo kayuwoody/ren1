@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
+import { wcApi } from '@/lib/wooClient';
 import { recordProductSale } from '@/lib/db/inventoryConsumptionService';
-import { getOrderWithItems } from '@/lib/db/orderService';
-import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 /**
  * POST /api/debug/recreate-consumptions
- * Recreate consumption records for specific orders (from local SQLite)
+ * Recreate consumption records for specific orders
  */
 export async function POST(req: Request) {
   try {
-    const branchId = getBranchIdFromRequest(req);
     const { orderIds } = await req.json();
 
     if (!Array.isArray(orderIds) || orderIds.length === 0) {
@@ -22,9 +20,10 @@ export async function POST(req: Request) {
     for (const orderId of orderIds) {
       console.log(`\n🔄 Recreating consumption records for order ${orderId}...`);
 
-      const order = getOrderWithItems(String(orderId));
+      // Fetch order from WooCommerce
+      const { data: order } = await wcApi.get(`orders/${orderId}`) as { data: any };
 
-      if (!order || !order.items.length) {
+      if (!order || !order.line_items) {
         console.warn(`⚠️  Order ${orderId} not found or has no line items`);
         results.push({
           orderId,
@@ -34,37 +33,45 @@ export async function POST(req: Request) {
         continue;
       }
 
-      console.log(`📦 Order ${orderId}: ${order.items.length} line items`);
+      console.log(`📦 Order ${orderId}: ${order.line_items.length} line items`);
 
       let totalCOGS = 0;
       let totalConsumptions = 0;
 
-      for (const item of order.items) {
-        console.log(`  Processing: ${item.productName} (qty: ${item.quantity}, orderItemId: ${item.id})`);
+      // Process each line item
+      for (const item of order.line_items) {
+        const { product_id, name, quantity, id: orderItemId, meta_data } = item;
 
-        // Extract bundle selection from variations JSON
+        console.log(`  Processing: ${name} (qty: ${quantity}, orderItemId: ${orderItemId})`);
+
+        // Extract bundle metadata if present
         let bundleSelection: { selectedMandatory: Record<string, string>, selectedOptional: string[] } | undefined;
-        if (item.variations) {
-          try {
-            const v = JSON.parse(item.variations);
-            if (v._is_bundle === 'true') {
+        if (meta_data) {
+          const isBundle = meta_data.find((m: any) => m.key === '_is_bundle')?.value === 'true';
+          if (isBundle) {
+            const mandatoryJson = meta_data.find((m: any) => m.key === '_bundle_mandatory')?.value;
+            const optionalJson = meta_data.find((m: any) => m.key === '_bundle_optional')?.value;
+
+            try {
               bundleSelection = {
-                selectedMandatory: v._bundle_mandatory ? JSON.parse(v._bundle_mandatory) : {},
-                selectedOptional: v._bundle_optional ? JSON.parse(v._bundle_optional) : [],
+                selectedMandatory: mandatoryJson ? JSON.parse(mandatoryJson) : {},
+                selectedOptional: optionalJson ? JSON.parse(optionalJson) : [],
               };
+            } catch (e) {
+              console.warn(`   ⚠️  Failed to parse bundle metadata`);
             }
-          } catch {}
+          }
         }
 
-        const consumptions = await recordProductSale({
-          orderId: String(orderId),
-          wcProductId: item.productId,
-          productName: item.productName,
-          quantitySold: item.quantity,
-          orderItemId: item.id,
-          bundleSelection,
-          branchId,
-        });
+        // Record consumption
+        const consumptions = await recordProductSale(
+          String(orderId),
+          String(product_id),
+          name,
+          quantity,
+          String(orderItemId),
+          bundleSelection
+        );
 
         const itemCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
         totalCOGS += itemCOGS;

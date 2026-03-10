@@ -1,6 +1,5 @@
 import { db } from './init';
 import { v4 as uuidv4 } from 'uuid';
-import { initBranchStockForItem } from './branchStockService';
 
 export interface Product {
   id: string;
@@ -91,11 +90,11 @@ export function upsertProduct(
   const sku = (product.sku && product.sku.trim() !== '') ? product.sku : `product-${product.wcId || id}`;
 
   if (existing) {
-    // Update existing product — do NOT write stockQuantity (managed by BranchStock)
+    // Update existing product
     const stmt = db.prepare(`
       UPDATE Product
       SET wcId = ?, name = ?, sku = ?, category = ?, basePrice = ?,
-          supplierCost = ?, unitCost = ?, manageStock = ?, supplier = ?, quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
+          supplierCost = ?, unitCost = ?, stockQuantity = ?, manageStock = ?, supplier = ?, quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
       WHERE id = ?
     `);
 
@@ -107,6 +106,7 @@ export function upsertProduct(
       product.basePrice,
       product.supplierCost,
       product.unitCost,
+      product.stockQuantity,
       product.manageStock ? 1 : 0,
       product.supplier || null,
       product.quantityPerCarton || null,
@@ -115,11 +115,11 @@ export function upsertProduct(
       id
     );
   } else {
-    // Insert new product — stockQuantity defaults to 0 (real stock lives in BranchStock)
+    // Insert new product
     const stmt = db.prepare(`
       INSERT INTO Product (id, wcId, name, sku, category, basePrice, supplierCost, unitCost,
                           stockQuantity, manageStock, supplier, quantityPerCarton, imageUrl, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -131,6 +131,7 @@ export function upsertProduct(
       product.basePrice,
       product.supplierCost,
       product.unitCost,
+      product.stockQuantity,
       product.manageStock ? 1 : 0,
       product.supplier || null,
       product.quantityPerCarton || null,
@@ -138,11 +139,6 @@ export function upsertProduct(
       now,
       now
     );
-
-    // Create BranchStock entries for the new product across all active branches
-    if (product.manageStock) {
-      initBranchStockForItem('product', id);
-    }
   }
 
   return getProduct(id)!;
@@ -182,8 +178,19 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     console.log(`🔄 Syncing ${wcProduct.name} - Preserving supplier: "${existing.supplier}"`);
   }
 
-  // Stock is managed by BranchStock — never sync stockQuantity from WC
-  const stockQuantity = existing?.stockQuantity ?? 0;
+  // PRESERVE local SQLite stock as source of truth
+  // SQLite is updated when orders are paid (via consumption API)
+  // Only use WooCommerce stock for NEW products that don't exist in SQLite yet
+  const stockQuantity = existing?.stockQuantity ?? (wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 0);
+
+  // Debug logging for stock preservation
+  if (existing && wcProduct.manage_stock) {
+    const localStock = existing.stockQuantity ?? 0;
+    const wcStock = wcProduct.stock_quantity ?? 0;
+    if (localStock !== wcStock) {
+      console.log(`📦 Stock preservation for "${wcProduct.name}": Local=${localStock} (KEPT), WC=${wcStock} (ignored)`);
+    }
+  }
 
   if (existing && (supplierCost > 0 || unitCost > 0)) {
     console.log(`🔄 Syncing ${wcProduct.name} - Preserving: supplierCost=RM${supplierCost}, unitCost=RM${unitCost}, stock=${stockQuantity}`);

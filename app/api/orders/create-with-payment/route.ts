@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { createWooOrder } from "@/lib/orderService";
 import { getPaymentInfo } from "@/lib/paymentService";
 import { getPosCustomerId } from "@/lib/posCustomer";
-import { saveOrderLocally } from "@/lib/db/orderService";
-import { getBranchIdFromRequest } from "@/lib/api/branchHelper";
 
 /**
  * POST /api/orders/create-with-payment
@@ -62,15 +60,6 @@ export async function POST(req: Request) {
     });
 
     console.log(`✅ Order created: #${order.id} (pending payment)`);
-
-    // Save to local SQLite for branch-aware reporting
-    try {
-      const branchId = getBranchIdFromRequest(req);
-      saveOrderLocally(order, branchId);
-      console.log(`📦 Order #${order.id} saved to local DB (branch: ${branchId})`);
-    } catch (localErr) {
-      console.error('⚠️ Failed to save order locally:', localErr);
-    }
 
     // Extract payment information
     const payment = getPaymentInfo(order);

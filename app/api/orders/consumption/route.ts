@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { recordProductSale, calculateProductCOGS } from '@/lib/db/inventoryConsumptionService';
-import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
 
 /**
@@ -9,7 +8,6 @@ import { handleApiError, validationError } from '@/lib/api/error-handler';
  */
 export async function POST(req: Request) {
   try {
-    const branchId = getBranchIdFromRequest(req);
     const { orderId, lineItems } = await req.json();
 
     if (!orderId || !Array.isArray(lineItems)) {
@@ -60,16 +58,15 @@ export async function POST(req: Request) {
       const cogsData = calculateProductCOGS(productId, quantity, bundleSelection);
       totalCOGS += cogsData.totalCOGS;
 
-      // Record material consumption and deduct from BranchStock
-      const consumptions = await recordProductSale({
+      // Record material consumption, deduct from stock, and update WooCommerce inventory
+      const consumptions = await recordProductSale(
         orderId,
-        wcProductId: productId,
+        productId,
         productName,
-        quantitySold: quantity,
+        quantity,
         orderItemId,
-        bundleSelection,
-        branchId,
-      });
+        bundleSelection
+      );
 
       results.push({
         productId,

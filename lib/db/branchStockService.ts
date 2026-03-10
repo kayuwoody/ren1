@@ -92,41 +92,6 @@ export function updateLowStockThreshold(branchId: string, itemType: string, item
   }
 }
 
-/**
- * Create BranchStock entries for a new item across all active branches.
- */
-export function initBranchStockForItem(itemType: 'material' | 'product', itemId: string): void {
-  const now = new Date().toISOString();
-  const branches = db.prepare('SELECT id FROM Branch WHERE isActive = 1').all() as { id: string }[];
-  for (const branch of branches) {
-    db.prepare(
-      'INSERT OR IGNORE INTO BranchStock (id, branchId, itemType, itemId, stockQuantity, lowStockThreshold, updatedAt) VALUES (?, ?, ?, ?, 0, 0, ?)'
-    ).run(uuidv4(), branch.id, itemType, itemId, now);
-  }
-}
-
-/**
- * Sync legacy Material.stockQuantity and Product.stockQuantity columns
- * with the SUM of BranchStock quantities across all branches.
- *
- * Call after PO receiving or stock checks (NOT on every sale).
- * Safety net for code that still reads legacy columns directly.
- */
-export function syncLegacyStockColumns(): void {
-  db.exec(`
-    UPDATE Material SET stockQuantity = COALESCE(
-      (SELECT SUM(bs.stockQuantity) FROM BranchStock bs
-       WHERE bs.itemType = 'material' AND bs.itemId = Material.id), 0
-    )
-  `);
-  db.exec(`
-    UPDATE Product SET stockQuantity = COALESCE(
-      (SELECT SUM(bs.stockQuantity) FROM BranchStock bs
-       WHERE bs.itemType = 'product' AND bs.itemId = Product.id), 0
-    ) WHERE manageStock = 1
-  `);
-}
-
 export function initBranchStockForNewBranch(branchId: string): void {
   const now = new Date().toISOString();
 
