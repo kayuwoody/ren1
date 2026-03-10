@@ -14,17 +14,28 @@
 
 ## Resume Here
 
-**Status:** Round 2 review complete. Need to draft Round 3 fix instructions for the sub-agent.
+**Status:** Drafting Round 3 fix instruction doc (`ROUND3_FIX_INSTRUCTIONS.md`).
 
 **What just happened:**
 - Sub-agent did Round 1 implementation → we reviewed → found gaps
 - We wrote `MULTI_BRANCH_AGENT_INSTRUCTIONS.md` with fix instructions
 - Sub-agent did Round 2 fixes → we reviewed → `REVIEW_FINDINGS_FORK.md` has the results
+- Research complete: local Order table exists with branchId column, but is NEVER populated. No orderService in lib/db/. All 5 order/sales routes query WC exclusively. No sync mechanism exists.
 
 **What needs to happen next:**
-1. Assess Round 2 review findings (in `REVIEW_FINDINGS_FORK.md`)
-2. Draft Round 3 instruction doc with targeted fixes for remaining issues
+1. ✅ Research done — understand the gaps
+2. IN PROGRESS — Writing `ROUND3_FIX_INSTRUCTIONS.md` (targeted fixes for sub-agent on its branch)
 3. Dispatch sub-agent to `claude/fork-multi-branch-kR5aM` to execute Round 3
+
+**Round 3 doc structure (if drafting is interrupted):**
+- Fix A (CRITICAL): Create `lib/db/orderService.ts` — local Order/OrderItem INSERT function. Update `create-with-payment` to call it.
+- Fix B (CRITICAL): Rewrite 5 order/sales API routes to query local Order table with `WHERE branchId = ?` instead of WC.
+- Fix C (CRITICAL): stock-check route — remove legacy column direct writes + WC sync, use BranchStock + syncLegacyStockColumns()
+- Fix D (CRITICAL): update-stock route — redirect to BranchStock, remove WC sync
+- Fix E (PARTIAL): materialService — remove updateMaterialStock(), redirect getLowStockMaterials(), create BranchStock on new material
+- Fix F (PARTIAL): productService — stop writing legacy stockQuantity in upsertProduct()
+- Fix G (PARTIAL): stock-check PDF — add branch info
+- Fix H (PARTIAL): branch indicator — add to admin header/layout, not just dashboard
 
 ---
 
