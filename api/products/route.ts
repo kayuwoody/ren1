@@ -1,0 +1,152 @@
+// app/api/products/route.ts
+import { NextResponse } from "next/server";
+import { wcApi } from "@/lib/wooClient";
+import { getAllProducts, syncProductFromWooCommerce, getProductByWcId, deleteProduct } from "@/lib/db/productService";
+
+export const dynamic = "force-dynamic"; // ensures this API route runs fresh each time
+
+/**
+ * GET /api/products
+ *
+ * Returns products with local-first caching:
+ * 1. Check local SQLite cache first
+ * 2. If cache is empty or products missing, fetch from WooCommerce
+ * 3. Update local cache with WooCommerce data
+ * 4. Remove cached products that no longer exist in WooCommerce
+ *
+ * Query params:
+ * - force_sync=true: Force fetch from WooCommerce even if cache exists
+ */
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const forceSync = url.searchParams.get('force_sync') === 'true';
+
+  try {
+    // Step 1: Get products from local cache
+    const localProducts = getAllProducts();
+
+    // Step 2: If cache is populated and no force sync, return cached products
+    if (localProducts.length > 0 && !forceSync) {
+      console.log(`✅ Returning ${localProducts.length} products from local cache`);
+
+      // Filter out hidden/private products from customer-facing display
+      const visibleProducts = localProducts.filter(
+        product => product.category !== 'hidden' && product.category !== 'private'
+      );
+
+      // Convert local products to WooCommerce format for compatibility
+      const wcFormatProducts = visibleProducts.map(product => ({
+        id: product.wcId,
+        name: product.name,
+        sku: product.sku,
+        price: product.basePrice.toString(),
+        regular_price: product.basePrice.toString(),
+        stock_quantity: product.stockQuantity,
+        manage_stock: product.manageStock, // Use actual manage_stock value from WooCommerce
+        images: product.imageUrl ? [{ src: product.imageUrl }] : [],
+        categories: [{ slug: product.category, name: product.category }],
+        // Add any other fields your frontend expects
+      }));
+
+      console.log(`📦 Filtered out ${localProducts.length - visibleProducts.length} hidden/private products from display`);
+      return NextResponse.json(wcFormatProducts);
+    }
+
+    // Step 3: Fetch from WooCommerce (cache is empty or force sync)
+    console.log(forceSync ? "🔄 Force syncing products from WooCommerce..." : "📦 Cache empty, fetching products from WooCommerce...");
+
+    const { data: wcProducts } = (await wcApi.get("products", {
+      per_page: 100,
+      status: 'any' // Include all products (publish, private, etc.) - private ones used for hidden modifiers
+    })) as { data: any };
+
+    console.log(`✅ WooCommerce returned ${wcProducts.length} products`);
+
+    // Step 4: Sync WooCommerce products to local cache
+    let syncedCount = 0;
+    const wcProductIds = new Set<number>();
+
+    for (const wcProduct of wcProducts) {
+      try {
+        syncProductFromWooCommerce(wcProduct);
+        wcProductIds.add(wcProduct.id);
+        syncedCount++;
+      } catch (err) {
+        console.error(`⚠️ Failed to sync product ${wcProduct.id}:`, err);
+      }
+    }
+
+    console.log(`✅ Synced ${syncedCount}/${wcProducts.length} products to local cache`);
+
+    // Step 5: Remove products from cache that no longer exist in WooCommerce
+    const cachedProducts = getAllProducts();
+    let deletedCount = 0;
+
+    for (const cachedProduct of cachedProducts) {
+      // If cached product has a WooCommerce ID and it's not in the current WooCommerce products, delete it
+      if (cachedProduct.wcId && !wcProductIds.has(cachedProduct.wcId)) {
+        try {
+          deleteProduct(cachedProduct.id);
+          deletedCount++;
+          console.log(`🗑️  Deleted product from cache: ${cachedProduct.name} (WC ID: ${cachedProduct.wcId})`);
+        } catch (err: any) {
+          // Products with recipes or consumption history can't be deleted due to foreign key constraints
+          if (err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+            console.warn(`⚠️  Cannot delete "${cachedProduct.name}": Has recipes or order history (keeping in cache)`);
+          } else {
+            console.error(`⚠️ Failed to delete product ${cachedProduct.id}:`, err);
+          }
+        }
+      }
+    }
+
+    if (deletedCount > 0) {
+      console.log(`✅ Removed ${deletedCount} products from cache that no longer exist in WooCommerce`);
+    }
+
+    // Filter out hidden/private products from customer-facing display
+    const visibleWcProducts = wcProducts.filter((product: any) => {
+      const category = product.categories?.[0]?.slug || 'uncategorized';
+      return category !== 'hidden' && category !== 'private';
+    });
+
+    console.log(`📦 Filtered out ${wcProducts.length - visibleWcProducts.length} hidden/private products from display`);
+    return NextResponse.json(visibleWcProducts);
+  } catch (error: any) {
+    console.error("❌ Products fetch failed:", error);
+
+    // If WooCommerce fetch fails, try to return cached products as fallback
+    try {
+      const fallbackProducts = getAllProducts();
+      if (fallbackProducts.length > 0) {
+        console.log(`⚠️ WooCommerce failed, returning ${fallbackProducts.length} cached products as fallback`);
+
+        // Filter out hidden/private products from customer-facing display
+        const visibleFallbackProducts = fallbackProducts.filter(
+          product => product.category !== 'hidden' && product.category !== 'private'
+        );
+
+        const wcFormatProducts = visibleFallbackProducts.map(product => ({
+          id: product.wcId,
+          name: product.name,
+          sku: product.sku,
+          price: product.basePrice.toString(),
+          regular_price: product.basePrice.toString(),
+          stock_quantity: product.stockQuantity,
+          manage_stock: product.manageStock, // Use actual manage_stock value from WooCommerce
+          images: product.imageUrl ? [{ src: product.imageUrl }] : [],
+          categories: [{ slug: product.category, name: product.category }],
+        }));
+
+        return NextResponse.json(wcFormatProducts);
+      }
+    } catch (fallbackErr) {
+      console.error("❌ Fallback to cache also failed:", fallbackErr);
+    }
+
+    return NextResponse.json(
+      { error: "Failed to fetch products" },
+      { status: 500 }
+    );
+  }
+}

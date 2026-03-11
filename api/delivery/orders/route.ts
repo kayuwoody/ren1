@@ -1,0 +1,42 @@
+import { NextResponse } from "next/server";
+import { wcApi } from "@/lib/wooClient";
+
+/**
+ * GET /api/delivery/orders
+ *
+ * Returns processing orders marked as ready for delivery (with out_for_delivery flag)
+ */
+export async function GET(req: Request) {
+  try {
+    // Fetch all processing orders
+    // Add timestamp to bust WooCommerce cache
+    const response: any = await wcApi.get("orders", {
+      status: "processing",
+      per_page: 100,
+      orderby: "date",
+      order: "asc", // Oldest first (highest priority)
+      _fields: "id,number,status,date_created,total,line_items,meta_data,billing", // Explicitly request meta_data
+      _: Date.now(), // Cache buster
+    });
+
+    const allProcessingOrders = response.data || [];
+
+    // Filter for delivery orders that are ready
+    const deliveryOrders = allProcessingOrders.filter((order: any) => {
+      const kitchenReady = order.meta_data?.find((m: any) => m.key === "kitchen_ready")?.value;
+      const outForDelivery = order.meta_data?.find((m: any) => m.key === "out_for_delivery")?.value;
+      return kitchenReady === "yes" && outForDelivery === "yes";
+    });
+
+    return NextResponse.json(deliveryOrders);
+  } catch (err: any) {
+    console.error("❌ /api/delivery/orders error:", err);
+    return NextResponse.json(
+      {
+        error: "Failed to load delivery orders",
+        details: err?.message || "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}
