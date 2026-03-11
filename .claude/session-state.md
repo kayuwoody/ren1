@@ -1,4 +1,4 @@
-# Session State: Code Review & Round 4 Planning
+# Session State: Multi-Branch Implementation Review
 
 ## READ THIS FIRST — EVERY TIME
 
@@ -13,37 +13,39 @@
 
 ## Resume Here
 
-**Status:** Round 4 instructions COMPLETE. `ROUND4_FIX_INSTRUCTIONS.md` written and ready for code agent.
+**Status:** Round 4 COMPLETE. Objectives review COMPLETE. Implementation is functionally done.
 
-**What happened this session:**
-1. Checked out code branch `claude/fork-multi-branch-kR5aM`
-2. Discovered root-level files (`api/`, `db/`) are uploaded at WRONG paths — a mix of fixed and unfixed code
-3. Proper-path files (`app/api/`, `lib/db/`) are the real project; some have Round 2-3 fixes, others need D-H fixes
-4. Reviewed all D-H fixes against spec using root-level files as reference
-5. Verified A-C known issues — all still present
-6. Ran cross-cutting checks — no architectural violations in already-fixed files
-7. Wrote `ROUND4_FIX_INSTRUCTIONS.md` with complete, self-contained instructions
+**Rounds completed:**
+- Rounds 1-3: Schema, BranchStock service, branchContext, API route scoping, inventory consumption, PO receiving
+- Round 4: Fixes D-H (materialService, productService, stock-check PDF, admin layout, transactions, cleanup)
+- Objectives review: 27/28 items DONE, 1 PARTIAL (low-impact), 1 minor gap
 
-**Key finding:** `lib/db/branchStockService.ts` at proper path is MISSING `initBranchStockForItem()` — must be added before Fixes E3/F3 can work. Also `lib/db/orderService.ts` doesn't exist at proper path.
+### Remaining Gaps (low priority)
 
-**Review Results Summary:**
+1. **3E (PARTIAL):** `app/admin/materials/page.tsx` — DELETE/POST/PUT use plain `fetch` instead of `branchFetch`. Low impact because materials are a global catalog and `initBranchStockForItem` on the server handles branch stock init regardless. But for consistency, write calls should use `branchFetch`.
 
-| Fix | Verdict | Issue |
-|-----|---------|-------|
-| D | Root PASS | Needs copy to `app/api/products/update-stock/route.ts` |
-| E | Root PARTIAL | E4: UPDATE still writes stockQuantity to Material table |
-| F | Root PASS | Minor: stale WC comment on line 201 |
-| G | Root PARTIAL | Still reads legacy columns for stock (not BranchStock) |
-| H | Root PASS | Needs creation at `app/admin/layout.tsx` |
-| A1 | STILL PRESENT | saveOrderLocally not in transaction |
-| A3 | STILL PRESENT | branchId optional in LocalOrder |
-| C1 | STILL PRESENT | stock-check POST loop not in transaction |
+2. **2E (minor):** `app/api/admin/daily-stats/route.ts` — `pendingOrders` count not branch-filtered. Main stats (revenue, items sold) are correctly scoped.
 
-**The plan going forward:**
-1. User/agent dispatches a code agent with `ROUND4_FIX_INSTRUCTIONS.md`
-2. Code agent executes Phases 0-8 on this branch
-3. Final review after code agent completes
-4. Merge to main
+### Objectives Review Results (all 8 tasks)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| 1: Legacy stock writes | BranchStock = sole source of truth | **DONE** (all 4 sub-tasks) |
+| 2: API route scoping | 9 routes with branchId | **DONE** (8/9; COGS is N/A) |
+| 3: Frontend branchFetch | 5 pages | **DONE** (4 full + 1 partial) |
+| 4: PO number prefix | `{BRANCH_CODE}-PO-YYYY-MM-NNNN` | **DONE** |
+| 5: PDFs/receipts | Branch info in headers | **DONE** (all 3) |
+| 6: Branch indicator | Admin layout banner | **DONE** |
+| 7: syncLegacyStockColumns | Aggregate safety net | **DONE** (3 call sites) |
+| 8: Schema (timezone) | Branch table column | **DONE** |
+
+### Cross-cutting verification (all PASS)
+- Zero `updateMaterialStock` live calls in codebase
+- Zero `wcApi` references in stock operations
+- `UPDATE...SET...stockQuantity` only in `syncLegacyStockColumns()` in branchStockService.ts
+- `branchId` required (not optional) in LocalOrder/LocalOrderItem
+- `saveOrderLocally` wrapped in `db.transaction()`
+- Stock-check POST loop wrapped in `db.transaction()`
 
 ---
 
@@ -51,11 +53,10 @@
 
 | File | Purpose |
 |------|---------|
-| `.claude/ROUND4_FIX_INSTRUCTIONS.md` | **CURRENT** — Round 4 instructions for code agent |
-| `.claude/ROUND3_5_INSTRUCTIONS.md` | Review checklist (completed this session) |
-| `.claude/ROUND3_REVIEW_FINDINGS.md` | Round 3 review (A-C pass, D-H not done in worktree) |
-| `.claude/MULTI_BRANCH_AGENT_INSTRUCTIONS.md` | Original Round 2 instructions |
-| `api/`, `db/`, `layout.tsx`, `branchContext.tsx` | Root-level uploads — reference only, to be deleted in Phase 7 |
+| `.claude/ROUND4_FIX_INSTRUCTIONS.md` | Round 4 instructions (executed) |
+| `.claude/ROUND3_5_INSTRUCTIONS.md` | Review checklist (completed) |
+| `.claude/ROUND3_REVIEW_FINDINGS.md` | Round 3 review findings |
+| `.claude/MULTI_BRANCH_AGENT_INSTRUCTIONS.md` | Original Round 2 instructions (Tasks 1-8 spec) |
 
 ---
 
