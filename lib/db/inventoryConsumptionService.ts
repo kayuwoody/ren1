@@ -1,9 +1,9 @@
 import { db, initDatabase } from './init';
 import { v4 as uuidv4 } from 'uuid';
 import { getProductRecipe } from './recipeService';
-import { getMaterial, updateMaterialStock } from './materialService';
+import { getMaterial } from './materialService';
 import { getProduct, getProductByWcId } from './productService';
-import { wcApi } from '../wooClient';
+import { adjustBranchStock } from './branchStockService';
 
 // Ensure database is initialized
 initDatabase();
@@ -28,23 +28,41 @@ export interface InventoryConsumption {
   consumedAt: string;
 }
 
+export interface RecordProductSaleOptions {
+  orderId: string;
+  wcProductId: string | number;
+  productName: string;
+  quantitySold: number;
+  orderItemId?: string;
+  bundleSelection?: {
+    selectedMandatory: Record<string, string>;
+    selectedOptional: string[];
+  };
+  branchId: string;
+}
+
 /**
  * Record inventory consumption when a product is sold
  * This automatically deducts materials from stock based on the product's recipe
  * Recursively processes linked products to deduct all materials in the chain
  */
 export async function recordProductSale(
+  options: RecordProductSaleOptions
+): Promise<InventoryConsumption[]> {
+  const { orderId, wcProductId, productName, quantitySold, orderItemId, bundleSelection, branchId } = options;
+  return _recordProductSaleInternal(orderId, wcProductId, productName, quantitySold, orderItemId, bundleSelection, 0, '', branchId);
+}
+
+async function _recordProductSaleInternal(
   orderId: string,
   wcProductId: string | number,
   productName: string,
   quantitySold: number,
-  orderItemId?: string,
-  bundleSelection?: {
-    selectedMandatory: Record<string, string>;
-    selectedOptional: string[];
-  },
-  depth: number = 0,
-  parentChain: string = ''
+  orderItemId: string | undefined,
+  bundleSelection: { selectedMandatory: Record<string, string>; selectedOptional: string[] } | undefined,
+  depth: number,
+  parentChain: string,
+  branchId: string
 ): Promise<InventoryConsumption[]> {
   const consumptions: InventoryConsumption[] = [];
   const indent = '  '.repeat(depth);
@@ -104,8 +122,8 @@ export async function recordProductSale(
       INSERT INTO InventoryConsumption
       (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
        materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-       unit, costPerUnit, totalCost, consumedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       unit, costPerUnit, totalCost, consumedAt, branchId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -124,7 +142,8 @@ export async function recordProductSale(
       'unit',
       product.supplierCost,
       baseCostConsumption.totalCost,
-      now
+      now,
+      branchId
     );
 
     consumptions.push(baseCostConsumption);
@@ -148,14 +167,8 @@ export async function recordProductSale(
 
     // Still deduct stock for products with no recipe (e.g., supplier-bought items like pies)
     if (depth === 0) {
-      deductLocalProductStock(productId, quantitySold, productName);
+      deductLocalProductStock(productId, quantitySold, productName, branchId);
       console.log(`${indent}📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
-
-      // Log stock comparison for root product
-      if (product.wcId) {
-        console.log(`\n📊 Stock Comparison After Consumption:`);
-        await logStockComparison(productId, product.wcId, productName);
-      }
     }
 
     return consumptions;
@@ -170,12 +183,6 @@ export async function recordProductSale(
 
     // Handle bundle selection filtering (works at all depths with unified selection format)
     if (bundleSelection && recipeItem.selectionGroup) {
-      // Generate the uniqueKey for this selection group
-      // At root level: "root:groupName"
-      // At nested levels: "currentProductId:groupName" (the product that owns this XOR group)
-      // NOTE: At nested levels, we need to find which linked product has this XOR group
-      // For items IN an XOR group, the linkedProductId represents one of the choices
-      // We need to use the ID of the product that HAS the XOR group (parent of the group items)
       const uniqueKey = depth === 0 ? `root:${recipeItem.selectionGroup}` : `${productId}:${recipeItem.selectionGroup}`;
 
       const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
@@ -225,8 +232,8 @@ export async function recordProductSale(
         INSERT INTO InventoryConsumption
         (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
          materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-         unit, costPerUnit, totalCost, consumedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         unit, costPerUnit, totalCost, consumedAt, branchId)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -245,13 +252,14 @@ export async function recordProductSale(
         recipeItem.unit,
         recipeItem.costPerUnit || 0,
         consumption.totalCost,
-        now
+        now,
+        branchId
       );
 
       console.log(`${indent}      💾 Stored consumption: orderItemId=${orderItemId || 'null'}, material=${recipeItem.materialName}`);
 
       consumptions.push(consumption);
-      deductMaterialStock(recipeItem.materialId, quantityConsumed);
+      deductMaterialStock(recipeItem.materialId, quantityConsumed, branchId);
     } else if (recipeItem.itemType === 'product' && recipeItem.linkedProductId) {
       // Linked product - record the product itself AND recursively process its materials
       console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
@@ -259,9 +267,7 @@ export async function recordProductSale(
       // Get the linked product to find its WC ID
       const linkedProduct = getProduct(recipeItem.linkedProductId);
       if (linkedProduct && linkedProduct.wcId) {
-        // First, record the linked product itself as a consumption entry (for visibility only - cost tracked via materials)
-        // This allows reports to show "1x Americano" as part of the combo
-        // Cost is set to 0 to avoid double-counting (actual costs come from recursive material expansion)
+        // Record the linked product itself as a consumption entry (for visibility only)
         const consumptionId = uuidv4();
         const linkedProductConsumption: InventoryConsumption = {
           id: consumptionId,
@@ -278,8 +284,8 @@ export async function recordProductSale(
           linkedProductName: recipeItem.linkedProductName,
           quantityConsumed,
           unit: 'unit',
-          costPerUnit: 0, // Cost is 0 - actual cost tracked via materials below
-          totalCost: 0,   // Cost is 0 - actual cost tracked via materials below
+          costPerUnit: 0,
+          totalCost: 0,
           consumedAt: now,
         };
 
@@ -288,8 +294,8 @@ export async function recordProductSale(
           INSERT INTO InventoryConsumption
           (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
            materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-           unit, costPerUnit, totalCost, consumedAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           unit, costPerUnit, totalCost, consumedAt, branchId)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         stmt.run(
@@ -306,36 +312,29 @@ export async function recordProductSale(
           recipeItem.linkedProductName,
           quantityConsumed,
           'unit',
-          0, // Cost is 0 - actual cost tracked via materials
-          0, // Cost is 0 - actual cost tracked via materials
-          now
+          0,
+          0,
+          now,
+          branchId
         );
 
         console.log(`${indent}      💾 Stored linked product (visibility only): ${recipeItem.linkedProductName} x${quantityConsumed}`);
         consumptions.push(linkedProductConsumption);
 
-        // Deduct local DB inventory for linked products
-        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name);
-
-        // Deduct WooCommerce inventory for ALL linked products
-        // These are component products that WooCommerce doesn't automatically deduct
-        // (Only the root product inventory is handled by WooCommerce when the order is created)
-        await deductWooProductStock(linkedProduct.wcId, quantityConsumed, linkedProduct.name);
-
-        // Log stock comparison for linked product
-        await logStockComparison(linkedProduct.id, linkedProduct.wcId, linkedProduct.name);
+        // Deduct BranchStock for linked product
+        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name, branchId);
 
         // Then recursively process the linked product's materials
-        // Pass bundleSelection through so nested XOR choices are respected
-        const linkedConsumptions = await recordProductSale(
+        const linkedConsumptions = await _recordProductSaleInternal(
           orderId,
           linkedProduct.wcId,
           linkedProduct.name,
           quantityConsumed,
           orderItemId,
-          bundleSelection,  // Pass selections through to handle nested XORs
+          bundleSelection,
           depth + 1,
-          chain
+          chain,
+          branchId
         );
         consumptions.push(...linkedConsumptions);
       } else {
@@ -346,135 +345,41 @@ export async function recordProductSale(
 
   // Deduct local DB stock for the main product (only at root level, not for linked products)
   if (depth === 0) {
-    deductLocalProductStock(productId, quantitySold, productName);
+    deductLocalProductStock(productId, quantitySold, productName, branchId);
     console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
-
-    // Log stock comparison for root product (WC was auto-deducted when order was created)
-    if (product.wcId) {
-      console.log(`\n📊 Stock Comparison After Consumption:`);
-      await logStockComparison(productId, product.wcId, productName);
-    }
   }
 
   return consumptions;
 }
 
 /**
- * Deduct material from stock
+ * Deduct material from BranchStock (source of truth)
  */
-function deductMaterialStock(materialId: string, quantity: number): void {
+function deductMaterialStock(materialId: string, quantity: number, branchId: string): void {
   const material = getMaterial(materialId);
   if (!material) {
     console.error(`❌ Material ${materialId} not found - cannot deduct stock`);
     return;
   }
 
-  const newStock = material.stockQuantity - quantity;
+  const newBranchStock = adjustBranchStock(branchId, 'material', materialId, -quantity);
 
-  // Allow negative stock (backorder) but log warning
-  if (newStock < 0) {
-    console.warn(`⚠️  Material ${material.name} stock went negative: ${newStock} ${material.purchaseUnit}`);
+  if (newBranchStock < 0) {
+    console.warn(`⚠️  Material ${material.name} branch stock went negative: ${newBranchStock} ${material.purchaseUnit}`);
   }
-
-  // Log low stock warning
-  if (newStock <= material.lowStockThreshold && newStock > material.lowStockThreshold - quantity) {
-    console.warn(`🔔 Low stock alert: ${material.name} = ${newStock} ${material.purchaseUnit} (threshold: ${material.lowStockThreshold})`);
-  }
-
-  updateMaterialStock(materialId, newStock);
-}
-
-/**
- * Deduct product from local DB stock
- * NOTE: Always updates local stock unconditionally (like PO receiving does)
- * The WC sync in deductWooProductStock will check WC's manage_stock independently
- */
-function deductLocalProductStock(productId: string, quantity: number, productName: string): void {
-  const product = getProduct(productId);
-  if (!product) {
-    console.error(`❌ Product ${productId} not found - cannot deduct local stock`);
-    return;
-  }
-
-  const currentStock = product.stockQuantity || 0;
-  const newStock = currentStock - quantity;
-
-  console.log(`   📦 Local DB Inventory: ${productName} (${currentStock} → ${newStock})`);
-
-  // Update local database stock (always update, matching PO receiving behavior)
-  db.prepare('UPDATE Product SET stockQuantity = ? WHERE id = ?').run(newStock, productId);
-
-  // Verify the update
-  const verified = db.prepare('SELECT stockQuantity FROM Product WHERE id = ?').get(productId) as { stockQuantity: number } | undefined;
-  console.log(`   ✅ Local DB verified: ${productName} stock = ${verified?.stockQuantity}`);
-
-  // Log warnings
-  if (newStock < 0) {
-    console.warn(`   ⚠️  Local DB: ${productName} stock went negative: ${newStock}`);
+  if (newBranchStock <= material.lowStockThreshold && newBranchStock > material.lowStockThreshold - quantity) {
+    console.warn(`🔔 Low stock alert: ${material.name} = ${newBranchStock} ${material.purchaseUnit} (threshold: ${material.lowStockThreshold})`);
   }
 }
 
 /**
- * Deduct WooCommerce product stock (for linked products in combos)
- * When a combo contains finished products (like Danish), we need to update WooCommerce inventory
+ * Deduct product from BranchStock (source of truth)
  */
-async function deductWooProductStock(wcProductId: number, quantity: number, productName: string): Promise<void> {
-  try {
-    // Fetch current product from WooCommerce
-    const response = await wcApi.get(`products/${wcProductId}`);
-    const product = (response as any).data;
-
-    // Check if product manages stock
-    if (!product.manage_stock) {
-      console.log(`   ℹ️  Product "${productName}" does not manage stock in WooCommerce - skipping inventory update`);
-      return;
-    }
-
-    const currentStock = product.stock_quantity || 0;
-    const newStock = currentStock - quantity;
-
-    console.log(`   📦 WooCommerce Inventory: ${productName} (${currentStock} → ${newStock})`);
-
-    // Update WooCommerce product stock
-    await wcApi.put(`products/${wcProductId}`, {
-      stock_quantity: newStock
-    });
-
-    // Log warnings
-    if (newStock < 0) {
-      console.warn(`   ⚠️  WooCommerce: ${productName} stock went negative: ${newStock}`);
-    }
-
-  } catch (error: any) {
-    console.error(`   ❌ Failed to update WooCommerce stock for ${productName}:`, error.message);
-    // Don't fail the whole operation if WooCommerce update fails
-  }
-}
-
-/**
- * Compare and log local DB vs WooCommerce stock levels for verification
- */
-async function logStockComparison(productId: string, wcProductId: number, productName: string): Promise<void> {
-  try {
-    // Get local stock
-    const localProduct = getProduct(productId);
-    const localStock = localProduct?.stockQuantity ?? 'N/A';
-
-    // Get WooCommerce stock
-    const response = await wcApi.get(`products/${wcProductId}`);
-    const wcProduct = (response as any).data;
-    const wcStock = wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 'not managed';
-
-    // Log comparison
-    const match = localStock === wcStock;
-    const icon = match ? '✅' : '⚠️';
-    console.log(`   ${icon} Stock Comparison: "${productName}" - Local: ${localStock}, WC: ${wcStock}${match ? '' : ' (MISMATCH!)'}`);
-
-    if (!match && typeof localStock === 'number' && typeof wcStock === 'number') {
-      console.warn(`   🔍 Stock drift detected for "${productName}": Local=${localStock}, WC=${wcStock}, Diff=${localStock - wcStock}`);
-    }
-  } catch (error: any) {
-    console.error(`   ❌ Failed to compare stock for ${productName}:`, error.message);
+function deductLocalProductStock(productId: string, quantity: number, productName: string, branchId: string): void {
+  const newBranchStock = adjustBranchStock(branchId, 'product', productId, -quantity);
+  console.log(`   📦 BranchStock: ${productName} → ${newBranchStock}`);
+  if (newBranchStock < 0) {
+    console.warn(`   ⚠️  BranchStock: ${productName} went negative: ${newBranchStock}`);
   }
 }
 
@@ -680,21 +585,17 @@ export function calculateProductCOGS(
     .forEach(item => {
       // Handle bundle selection filtering (works at all depths with unified selection format)
       if (bundleSelection && item.selectionGroup) {
-        // Generate the uniqueKey for this selection group
         const uniqueKey = depth === 0 ? `root:${item.selectionGroup}` : `${product.id}:${item.selectionGroup}`;
         const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
 
-        // Check if this specific item was selected
         const isSelected = item.linkedProductId === selectedItemId;
 
         if (!isSelected) {
-          // Skip this item - it wasn't selected in the XOR group
           return;
         }
       }
 
       if (item.itemType === 'material' && item.materialId) {
-        // Direct material - add to breakdown
         breakdown.push({
           itemType: 'material',
           itemId: item.materialId,
@@ -707,28 +608,24 @@ export function calculateProductCOGS(
           productChain: chain,
         });
       } else if (item.itemType === 'product' && item.linkedProductId) {
-        // Linked product - add product entry for visibility, then recursively expand its materials
         const linkedProduct = getProduct(item.linkedProductId);
         if (linkedProduct && linkedProduct.wcId) {
-          // Add the linked product itself to the breakdown for reporting visibility
-          // Cost is 0 to avoid double-counting (actual costs come from recursive expansion below)
           breakdown.push({
             itemType: 'product',
             itemId: item.linkedProductId,
             itemName: item.linkedProductName || linkedProduct.name,
             quantityUsed: item.quantity * quantity,
             unit: 'unit',
-            costPerUnit: 0, // Cost is 0 - actual cost tracked via materials
-            totalCost: 0,   // Cost is 0 - actual cost tracked via materials
+            costPerUnit: 0,
+            totalCost: 0,
             depth,
             productChain: chain,
           });
 
-          // Pass bundleSelection through to handle nested XORs
           const linkedCOGS = calculateProductCOGS(
             linkedProduct.wcId,
             item.quantity * quantity,
-            bundleSelection, // Pass selections through
+            bundleSelection,
             depth + 1,
             chain
           );

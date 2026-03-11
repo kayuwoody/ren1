@@ -1,228 +1,219 @@
 # Round 3 Review Findings
 
+**Reviewed:** Worktree at `.claude/worktrees/agent-af250b7d/` (branch `claude/fork-multi-branch-kR5aM`)
+**Date:** 2026-03-10
+**Scope:** Fixes A-C (completed by sub-agent), Fixes D-H (confirmed incomplete)
+
 ## Summary
 
-**Overall: PARTIAL PASS** -- 14 issues found (3 blockers, 5 medium, 6 low).
+Fixes A, B, and C are **implemented with no architectural violations**. All five admin reporting routes and the stock-check route have been correctly migrated from WooCommerce API calls to local SQLite queries. The `orderService.ts` was created and `create-with-payment` now saves orders locally. BranchStock is used as sole source of truth in the stock-check route.
 
-**Critical meta-issue:** Commit `c726392` ("Revert code changes: this branch is planning-only") reverted ALL Round 3 implementation from commit `163933c`. The code no longer exists in the working tree. This review was performed against the implementation at commit `163933c`.
+**Fixes D, E, F, G, H are confirmed NOT implemented** in the worktree.
 
-All 8 fixes (A-H) were implemented. Fixes C, D, G, and H are clean passes. Fixes A, B, E, and F have issues ranging from low to blocker severity.
-
----
-
-## Fix A: PARTIAL — Local Order Storage
-
-### A1: orderService.ts — Created
-
-**Issues:**
-
-1. **[BLOCKER] No transaction wrapping.** `saveOrderLocally()` inserts an Order row and then loops to insert OrderItem rows without wrapping in `db.transaction()`. If the process crashes mid-loop, the Order row exists with partial or missing items. The spec explicitly requires: "Wrap multi-step stock ops in `db.transaction()`."
-
-2. **[LOW] Function names differ from spec.** Spec says `createLocalOrder()`, `getLocalOrder()`, `listLocalOrders()`, `getSalesData()`, `getDailySales()`, `getProductsSold()`. Implementation uses `saveOrderLocally()`, `getOrderWithItems()`, `getOrders()`, `getSaleOrders()`, `getDayOrders()`. Functionally equivalent but deviates from spec API. Not a blocker since the routes use the right functions.
-
-3. **[LOW] branchId is optional in LocalOrder type.** `branchId?: string` (line 30) -- per architecture, branchId should be required in data types. The `getOrders()` function also treats `branchId` as optional (line 133). This is acceptable at the service layer if the API layer always provides it, but weakens type safety.
-
-4. **[LOW] Order ID uses WC ID as string.** `const orderId = String(wooOrder.id)` (line 324) -- spec says "Generate a UUID for the local order `id`". Using the WC ID as the local ID means it's not a UUID and could collide with locally-generated UUIDs if local-only orders are ever added.
-
-5. **[LOW] `saveOrderLocally` sets `totalCost`, `totalProfit`, `overallMargin` to 0.** These values are never backfilled after inventory consumption runs. Orders will always show 0 COGS in the orders table, making the sales reports dependent on computing COGS at query time from order items.
-
-### A2: create-with-payment/route.ts — Updated
-
-**Correct.** Calls `saveOrderLocally(order, branchId)` after WC order creation. Wrapped in try/catch so local failure doesn't block the order. `getBranchIdFromRequest` correctly falls back to default branch.
+**No blockers found in Fixes A-C.** There are quality issues (no transactions, naming divergence from spec, optional branchId typing) but nothing that violates architectural rules.
 
 ---
 
-## Fix B: PARTIAL — Rewrite 5 Order/Sales Routes
+## Fix A: PASS -- Local Order Storage
 
-### B1: admin/orders/route.ts — PASS
-WC calls removed. Uses `getOrders({ branchId })` from orderService. Clean implementation.
+### A1: `lib/db/orderService.ts` -- Created
 
-### B2: admin/sales/route.ts — PASS
-WC calls removed. Uses `getSaleOrders()` and computes aggregates in-route. Response shape looks correct (totalRevenue, totalOrders, averageOrderValue, revenueByDay, topProducts, ordersByStatus).
+The service was created with a different API surface than spec prescribed, but is functionally equivalent:
 
-### B3: admin/sales/daily/route.ts — PASS
-WC calls removed. Uses `getDayOrders()`. Response shape includes date, summary, and detailed orders with per-item breakdown including bundle support.
+| Spec Function | Actual Implementation | Notes |
+|---|---|---|
+| `createLocalOrder(input)` | `saveOrderLocally(wooOrder, branchId)` | Takes raw WC order object instead of typed input |
+| `getLocalOrder(id)` | `getOrderWithItems(orderId)` | Equivalent |
+| `listLocalOrders(branchId, opts)` | `getOrders(opts)` | No pagination (limit/offset) |
+| `getSalesData(branchId, ...)` | Not a standalone function | Aggregation done in route handler |
+| `getDailySales(branchId, ...)` | Not a standalone function | Aggregation done in route handler |
+| `getDailyStats(branchId, date)` | `getDailyStats(branchId)` | No date param, always today |
+| `getProductsSold(branchId, ...)` | Not a standalone function | Aggregation done in route handler |
 
-### B4: admin/daily-stats/route.ts — PASS
-WC calls removed. Uses `getDailyStats(branchId)`. Returns `{ todayOrders, todayRevenue, itemsSold, pendingOrders }`.
+**Issues (non-blocking):**
+1. `saveOrderLocally()` uses `String(wooOrder.id)` as the order ID, not a UUID as spec requires. Works but diverges from intent.
+2. `saveOrderLocally()` inserts `totalCost=0`, `totalProfit=0`, `overallMargin=0` and never backfills. COGS are computed at query time from `InventoryConsumption` records in route handlers.
+3. `branchId` is typed as optional (`branchId?: string`) in `LocalOrder` interface. Should be required per architectural rules.
+4. **No `db.transaction()` wrapper** around order + items insertion. Partial inserts possible on crash.
+5. No pagination support in `getOrders()`.
 
-### B5: admin/products-sold/route.ts — PASS
-WC calls removed. Uses `getSaleOrders()` and computes product-level stats. Response includes summary, allProducts, highlights (topSelling, highestRevenue, etc.), dateRange.
+### A2: `app/api/orders/create-with-payment/route.ts` -- Updated correctly
 
-**One concern across all B routes:** The `dateRange` in products-sold (line 131-132) hardcodes `start` and `end` to `new Date().toISOString()` instead of the actual date range used in the query. This means the frontend will display incorrect date range info.
-
----
-
-## Fix C: PASS — Stock Check Route
-
-**POST handler is correct:**
-- No `updateMaterialStock()` call
-- No raw `UPDATE Product SET stockQuantity` SQL
-- No `wcApi` import or calls
-- Uses `updateBranchStock(branchId, ...)` for each item
-- Calls `syncLegacyStockColumns()` once at the end
-- All imports are clean
-
-**GET handler concern (not in scope but notable):** The GET handler still reads from legacy `product.stockQuantity` and `material.stockQuantity` columns. Since `syncLegacyStockColumns()` is called after POST, this should be consistent -- but it shows aggregate stock across all branches, not branch-specific stock. For a single-branch deployment this is fine, but multi-branch stock checks will show combined stock.
+- Calls `saveOrderLocally(order, branchId)` after WC order creation (line 75).
+- Non-fatal try/catch -- WC order succeeds even if local save fails. Correct per spec.
+- `branchId` obtained from `getBranchIdFromRequest(req)`.
+- WC order creation retained for payment processing as spec requires.
 
 ---
 
-## Fix D: PASS — Update-Stock Route
+## Fix B: PASS -- Rewrite 5 Order/Sales Routes
 
-All requirements met:
-- Imports `getBranchIdFromRequest` and `updateBranchStock`
-- Gets `branchId` from request
-- Uses `updateBranchStock(branchId, 'product', productId, stockQuantity)` instead of legacy UPDATE
-- Calls `syncLegacyStockColumns()` after update
-- No `wcApi` import or calls
-- Clean implementation
+All five routes fully rewritten. No WC API calls remain in any of them.
 
----
+### B1: `app/api/admin/orders/route.ts` -- PASS
+Uses `getOrders({ branchId, showAll })`. Returns flat array of orders. Clean.
 
-## Fix E: PARTIAL — materialService.ts Cleanup
+### B2: `app/api/admin/sales/route.ts` -- PASS
+Uses `getSaleOrders()`, computes revenue/COGS/margins inline using `getOrderConsumptions()`.
+Response shape: `{ totalRevenue, totalOrders, averageOrderValue, totalDiscounts, totalCOGS, totalProfit, overallMargin, totalItemsSold, averageItemPrice, averageProfitPerItem, revenueByDay, topProducts, ordersByStatus }`.
 
-### E1: Remove `updateMaterialStock()` — PASS
-Function is deleted. No remaining callers in code files (only in documentation files).
+### B3: `app/api/admin/sales/daily/route.ts` -- PASS
+Uses `getDayOrders()`. Computes per-order COGS from consumption records. Handles bundle data parsing from `variations` JSON. Response: `{ date, summary, orders }`.
 
-### E2: Redirect `getLowStockMaterials()` — **[MEDIUM] INCORRECT**
-The spec says:
-```typescript
-export function getLowStockMaterials(branchId: string) {
-  return getLowStockItems(branchId, 'material');
-}
-```
+### B4: `app/api/admin/daily-stats/route.ts` -- PASS
+Uses `getDailyStats(branchId)`. Returns `{ todayOrders, todayRevenue, itemsSold, pendingOrders }`. Graceful zero-fallback on error.
 
-The implementation calls `getLowStockItems(branchId)` without the `'material'` type filter. Furthermore, `getLowStockItems()` in `branchStockService.ts` does not accept an `itemType` parameter at all -- its signature is `getLowStockItems(branchId: string)`. This means `getLowStockMaterials()` returns ALL low stock items (both materials AND products), which is semantically wrong for a function named "getLowStock**Materials**".
+### B5: `app/api/admin/products-sold/route.ts` -- PASS
+Uses `getSaleOrders()`. Computes per-product stats with COGS. Response: `{ summary, allProducts, highlights, dateRange }`.
 
-The fix requires either:
-(a) Adding an optional `itemType` parameter to `getLowStockItems()`, or
-(b) Filtering the results in `getLowStockMaterials()`.
-
-Currently no callers of `getLowStockMaterials` exist in the app routes, so this is medium severity.
-
-### E3: Init BranchStock for New Materials — PASS
-`upsertMaterial()` calls `initBranchStockForItem('material', id)` when inserting a new material (line 106). Correct.
-
-### Additional note on E:
-`upsertMaterial()` UPDATE path still writes `stockQuantity` directly to the Material table (line 56). The spec for Fix E does not explicitly require removing this, so it's not a violation, but it contradicts the BranchStock-as-sole-source-of-truth architecture. When a material is updated via the admin UI, whatever `stockQuantity` value the caller passes overwrites the legacy column directly, potentially desynchronizing it from BranchStock.
+**Cross-cutting observation:** COGS aggregation logic is duplicated across routes B2, B3, and B5 (each independently calls `getOrderConsumptions()` per order and computes margins). Spec intended this to live in `orderService.ts`. Not a correctness issue, but a maintainability concern.
 
 ---
 
-## Fix F: PASS — productService.ts
+## Fix C: PASS -- Stock Check Route
 
-### F1: Stop writing stockQuantity in upsertProduct() — PASS
-The UPDATE path (line 94-116) does NOT include `stockQuantity` in the SET clause. Comment confirms: "do NOT write stockQuantity (managed by BranchStock)".
+**File:** `app/api/admin/stock-check/route.ts`
 
-The INSERT path (line 118-146) hardcodes `stockQuantity` to `0`, which is correct for a new product.
+### GET handler -- Correct
+- Reads stock from `getBranchStock(branchId, ...)` for each product and material.
+- Uses BranchStock as source of truth. No legacy column reads for stock values.
 
-### F2: Stop syncing stock from WC in syncProductFromWooCommerce() — PASS
-Line 186: `const stockQuantity = existing?.stockQuantity ?? 0` preserves the local value instead of using WC's stock. The variable is then passed to `upsertProduct()` but since the UPDATE path doesn't write stockQuantity, this is effectively a no-op for existing products.
+### POST handler -- Correct
+- **Removed:** `updateMaterialStock()` call -- confirmed absent.
+- **Removed:** Direct `UPDATE Product SET stockQuantity = ?` -- confirmed absent.
+- **Removed:** `wcApi.put()` call -- confirmed absent. No `wcApi` import in file.
+- Uses `updateBranchStock(branchId, ...)` for each item -- correct.
+- Calls `syncLegacyStockColumns()` once after all updates -- correct per spec.
+- Creates stock check log with `branchId`.
 
-**[LOW] Misleading comment on line 201:** `stockQuantity, // Use WooCommerce stock as source of truth` -- this comment directly contradicts the architecture. The code is correct (preserves local value), but the comment is wrong and could confuse future maintainers.
-
-### F3: Init BranchStock for new products — PASS
-Line 142-145: `initBranchStockForItem('product', id)` called when `!existing && product.manageStock`.
-
----
-
-## Fix G: PASS — Stock Check PDF Branch Info
-
-All requirements met:
-- Accepts `branchId` from request header via `getBranchIdFromRequest(req)` (line 122)
-- Looks up branch via `getBranch(branchId)` (line 123)
-- Includes branch name (bold, centered, blue) in PDF header (lines 125-133)
-- Includes branch address if available (lines 136-147)
-- Follows same PDF generation patterns as the rest of the file
+**Issue (non-blocking):** POST handler loop of `updateBranchStock()` calls is not wrapped in `db.transaction()`. Partial updates possible on crash.
 
 ---
 
-## Fix H: PASS — Branch Indicator in Admin Header
+## Fix D: NOT IMPLEMENTED -- Update-Stock Route
 
-### admin/layout.tsx — Created correctly
-- Uses `useBranch()` from `branchContext.tsx`
-- Shows branch name and code as a read-only indicator bar
-- Not a selector (matches spec requirement)
-- Blue-themed badge with colored dot
+**File:** `app/api/products/update-stock/route.ts`
 
-### branchContext.tsx — Created correctly
-- Provides `BranchProvider` with `currentBranch`, `branches`, `setBranch`, `branchFetch`
-- `branchFetch` injects `X-Branch-Id` header automatically
-- Uses sessionStorage for persistence
-- Fetches branches from `/api/admin/branches`
+Confirmed **untouched**. The file still:
+1. Imports `wcApi` from `@/lib/wooClient` (line 3)
+2. Writes directly to `Product.stockQuantity` via `UPDATE Product SET stockQuantity = ?` (line 47)
+3. Calls `wcApi.put()` to sync stock to WooCommerce (line 54)
+4. Does NOT use `getBranchIdFromRequest`
+5. Does NOT use `updateBranchStock` or `syncLegacyStockColumns`
 
-### app/layout.tsx — Wrapped correctly
-- `BranchProvider` wraps the entire app (line 15-20)
-- Placed outside `CartProvider` which is correct
+**This is an active architectural violation** (direct legacy writes + WC sync).
 
-### api/admin/branches/route.ts — Created correctly
-- Simple GET endpoint returning `getActiveBranches()`
+---
+
+## Fix E: NOT IMPLEMENTED -- materialService Cleanup
+
+**File:** `lib/db/materialService.ts`
+
+All three sub-fixes confirmed missing:
+
+### E1: `updateMaterialStock()` still exists (line 239-248)
+Still writes directly to `Material.stockQuantity`. The stock-check route (Fix C) no longer calls it, but it remains exported and callable.
+
+### E2: `getLowStockMaterials()` still queries legacy columns (line 253-260)
+Queries `WHERE stockQuantity <= lowStockThreshold` on the `Material` table directly. Not redirected to `branchStockService.getLowStockItems()`.
+
+Note: `getLowStockItems()` in branchStockService has signature `getLowStockItems(branchId: string)` with no `itemType` parameter. The spec assumed `getLowStockItems(branchId, 'material')` which doesn't match. Would need either a branchStockService change or a filter wrapper.
+
+### E3: `upsertMaterial()` does not create BranchStock for new materials
+No `initBranchStockForItem` call. That function also does not exist in `branchStockService.ts`. Only `initBranchStockForNewBranch()` exists (creates stock entries for all items when a new *branch* is created).
+
+Additionally: `upsertMaterial()` UPDATE path (line 52-73) still writes `stockQuantity` directly to the Material table, which can desynchronize from BranchStock.
+
+---
+
+## Fix F: NOT IMPLEMENTED -- productService Cleanup
+
+**File:** `lib/db/productService.ts`
+
+All three sub-fixes confirmed missing:
+
+1. `upsertProduct()` still writes `stockQuantity` in both INSERT (line 125) and UPDATE (line 101, 109) SQL.
+2. `syncProductFromWooCommerce()` still reads WC stock for new products (line 184: `wcProduct.stock_quantity ?? 0`) and writes it via `upsertProduct()`.
+3. No BranchStock entry creation for new products.
+
+---
+
+## Fix G: NOT IMPLEMENTED -- Stock Check PDF
+
+**File:** `app/api/admin/stock-check/pdf/route.ts`
+
+Confirmed untouched:
+1. No `branchId` parameter accepted (function signature is `GET()` with no request param, line 31).
+2. No branch name/address in PDF header.
+3. Reads stock from `product.stockQuantity` and `material.stockQuantity` (legacy columns, lines 49, 63) rather than BranchStock. Shows aggregate stock across all branches.
+
+---
+
+## Fix H: NOT IMPLEMENTED -- Admin Layout Branch Indicator
+
+Confirmed: `app/admin/layout.tsx` does **not exist** in the worktree.
+
+`context/branchContext.tsx` does exist and correctly provides `branchFetch` and `useBranch`. It is ready to be consumed by a future admin layout component.
 
 ---
 
 ## Additional Findings
 
-### 1. [BLOCKER] Implementation is reverted
-Commit `c726392` ("Revert code changes: this branch is planning-only") reverted ALL code changes from `163933c`. The current HEAD has none of the Round 3 implementation. The implementation needs to be re-applied (cherry-pick `163933c` or revert the revert).
+1. **`inventoryConsumptionService.ts` is correct.** Uses `adjustBranchStock()` for both material and product stock deductions. Has `branchId` threaded through all functions. No legacy direct writes. No WC sync calls. Passes review.
 
-### 2. [MEDIUM] No transaction wrapping in saveOrderLocally
-As noted in Fix A, the order + order items insert is not atomic. This violates the architectural rule: "Wrap multi-step stock ops in `db.transaction()`."
+2. **`branchContext.tsx` is correct.** Provides `BranchProvider` with `currentBranch`, `branches`, `setBranch`, `branchFetch` (injects `X-Branch-Id` header). Uses sessionStorage for persistence.
 
-### 3. [MEDIUM] Stock Check GET reads legacy columns, not BranchStock
-The GET handler for `/api/admin/stock-check` shows aggregate stock from legacy columns rather than branch-specific stock from BranchStock. In a multi-branch deployment, users would see combined stock instead of their branch's stock.
+3. **`branchStockService.ts` has `syncLegacyStockColumns`.** Confirmed present (lines 113-126). Updates both `Material.stockQuantity` and `Product.stockQuantity` as aggregate SUMs from BranchStock. Correct implementation.
 
-### 4. [MEDIUM] Products-sold dateRange hardcoded
-`app/api/admin/products-sold/route.ts` line 131-132 sets dateRange start and end to `new Date().toISOString()` instead of the actual query date range.
+4. **No remaining callers of `updateMaterialStock` in routes.** The function exists in materialService.ts but grep confirms no route or service file imports or calls it. The stock-check route (its former caller) now uses `updateBranchStock`. Safe to delete in Fix E.
 
-### 5. [MEDIUM] inventoryConsumptionService has no transaction wrapping
-`recordProductSale()` inserts multiple InventoryConsumption rows and adjusts BranchStock for multiple materials in a loop without wrapping in a transaction. If the process fails mid-way, partial consumption records will exist.
+5. **Duplicate date-range logic.** `buildDateFilter()` in `orderService.ts` and the inline date computation in `products-sold/route.ts` (lines 161-192) duplicate timezone-aware date range logic.
 
 ---
 
 ## Remaining WooCommerce References
 
-### In scope (stock/order routes) -- CLEAN
-No `wcApi` or `fetchAllWooPages` references remain in:
-- `app/api/admin/orders/route.ts`
-- `app/api/admin/sales/route.ts`
-- `app/api/admin/sales/daily/route.ts`
-- `app/api/admin/daily-stats/route.ts`
-- `app/api/admin/products-sold/route.ts`
-- `app/api/admin/stock-check/route.ts`
-- `app/api/products/update-stock/route.ts`
+**In routes that were cleaned (Fixes A-C scope):**
 
-### Out of scope (not addressed in Round 3, acceptable)
-- `app/api/admin/products/costs/route.ts` -- uses `fetchAllWooPages` for product catalog sync
-- `app/api/admin/customers/route.ts` -- uses `fetchAllWooPages` for customer data
-- `app/api/products/route.ts` -- uses `wcApi` for product sync
-- `app/api/orders/route.ts` -- uses `wcApi` for order management
-- `app/api/orders/create-with-payment/route.ts` -- still creates WC orders (intentionally kept per spec)
+| File | WC References | Status |
+|------|--------------|--------|
+| `app/api/admin/orders/route.ts` | None | CLEAN |
+| `app/api/admin/sales/route.ts` | None | CLEAN |
+| `app/api/admin/sales/daily/route.ts` | None | CLEAN |
+| `app/api/admin/daily-stats/route.ts` | None | CLEAN |
+| `app/api/admin/products-sold/route.ts` | None | CLEAN |
+| `app/api/admin/stock-check/route.ts` | None | CLEAN |
+| `app/api/orders/create-with-payment/route.ts` | `createWooOrder` | EXPECTED (kept for payment) |
+
+**In routes that should have been cleaned but weren't (Fix D):**
+
+| File | WC References | Status |
+|------|--------------|--------|
+| `app/api/products/update-stock/route.ts` | `wcApi` import + `wcApi.put()` | DIRTY -- Fix D not done |
 
 ---
 
-## Blockers
+## Blockers for Fixes A-C
 
-1. **Implementation is reverted.** Commit `c726392` undid all Round 3 changes. Must re-apply (revert the revert or cherry-pick `163933c`).
-
-2. **`saveOrderLocally()` lacks transaction wrapping.** Order + OrderItem inserts must be atomic. Wrap in `db.transaction()`.
-
-3. **`getLowStockMaterials()` returns products too.** The `getLowStockItems()` function needs an `itemType` filter parameter, or `getLowStockMaterials` needs to filter results. Currently returns semantically incorrect data.
+**None.** The completed work has no architectural violations:
+- BranchStock is sole source of truth in stock-check (Fix C)
+- Local SQLite queries replace WC API calls in all 5 reporting routes (Fix B)
+- branchId is threaded through from request headers in all routes
+- `syncLegacyStockColumns()` called after batch stock updates
+- No WC sync added to any stock operation
 
 ---
 
 ## Recommendations
 
-1. **Add `itemType` filter to `getLowStockItems()`.** Make the second parameter optional so it can filter by `'material'` or `'product'` when needed.
+**Priority (should do before merge):**
+1. Wrap `saveOrderLocally()` in `db.transaction()` -- prevents partial order inserts.
+2. Wrap stock-check POST update loop in `db.transaction()` -- prevents partial stock updates.
+3. Complete Fix D next -- it is the only remaining architectural violation in stock routes.
 
-2. **Fix misleading comment in `syncProductFromWooCommerce()`.** Line 201 says "Use WooCommerce stock as source of truth" but the code correctly preserves local stock. Change to "Preserve existing local stock value".
-
-3. **Make stock-check GET branch-aware.** Read from BranchStock instead of legacy columns so each branch sees its own stock levels.
-
-4. **Fix products-sold dateRange.** Pass the actual computed startDate/endDate to the response instead of `new Date().toISOString()`.
-
-5. **Use UUID for local order ID.** Instead of `String(wooOrder.id)`, use `uuidv4()` and store WC ID in the `wcId` column per the spec.
-
-6. **Wrap `recordProductSale()` in a transaction.** Multiple inserts + stock adjustments should be atomic.
-
-7. **Stop writing `stockQuantity` in `upsertMaterial()` UPDATE path.** The material UPDATE still directly sets `Material.stockQuantity`, which can desynchronize from BranchStock. Consider removing it from the UPDATE SQL and relying on `syncLegacyStockColumns()` instead.
-
-8. **Back-fill order COGS.** After `recordProductSale()` computes consumption, update the Order row's `totalCost`, `totalProfit`, `overallMargin` so that order-level reports don't need to re-aggregate from consumption records.
+**Nice-to-have:**
+4. Move COGS aggregation logic from route handlers into `orderService.ts` functions to reduce duplication.
+5. Use UUID for local order ID instead of stringified WC ID.
+6. Make `branchId` non-optional in `LocalOrder` interface.
+7. Complete Fixes E and F (service cleanup) to remove legacy `updateMaterialStock()` and stop `upsertProduct()` from writing `stockQuantity`.
+8. Complete Fixes G and H (UI improvements) for branch info in PDF and admin header indicator.

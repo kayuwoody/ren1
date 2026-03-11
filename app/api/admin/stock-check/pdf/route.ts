@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { getAllProducts } from '@/lib/db/productService';
 import { getAllMaterials } from '@/lib/db/materialService';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
+import { getBranch } from '@/lib/db/branchService';
 import { handleApiError } from '@/lib/api/error-handler';
 
 interface StockCheckItem {
@@ -28,7 +30,7 @@ function sanitizeText(text: string): string {
  *
  * Generate a PDF stock take sheet grouped by supplier
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const products = getAllProducts();
     const materials = getAllMaterials();
@@ -115,6 +117,35 @@ export async function GET() {
       color: rgb(0, 0, 0),
     });
     y -= 25;
+
+    // Branch info
+    const branchId = getBranchIdFromRequest(req);
+    const branch = getBranch(branchId);
+    if (branch) {
+      const branchText = sanitizeText(branch.name);
+      const branchWidth = fontBold.widthOfTextAtSize(branchText, 12);
+      page.drawText(branchText, {
+        x: (pageWidth - branchWidth) / 2,
+        y: y,
+        size: 12,
+        font: fontBold,
+        color: rgb(0.2, 0.4, 0.6),
+      });
+      y -= 16;
+
+      if (branch.address) {
+        const addrText = sanitizeText(branch.address);
+        const addrWidth = font.widthOfTextAtSize(addrText, 9);
+        page.drawText(addrText, {
+          x: (pageWidth - addrWidth) / 2,
+          y: y,
+          size: 9,
+          font: font,
+          color: rgb(0.4, 0.4, 0.4),
+        });
+        y -= 14;
+      }
+    }
 
     // Date
     const dateText = `Date: ${new Date().toLocaleDateString('en-MY')}`;
