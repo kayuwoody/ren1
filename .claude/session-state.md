@@ -1,12 +1,11 @@
-# Session State: Multi-Branch Planning
+# Session State: Code Review & Round 4 Planning
 
-## ⚠️ READ THIS FIRST — EVERY TIME
+## READ THIS FIRST — EVERY TIME
 
-- **You are the ARCHITECT.** This is a planning-only session. You do NOT write code on this branch.
-- **Sub-agents do all implementation.** You write instruction docs, review findings, and decide next steps.
-- **The code branch is `claude/fork-multi-branch-kR5aM`.** That's where all implementation lives.
-- **Our branch (`claude/pos-multi-branch-support-YS4Qr`) is planning-only.** It holds spec docs, instruction docs, review findings, and the recovered code from commit `163933c`.
-- **On every session resume:** Read this file first, then tell the user what you understand the current status to be and ask them to confirm before taking any action.
+- **You are the ARCHITECT.** This session reviews implementation code and produces instruction docs.
+- **Code branch:** `claude/fork-multi-branch-kR5aM`
+- **Your push branch:** `claude/review-session-state-vR06M`
+- **On every session resume:** Read this file first, summarize status, ask user to confirm.
 
 ---
 
@@ -14,26 +13,37 @@
 
 ## Resume Here
 
-**Status:** Code recovered from `163933c`. Round 3.5 instructions created. Ready for review → Round 4 cycle.
+**Status:** Round 4 instructions COMPLETE. `ROUND4_FIX_INSTRUCTIONS.md` written and ready for code agent.
 
-**What happened (chronological):**
-1. Sub-agent did Round 1 implementation → we reviewed → found gaps
-2. We wrote `MULTI_BRANCH_AGENT_INSTRUCTIONS.md` with fix instructions
-3. Sub-agent did Round 2 fixes → we reviewed → `REVIEW_FINDINGS_FORK.md` has results
-4. We wrote `ROUND3_FIX_INSTRUCTIONS.md` with targeted fixes A-H
-5. Sub-agent attempted Round 3 in worktree — completed A-C but skipped D-H, couldn't push (403)
-6. We implemented Round 3 (all A-H) directly on this branch in commit `163933c` — then reverted it
-7. Review agent reviewed the worktree code (A-C only) — review is in `ROUND3_REVIEW_FINDINGS.md`
-8. **Fixes D-H from commit `163933c` were NEVER reviewed**
-9. We cherry-picked `163933c` back onto this branch to recover the code
-10. Created `ROUND3_5_INSTRUCTIONS.md` — instructions for the next review + code agent cycle
+**What happened this session:**
+1. Checked out code branch `claude/fork-multi-branch-kR5aM`
+2. Discovered root-level files (`api/`, `db/`) are uploaded at WRONG paths — a mix of fixed and unfixed code
+3. Proper-path files (`app/api/`, `lib/db/`) are the real project; some have Round 2-3 fixes, others need D-H fixes
+4. Reviewed all D-H fixes against spec using root-level files as reference
+5. Verified A-C known issues — all still present
+6. Ran cross-cutting checks — no architectural violations in already-fixed files
+7. Wrote `ROUND4_FIX_INSTRUCTIONS.md` with complete, self-contained instructions
+
+**Key finding:** `lib/db/branchStockService.ts` at proper path is MISSING `initBranchStockForItem()` — must be added before Fixes E3/F3 can work. Also `lib/db/orderService.ts` doesn't exist at proper path.
+
+**Review Results Summary:**
+
+| Fix | Verdict | Issue |
+|-----|---------|-------|
+| D | Root PASS | Needs copy to `app/api/products/update-stock/route.ts` |
+| E | Root PARTIAL | E4: UPDATE still writes stockQuantity to Material table |
+| F | Root PASS | Minor: stale WC comment on line 201 |
+| G | Root PARTIAL | Still reads legacy columns for stock (not BranchStock) |
+| H | Root PASS | Needs creation at `app/admin/layout.tsx` |
+| A1 | STILL PRESENT | saveOrderLocally not in transaction |
+| A3 | STILL PRESENT | branchId optional in LocalOrder |
+| C1 | STILL PRESENT | stock-check POST loop not in transaction |
 
 **The plan going forward:**
-1. User pushes recovered code (from `163933c`) to the code branch `claude/fork-multi-branch-kR5aM`
-2. New planning chat reviews the code branch (with `163933c` code added) against `ROUND3_5_INSTRUCTIONS.md`
-3. Planning chat produces a Round 4 instruction doc based on review findings
-4. Code agent is dispatched to the code branch with Round 4 instructions
-5. Final review before merge
+1. User/agent dispatches a code agent with `ROUND4_FIX_INSTRUCTIONS.md`
+2. Code agent executes Phases 0-8 on this branch
+3. Final review after code agent completes
+4. Merge to main
 
 ---
 
@@ -41,33 +51,11 @@
 
 | File | Purpose |
 |------|---------|
-| `docs/MULTI_BRANCH_IMPLEMENTATION.md` | Full spec doc |
-| `.claude/MULTI_BRANCH_AGENT_INSTRUCTIONS.md` | Round 2 instruction doc (8 tasks) |
-| `.claude/ROUND3_FIX_INSTRUCTIONS.md` | Round 3 fix instructions (Fixes A-H) |
-| `.claude/ROUND3_5_INSTRUCTIONS.md` | **NEW** — Round 3.5 review checklist + known issues for next cycle |
-| `.claude/REVIEW_FINDINGS_FORK.md` | Round 2 review results |
-| `.claude/ROUND3_REVIEW_FINDINGS.md` | Round 3 review (A-C only — D-H never reviewed) |
-| `.claude/REVIEW_FINDINGS.md` | ❌ STALE — reviewed wrong branch, ignore |
-
----
-
-## What's Been Reviewed vs Not
-
-### Fixes A-C: REVIEWED and PASSED (with non-blocking issues)
-
-These were reviewed against the worktree code. The same code is in `163933c`. Known issues:
-- **A:** No `db.transaction()` in `saveOrderLocally()`, naming differs from spec, `branchId` typed as optional
-- **B:** COGS aggregation duplicated across routes (should be in orderService), no pagination
-- **C:** Stock-check POST loop not wrapped in `db.transaction()`
-
-### Fixes D-H: IMPLEMENTED in `163933c` but NEVER REVIEWED
-
-These need the new planning chat to review:
-- **D:** `update-stock` route — should use BranchStock + syncLegacy, remove WC
-- **E:** `materialService` cleanup — remove `updateMaterialStock()`, redirect `getLowStockMaterials()`, init BranchStock for new materials
-- **F:** `productService` cleanup — stop writing `stockQuantity`, init BranchStock for new products
-- **G:** Stock-check PDF — should include branch name/address
-- **H:** Admin layout branch indicator badge
+| `.claude/ROUND4_FIX_INSTRUCTIONS.md` | **CURRENT** — Round 4 instructions for code agent |
+| `.claude/ROUND3_5_INSTRUCTIONS.md` | Review checklist (completed this session) |
+| `.claude/ROUND3_REVIEW_FINDINGS.md` | Round 3 review (A-C pass, D-H not done in worktree) |
+| `.claude/MULTI_BRANCH_AGENT_INSTRUCTIONS.md` | Original Round 2 instructions |
+| `api/`, `db/`, `layout.tsx`, `branchContext.tsx` | Root-level uploads — reference only, to be deleted in Phase 7 |
 
 ---
 
@@ -76,7 +64,7 @@ These need the new planning chat to review:
 1. **BranchStock-only** — sole source of truth. Legacy columns = computed aggregates.
 2. **WooCommerce** — being deprecated. Remove WC sync calls. Don't add new WC logic.
 3. **PO numbers** — globally unique, branch-prefixed: `{BRANCH_CODE}-PO-YYYY-MM-NNNN`
-4. **Timezone** — UTC+8 hardcoded. Schema column exists for future, not wired up.
+4. **Timezone** — UTC+8 hardcoded.
 5. **Suppliers** — global scope, no changes.
 6. **Cart isolation** — not in scope. Each local POS server = one branch.
 7. **Products, recipes, materials** — global shared catalog.
@@ -85,9 +73,8 @@ These need the new planning chat to review:
 
 ## Process Rules
 
-- Always write findings to files immediately, not just in conversation
-- Before major actions, state which branch you're looking at
+- Always write findings to files immediately
+- Before major actions, state which files you're looking at (root-level vs proper-path)
 - If findings contradict earlier discussion, STOP and reconcile
-- Sub-agents do implementation. This session produces instruction docs.
 - Update this file at every meaningful transition point
-- On context reset: read this file FIRST, then ask user to confirm before acting
+- On context reset: read this file FIRST
