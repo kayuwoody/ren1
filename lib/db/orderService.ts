@@ -27,7 +27,7 @@ export interface LocalOrder {
   overallMargin: number;
   paymentMethod?: string;
   notes?: string;
-  branchId?: string;
+  branchId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -51,7 +51,7 @@ export interface LocalOrderItem {
   variations?: string;
   discountApplied: number;
   finalPrice: number;
-  branchId?: string;
+  branchId: string;
   soldAt: string;
 }
 
@@ -313,93 +313,96 @@ export function getDailyStats(branchId: string): {
  * Called at order creation time. Idempotent (upserts by wcId or id).
  */
 export function saveOrderLocally(wooOrder: any, branchId: string): void {
-  const now = new Date().toISOString();
+  const insertOrder = db.transaction(() => {
+    const now = new Date().toISOString();
 
-  const getMeta = (metaData: any[] | undefined, key: string, fallback?: any) => {
-    if (!metaData || !Array.isArray(metaData)) return fallback;
-    const m = metaData.find((entry: any) => entry.key === key);
-    return m?.value ?? fallback;
-  };
+    const getMeta = (metaData: any[] | undefined, key: string, fallback?: any) => {
+      if (!metaData || !Array.isArray(metaData)) return fallback;
+      const m = metaData.find((entry: any) => entry.key === key);
+      return m?.value ?? fallback;
+    };
 
-  const orderId = String(wooOrder.id);
-  const finalTotal = parseFloat(getMeta(wooOrder.meta_data, '_final_total', wooOrder.total) || '0');
+    const orderId = String(wooOrder.id);
+    const finalTotal = parseFloat(getMeta(wooOrder.meta_data, '_final_total', wooOrder.total) || '0');
 
-  const existing = db.prepare('SELECT id FROM "Order" WHERE id = ? OR wcId = ?').get(orderId, wooOrder.id);
+    const existing = db.prepare('SELECT id FROM "Order" WHERE id = ? OR wcId = ?').get(orderId, wooOrder.id);
 
-  if (existing) {
-    db.prepare('UPDATE "Order" SET status = ?, updatedAt = ? WHERE id = ? OR wcId = ?')
-      .run(wooOrder.status, now, orderId, wooOrder.id);
-    return;
-  }
-
-  db.prepare(`
-    INSERT INTO "Order" (id, wcId, orderNumber, status, customerName, customerPhone,
-                         subtotal, tax, total, totalCost, totalProfit, overallMargin,
-                         paymentMethod, notes, branchId, createdAt, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)
-  `).run(
-    orderId,
-    wooOrder.id,
-    wooOrder.number || String(wooOrder.id),
-    wooOrder.status,
-    wooOrder.billing?.first_name || 'Guest',
-    wooOrder.billing?.phone || null,
-    parseFloat(wooOrder.total) || 0,
-    0,
-    finalTotal,
-    wooOrder.payment_method || null,
-    wooOrder.customer_note || null,
-    branchId,
-    wooOrder.date_created || now,
-    now,
-  );
-
-  const insertItem = db.prepare(`
-    INSERT INTO OrderItem (id, orderId, productId, productName, category, sku,
-                           quantity, basePrice, unitPrice, subtotal, unitCost, totalCost,
-                           itemProfit, itemMargin, recipeSnapshot, variations,
-                           discountApplied, finalPrice, branchId, soldAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?, ?, ?, ?, ?, ?)
-  `);
-
-  for (const item of (wooOrder.line_items || [])) {
-    const itemId = String(item.id);
-    const finalPrice = parseFloat(getMeta(item.meta_data, '_final_price', item.price) || '0');
-    const retailPrice = parseFloat(getMeta(item.meta_data, '_retail_price', item.price) || '0');
-    const discountApplied = retailPrice > finalPrice ? retailPrice - finalPrice : 0;
-    const isBundle = getMeta(item.meta_data, '_is_bundle') === 'true';
-    const bundleDisplayName = getMeta(item.meta_data, '_bundle_display_name');
-    const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
-
-    const variationsObj: Record<string, any> = {};
-    if (isBundle) {
-      variationsObj._is_bundle = 'true';
-      variationsObj._bundle_display_name = bundleDisplayName;
-      variationsObj._bundle_base_product_name = getMeta(item.meta_data, '_bundle_base_product_name');
-      variationsObj._bundle_components = getMeta(item.meta_data, '_bundle_components');
+    if (existing) {
+      db.prepare('UPDATE "Order" SET status = ?, updatedAt = ? WHERE id = ? OR wcId = ?')
+        .run(wooOrder.status, now, orderId, wooOrder.id);
+      return;
     }
-    const discountReason = getMeta(item.meta_data, '_discount_reason');
-    if (discountReason) variationsObj._discount_reason = discountReason;
-    variationsObj._retail_price = String(retailPrice);
-    variationsObj._final_price = String(finalPrice);
 
-    insertItem.run(
-      itemId,
+    db.prepare(`
+      INSERT INTO "Order" (id, wcId, orderNumber, status, customerName, customerPhone,
+                           subtotal, tax, total, totalCost, totalProfit, overallMargin,
+                           paymentMethod, notes, branchId, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)
+    `).run(
       orderId,
-      String(item.product_id),
-      displayName,
-      '',
-      item.sku || '',
-      item.quantity,
-      retailPrice,
-      finalPrice,
-      finalPrice * item.quantity,
-      null,
-      JSON.stringify(variationsObj),
-      discountApplied,
-      finalPrice,
+      wooOrder.id,
+      wooOrder.number || String(wooOrder.id),
+      wooOrder.status,
+      wooOrder.billing?.first_name || 'Guest',
+      wooOrder.billing?.phone || null,
+      parseFloat(wooOrder.total) || 0,
+      0,
+      finalTotal,
+      wooOrder.payment_method || null,
+      wooOrder.customer_note || null,
       branchId,
       wooOrder.date_created || now,
+      now,
     );
-  }
+
+    const insertItem = db.prepare(`
+      INSERT INTO OrderItem (id, orderId, productId, productName, category, sku,
+                             quantity, basePrice, unitPrice, subtotal, unitCost, totalCost,
+                             itemProfit, itemMargin, recipeSnapshot, variations,
+                             discountApplied, finalPrice, branchId, soldAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const item of (wooOrder.line_items || [])) {
+      const itemId = String(item.id);
+      const finalPrice = parseFloat(getMeta(item.meta_data, '_final_price', item.price) || '0');
+      const retailPrice = parseFloat(getMeta(item.meta_data, '_retail_price', item.price) || '0');
+      const discountApplied = retailPrice > finalPrice ? retailPrice - finalPrice : 0;
+      const isBundle = getMeta(item.meta_data, '_is_bundle') === 'true';
+      const bundleDisplayName = getMeta(item.meta_data, '_bundle_display_name');
+      const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+
+      const variationsObj: Record<string, any> = {};
+      if (isBundle) {
+        variationsObj._is_bundle = 'true';
+        variationsObj._bundle_display_name = bundleDisplayName;
+        variationsObj._bundle_base_product_name = getMeta(item.meta_data, '_bundle_base_product_name');
+        variationsObj._bundle_components = getMeta(item.meta_data, '_bundle_components');
+      }
+      const discountReason = getMeta(item.meta_data, '_discount_reason');
+      if (discountReason) variationsObj._discount_reason = discountReason;
+      variationsObj._retail_price = String(retailPrice);
+      variationsObj._final_price = String(finalPrice);
+
+      insertItem.run(
+        itemId,
+        orderId,
+        String(item.product_id),
+        displayName,
+        '',
+        item.sku || '',
+        item.quantity,
+        retailPrice,
+        finalPrice,
+        finalPrice * item.quantity,
+        null,
+        JSON.stringify(variationsObj),
+        discountApplied,
+        finalPrice,
+        branchId,
+        wooOrder.date_created || now,
+      );
+    }
+  });
+  insertOrder();
 }

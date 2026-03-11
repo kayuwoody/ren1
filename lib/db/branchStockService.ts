@@ -18,6 +18,13 @@ export function getBranchStock(branchId: string, itemType: string, itemId: strin
   return row?.stockQuantity ?? 0;
 }
 
+export function getBranchStockRecord(branchId: string, itemType: string, itemId: string): BranchStock | null {
+  const row = db.prepare(
+    'SELECT * FROM BranchStock WHERE branchId = ? AND itemType = ? AND itemId = ?'
+  ).get(branchId, itemType, itemId) as BranchStock | undefined;
+  return row ?? null;
+}
+
 export function updateBranchStock(
   branchId: string,
   itemType: string,
@@ -100,6 +107,19 @@ export function initBranchStockForNewBranch(branchId: string): void {
       INSERT OR IGNORE INTO BranchStock (id, branchId, itemType, itemId, stockQuantity, lowStockThreshold, updatedAt)
       VALUES (?, ?, 'product', ?, 0, 0, ?)
     `).run(uuidv4(), branchId, p.id, now);
+  }
+}
+
+/**
+ * Create BranchStock entries for a new item across all active branches.
+ */
+export function initBranchStockForItem(itemType: 'material' | 'product', itemId: string): void {
+  const now = new Date().toISOString();
+  const branches = db.prepare('SELECT id FROM Branch WHERE isActive = 1').all() as { id: string }[];
+  for (const branch of branches) {
+    db.prepare(
+      'INSERT OR IGNORE INTO BranchStock (id, branchId, itemType, itemId, stockQuantity, lowStockThreshold, updatedAt) VALUES (?, ?, ?, ?, 0, 0, ?)'
+    ).run(uuidv4(), branch.id, itemType, itemId, now);
   }
 }
 
