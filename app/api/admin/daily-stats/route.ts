@@ -91,11 +91,18 @@ export async function GET(req: Request) {
       }))
     });
 
+    // Filter pending orders by branch
+    const branchFilteredPendingOrders = pendingOrders.filter((order: any) => {
+      const orderBranchId = getMetaValue(order.meta_data, '_branch_id', '');
+      if (orderBranchId && orderBranchId !== branchId) return false;
+      return true;
+    });
+
     return NextResponse.json({
       todayOrders: todayOrders.length,
       todayRevenue,
       itemsSold,
-      pendingOrders: pendingOrders.length
+      pendingOrders: branchFilteredPendingOrders.length
     });
 
   } catch (error) {

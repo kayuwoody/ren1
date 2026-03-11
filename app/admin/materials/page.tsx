@@ -54,7 +54,7 @@ export default function MaterialsPage() {
     }
 
     try {
-      const res = await fetch(`/api/admin/materials/${id}`, {
+      const res = await branchFetch(`/api/admin/materials/${id}`, {
         method: 'DELETE',
       });
 
@@ -263,6 +263,7 @@ function MaterialModal({
   onClose: () => void;
   onSave: () => void;
 }) {
+  const { branchFetch } = useBranch();
   const [formData, setFormData] = useState({
     name: material?.name || '',
     category: material?.category || 'ingredient',
@@ -290,7 +291,7 @@ function MaterialModal({
 
       const method = material ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await branchFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
