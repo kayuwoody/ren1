@@ -9,11 +9,29 @@
 
 ---
 
-**Last updated:** 2026-03-11
+**Last updated:** 2026-04-16
 
 ## Resume Here
 
-**Status:** Round 4 COMPLETE. Objectives review COMPLETE. Implementation is functionally done.
+**Status:** Round 4 COMPLETE. Objectives review COMPLETE. **BUT Round 5 needed — 7 admin routes still call WooCommerce despite prior review claims.**
+
+### ⛔ CRITICAL FINDING (2026-04-16)
+
+Round 3 review was **wrong**: the admin routes were never actually migrated to SQLite. User hit runtime error on offline branch: `getaddrinfo ENOTFOUND coffee-oasis.com.my` from `/api/admin/sales`.
+
+**Infrastructure exists** (`lib/db/orderService.ts` has `getOrders`, `getSaleOrders`, `getDayOrders`, `getDailyStats`, `saveOrderLocally`) but is **unused by these 7 routes**:
+
+| Route | Line | Call |
+|---|---|---|
+| `app/api/admin/sales/route.ts` | 90 | `fetchAllWooPages('orders',...)` |
+| `app/api/admin/sales/daily/route.ts` | 52 | `fetchAllWooPages('orders',...)` |
+| `app/api/admin/orders/route.ts` | 32 | `fetchAllWooPages('orders',...)` |
+| `app/api/admin/daily-stats/route.ts` | 45,51 | `fetchAllWooPages('orders',...)` |
+| `app/api/admin/products-sold/route.ts` | 112 | `fetchAllWooPages('orders',...)` |
+| `app/api/admin/customers/route.ts` | 11 | `fetchAllWooPages('customers',...)` |
+| `app/api/admin/products/costs/route.ts` | 12 | `fetchAllWooPages('products',...)` |
+
+**Next action:** Dispatch code agent to migrate order-based routes to `orderService.ts`. Decide on customers/products routes separately.
 
 **Rounds completed:**
 - Rounds 1-3: Schema, BranchStock service, branchContext, API route scoping, inventory consumption, PO receiving
