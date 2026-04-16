@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getWooOrder, updateWooOrder } from '@/lib/orderService';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { saveOrderLocally } from '@/lib/db/orderService';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
 /**
  * PATCH /api/orders/[orderId]/update-items
@@ -79,6 +81,18 @@ export async function PATCH(
     });
 
     console.log(`✅ Updated line_items for order #${orderId}`);
+
+    // Dual-write: sync local copy with the new line items so admin reports stay accurate.
+    try {
+      const existingMeta = Array.isArray(existing.meta_data) ? existing.meta_data : [];
+      const metaBranchId = (existingMeta.find((m: any) => m.key === '_branch_id')?.value as string) || '';
+      const branchId = metaBranchId || getBranchIdFromRequest(req);
+      if (branchId) {
+        saveOrderLocally(updated, branchId);
+      }
+    } catch (err) {
+      console.warn(`⚠️ Failed to save order ${orderId} locally:`, err);
+    }
 
     return NextResponse.json(updated);
   } catch (error) {

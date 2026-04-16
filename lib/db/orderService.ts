@@ -406,3 +406,64 @@ export function saveOrderLocally(wooOrder: any, branchId: string): void {
   });
   insertOrder();
 }
+
+/**
+ * Parse the `variations` JSON blob on a LocalOrderItem.
+ * Returns {} on parse failure or missing data.
+ */
+export function parseItemVariations(item: LocalOrderItem): Record<string, any> {
+  if (!item.variations) return {};
+  try {
+    return JSON.parse(item.variations);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Convert a LocalOrder + LocalOrderItem[] into a WooCommerce-shaped order
+ * for backward compatibility with frontends that still expect WC shape.
+ * Used by /api/admin/orders.
+ */
+export function toWcOrderShape(order: OrderWithItems): any {
+  const metaData: any[] = [
+    { key: '_branch_id', value: order.branchId },
+    { key: '_final_total', value: String(order.total) },
+  ];
+
+  const lineItems = order.items.map((item) => {
+    const v = parseItemVariations(item);
+    const itemMeta: any[] = [];
+    for (const [key, value] of Object.entries(v)) {
+      if (value !== null && value !== undefined) {
+        itemMeta.push({ key, value: String(value) });
+      }
+    }
+    return {
+      id: item.id,
+      product_id: item.productId,
+      name: item.productName,
+      sku: item.sku,
+      quantity: item.quantity,
+      price: item.finalPrice,
+      total: String(item.finalPrice * item.quantity),
+      meta_data: itemMeta,
+    };
+  });
+
+  return {
+    id: order.wcId ?? order.id,
+    number: order.orderNumber,
+    status: order.status,
+    total: String(order.total),
+    date_created: order.createdAt,
+    customer_id: 0,
+    billing: {
+      first_name: order.customerName || 'Guest',
+      phone: order.customerPhone || '',
+      email: '',
+    },
+    line_items: lineItems,
+    meta_data: metaData,
+  };
+}

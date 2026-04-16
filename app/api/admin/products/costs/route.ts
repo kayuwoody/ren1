@@ -1,35 +1,19 @@
 import { NextResponse } from 'next/server';
-import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
-import { syncProductFromWooCommerce, getAllProducts } from '@/lib/db/productService';
+import { getAllProducts } from '@/lib/db/productService';
 import { handleApiError } from '@/lib/api/error-handler';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/admin/products/costs
- * Fetch all products with cost and margin calculations
+ * Returns all products with cost and margin calculations from local SQLite.
  */
 export async function GET(req: Request) {
   try {
-    const wcProducts = await fetchAllWooPages('products', {
-      orderby: 'title',
-      order: 'asc'
-    });
-
-    // Sync each product to local database
-    wcProducts.forEach((wcProduct: any) => {
-      try {
-        syncProductFromWooCommerce(wcProduct);
-      } catch (err) {
-        console.error(`Failed to sync product ${wcProduct.id}:`, err);
-      }
-    });
-
-    // Get all products from local database (includes COGS from recipes)
     const localProducts = getAllProducts();
 
-    // Transform for API response with cost calculations
-    const transformedProducts = localProducts.map((product) => {
-      const wcProduct = wcProducts.find((p: any) => p.id === product.wcId);
-      const currentPrice = wcProduct ? parseFloat(wcProduct.price) || 0 : product.basePrice;
+    const transformed = localProducts.map((product) => {
+      const currentPrice = product.basePrice;
       const unitCost = product.unitCost || 0;
       const grossProfit = currentPrice - unitCost;
       const grossMargin = currentPrice > 0 ? (grossProfit / currentPrice) * 100 : 0;
@@ -49,7 +33,7 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ products: transformedProducts });
+    return NextResponse.json({ products: transformed });
   } catch (error) {
     return handleApiError(error, '/api/admin/products/costs');
   }

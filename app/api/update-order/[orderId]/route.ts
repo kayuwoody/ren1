@@ -4,6 +4,7 @@ import { getWooOrder, updateWooOrder } from '@/lib/orderService';
 import { cookies } from 'next/headers';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
 import { broadcastOrderUpdate } from '@/lib/sse/orderStreamManager';
+import { saveOrderLocally } from '@/lib/db/orderService';
 
 export async function PATCH(
   req: Request,
@@ -70,6 +71,17 @@ export async function PATCH(
 
     // 4) Perform the update in one go
     const updated = await updateWooOrder(orderId, patchPayload);
+
+    // Dual-write: upsert local copy so admin reports reflect the latest state.
+    // saveOrderLocally is idempotent (UPDATE if existing, INSERT otherwise).
+    try {
+      const metaBranchId = (combinedMeta.find((m: any) => m.key === '_branch_id')?.value as string) || '';
+      if (metaBranchId) {
+        saveOrderLocally(updated, metaBranchId);
+      }
+    } catch (err) {
+      console.warn(`⚠️ Failed to save order ${orderId} locally:`, err);
+    }
 
     // Broadcast order update to kitchen displays whenever status changes
     broadcastOrderUpdate();

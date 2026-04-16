@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchAllWooPages, getMetaValue } from '@/lib/api/woocommerce-helpers';
+import { getSaleOrders, parseItemVariations } from '@/lib/db/orderService';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 import { handleApiError } from '@/lib/api/error-handler';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
@@ -16,109 +16,27 @@ export async function GET(req: Request) {
     const endDateParam = searchParams.get('end');
     const hideStaffMeals = searchParams.get('hideStaffMeals') === 'true';
 
-    // Calculate date range
-    // Get current time in GMT+8 (Malaysia timezone)
-    const now = new Date();
-    const utc8Now = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-    const currentYear = utc8Now.getUTCFullYear();
-    const currentMonth = utc8Now.getUTCMonth();
-    const currentDay = utc8Now.getUTCDate();
-
-    let startDate = new Date();
-    let endDate = new Date();
-
-    // Set endDate to end of current day in GMT+8 (converted to UTC)
-    // GMT+8 23:59:59 = UTC 15:59:59 same day
-    endDate = new Date(Date.UTC(currentYear, currentMonth, currentDay, 23, 59, 59, 999) - (8 * 60 * 60 * 1000));
-
-    if (startDateParam && endDateParam) {
-      // Custom date range - parse as GMT+8 dates
-      const startParts = startDateParam.split('-');
-      const endParts = endDateParam.split('-');
-
-      startDate = new Date(Date.UTC(
-        parseInt(startParts[0]),
-        parseInt(startParts[1]) - 1,
-        parseInt(startParts[2]),
-        0, 0, 0, 0
-      ) - (8 * 60 * 60 * 1000));
-
-      endDate = new Date(Date.UTC(
-        parseInt(endParts[0]),
-        parseInt(endParts[1]) - 1,
-        parseInt(endParts[2]),
-        23, 59, 59, 999
-      ) - (8 * 60 * 60 * 1000));
-    } else {
-      // Calculate based on range
-      switch (range) {
-        case '7days':
-          // Start from 7 days ago at midnight GMT+8
-          startDate = new Date(Date.UTC(currentYear, currentMonth, currentDay - 7, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
-          break;
-        case '30days':
-          // Start from 30 days ago at midnight GMT+8
-          startDate = new Date(Date.UTC(currentYear, currentMonth, currentDay - 30, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
-          break;
-        case '90days':
-          // Start from 90 days ago at midnight GMT+8
-          startDate = new Date(Date.UTC(currentYear, currentMonth, currentDay - 90, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
-          break;
-        case 'mtd':
-          // Month to date - start of current month in GMT+8
-          // First day of current month at midnight GMT+8, converted to UTC
-          startDate = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
-          break;
-        case 'ytd':
-          // Year to date - start of current year in GMT+8
-          // January 1st of current year at midnight GMT+8, converted to UTC
-          startDate = new Date(Date.UTC(currentYear, 0, 1, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
-          break;
-        case 'all':
-          startDate = new Date('2020-01-01');
-          break;
-      }
-    }
-
     console.log('📊 Sales report date range:', {
-      start: startDate.toISOString(),
-      end: endDate.toISOString(),
-      range
+      range,
+      startDateParam,
+      endDateParam,
     });
 
-    // Fetch all orders (using pagination helper)
-    const allOrdersRaw = await fetchAllWooPages('orders', {
-      after: startDate.toISOString(),
-      before: endDate.toISOString(),
+    // Query orders from local SQLite (offline-safe)
+    const orders = getSaleOrders({
+      branchId,
+      range,
+      startDate: startDateParam,
+      endDate: endDateParam,
+      hideStaffMeals,
     });
 
-    // Filter by branch: include orders with matching _branch_id, or legacy orders with no tag
-    const allOrders = allOrdersRaw.filter((order) => {
-      const orderBranchId = getMetaValue(order.meta_data, '_branch_id', '');
-      return !orderBranchId || orderBranchId === branchId;
-    });
-
-    console.log(`📦 Fetched ${allOrders.length} total orders from WooCommerce`);
-
-    // Filter only orders that count as sales (exclude pending payment)
-    let orders = allOrders.filter(
-      (order) => order.status === 'completed' || order.status === 'processing' || order.status === 'ready-for-pickup'
-    );
-
-    // Filter out staff meals (orders with total = 0) if requested
+    console.log(`📦 Fetched ${orders.length} orders from local DB`);
     if (hideStaffMeals) {
-      orders = orders.filter((order) => {
-        const finalTotal = parseFloat(
-          getMetaValue(order.meta_data, '_final_total', order.total)
-        );
-        return finalTotal > 0;
-      });
-      console.log(`🍽️  Filtered out staff meals (total=0), ${orders.length} orders remaining`);
+      console.log(`🍽️  Staff meals filtered (total=0), ${orders.length} orders remaining`);
     }
-
-    console.log(`✅ Filtered to ${orders.length} orders with sales status`);
     if (orders.length > 0) {
-      console.log('Sample order statuses:', orders.slice(0, 5).map(o => ({ id: o.id, status: o.status, date: o.date_created })));
+      console.log('Sample order statuses:', orders.slice(0, 5).map(o => ({ id: o.id, status: o.status, date: o.createdAt })));
     }
 
     // Calculate statistics
@@ -132,26 +50,24 @@ export async function GET(req: Request) {
 
     console.log('💰 Processing orders for revenue calculation...');
 
-    orders.forEach((order) => {
-      // Get final total and discount from metadata
-      const finalTotal = parseFloat(
-        getMetaValue(order.meta_data, '_final_total', order.total)
-      );
-      const discount = parseFloat(
-        getMetaValue(order.meta_data, '_total_discount', '0')
+    for (const order of orders) {
+      const finalTotal = order.total;
+      // Sum per-item discount (discountApplied is per-unit difference between retail and final price)
+      const discount = order.items.reduce(
+        (sum, it) => sum + (it.discountApplied || 0) * it.quantity,
+        0,
       );
 
       // Get COGS from inventory consumption records (fetch once per order, reuse for items)
       let orderCOGS = 0;
       let orderConsumptions: any[] = [];
       try {
-        orderConsumptions = getOrderConsumptions(String(order.id));
+        orderConsumptions = getOrderConsumptions(order.id);
         orderCOGS = orderConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
       } catch (err) {
         console.warn(`⚠️  Could not fetch COGS for order ${order.id}`);
       }
 
-      // Debug logging for discount tracking
       if (discount > 0) {
         console.log(`Order #${order.id}: Discount = RM ${discount.toFixed(2)}, Final Total = RM ${finalTotal.toFixed(2)}, COGS = RM ${orderCOGS.toFixed(2)}`);
       }
@@ -161,7 +77,7 @@ export async function GET(req: Request) {
       totalCOGS += orderCOGS;
 
       // Group by day
-      const orderDate = new Date(order.date_created).toISOString().split('T')[0];
+      const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
         revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, cogs: 0, profit: 0 };
       }
@@ -175,28 +91,16 @@ export async function GET(req: Request) {
       ordersByStatus[order.status] = (ordersByStatus[order.status] || 0) + 1;
 
       // Product stats
-      order.line_items?.forEach((item: any) => {
-        const finalPrice = parseFloat(
-          getMetaValue(item.meta_data, '_final_price', item.price)
+      for (const item of order.items) {
+        const v = parseItemVariations(item);
+        const isBundle = v._is_bundle === 'true';
+        const productName = isBundle && v._bundle_display_name ? v._bundle_display_name : item.productName;
+
+        const itemRevenue = item.finalPrice * item.quantity;
+        const itemConsumptions = orderConsumptions.filter(
+          (c) => String(c.orderItemId) === String(item.id),
         );
-        const itemRevenue = finalPrice * item.quantity;
-
-        // Get COGS for this specific product from cached consumptions (no duplicate DB call)
-        let itemCOGS = 0;
-        try {
-          // Reuse orderConsumptions from above - no need to fetch again!
-          const itemConsumptions = item.id
-            ? orderConsumptions.filter(c => Number(c.orderItemId) === Number(item.id))
-            : orderConsumptions;
-          itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
-        } catch (err) {
-          // COGS not available
-        }
-
-        // Use bundle display name if available for proper tracking of combinations
-        const isBundle = getMetaValue(item.meta_data, '_is_bundle') === 'true';
-        const bundleDisplayName = getMetaValue(item.meta_data, '_bundle_display_name');
-        const productName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
+        const itemCOGS = itemConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
 
         if (!productStats[productName]) {
           productStats[productName] = { quantity: 0, revenue: 0, cogs: 0, profit: 0 };
@@ -208,8 +112,8 @@ export async function GET(req: Request) {
 
         // Track total items sold for average calculations
         totalItemsSold += item.quantity;
-      });
-    });
+      }
+    }
 
     // Sort revenue by day
     const revenueByDayArray = Object.entries(revenueByDay)

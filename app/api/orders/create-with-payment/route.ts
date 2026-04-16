@@ -3,6 +3,7 @@ import { createWooOrder } from "@/lib/orderService";
 import { getPaymentInfo } from "@/lib/paymentService";
 import { getPosCustomerId } from "@/lib/posCustomer";
 import { getBranchIdFromRequest } from "@/lib/api/branchHelper";
+import { saveOrderLocally } from "@/lib/db/orderService";
 
 /**
  * POST /api/orders/create-with-payment
@@ -68,6 +69,14 @@ export async function POST(req: Request) {
     });
 
     console.log(`✅ Order created: #${order.id} (pending payment)`);
+
+    // Dual-write: save to local SQLite for offline-safe admin reporting.
+    // WC is still the source of truth; a local save failure must not fail the order.
+    try {
+      saveOrderLocally(order, branchId);
+    } catch (err) {
+      console.warn('⚠️ Failed to save order locally (WC save succeeded):', err);
+    }
 
     // Extract payment information
     const payment = getPaymentInfo(order);

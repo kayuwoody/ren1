@@ -13,25 +13,34 @@
 
 ## Resume Here
 
-**Status:** Round 4 COMPLETE. Objectives review COMPLETE. **BUT Round 5 needed — 7 admin routes still call WooCommerce despite prior review claims.**
+**Status:** Rounds 1-5 COMPLETE. Admin routes no longer depend on WooCommerce for reads.
 
-### ⛔ CRITICAL FINDING (2026-04-16)
+### Round 5 (2026-04-16) — WC deprecation for admin routes
 
-Round 3 review was **wrong**: the admin routes were never actually migrated to SQLite. User hit runtime error on offline branch: `getaddrinfo ENOTFOUND coffee-oasis.com.my` from `/api/admin/sales`.
+Fixed two compounding bugs:
+1. `saveOrderLocally()` was defined in `lib/db/orderService.ts` but never called — local `Order` table was empty.
+2. 7 admin routes still queried WC via `fetchAllWooPages()`, causing DNS errors on offline branches.
 
-**Infrastructure exists** (`lib/db/orderService.ts` has `getOrders`, `getSaleOrders`, `getDayOrders`, `getDailyStats`, `saveOrderLocally`) but is **unused by these 7 routes**:
+**Changes:**
+- `lib/db/orderService.ts` — added `parseItemVariations()`, `toWcOrderShape()` helpers
+- `app/api/orders/create-with-payment/route.ts` — calls `saveOrderLocally(order, branchId)` after WC create
+- `app/api/update-order/[orderId]/route.ts` — calls `saveOrderLocally(updated, branchId)` after WC update
+- `app/api/orders/[orderId]/update-items/route.ts` — same wiring
+- `app/api/admin/sales/route.ts` — now uses `getSaleOrders()`
+- `app/api/admin/sales/daily/route.ts` — now uses `getDayOrders()`
+- `app/api/admin/orders/route.ts` — now uses `getOrders()` + `toWcOrderShape()`
+- `app/api/admin/daily-stats/route.ts` — now uses `getDailyStats()`
+- `app/api/admin/products-sold/route.ts` — now uses `getSaleOrders()`
+- `app/api/admin/customers/route.ts` — graceful DNS-error fallback (returns `[]` when offline)
+- `app/api/admin/products/costs/route.ts` — local-only via `getAllProducts()` (WC removed)
 
-| Route | Line | Call |
-|---|---|---|
-| `app/api/admin/sales/route.ts` | 90 | `fetchAllWooPages('orders',...)` |
-| `app/api/admin/sales/daily/route.ts` | 52 | `fetchAllWooPages('orders',...)` |
-| `app/api/admin/orders/route.ts` | 32 | `fetchAllWooPages('orders',...)` |
-| `app/api/admin/daily-stats/route.ts` | 45,51 | `fetchAllWooPages('orders',...)` |
-| `app/api/admin/products-sold/route.ts` | 112 | `fetchAllWooPages('orders',...)` |
-| `app/api/admin/customers/route.ts` | 11 | `fetchAllWooPages('customers',...)` |
-| `app/api/admin/products/costs/route.ts` | 12 | `fetchAllWooPages('products',...)` |
+**Verification:** `npm run build` passes. Zero `fetchAllWooPages('orders',...)` in admin routes. `saveOrderLocally` now called in 3 write paths.
 
-**Next action:** Dispatch code agent to migrate order-based routes to `orderService.ts`. Decide on customers/products routes separately.
+### Known followups (out of scope this round)
+
+- Historical WC orders not backfilled into local DB — reports will only show orders created after this fix.
+- `app/api/cron/cleanup-orders/route.ts` and `app/api/customers/search/route.ts` still use `fetchAllWooPages` — left as-is (not in the reporting critical path).
+- Dual-write (WC + local) is still in effect. Full WC removal is a later phase.
 
 **Rounds completed:**
 - Rounds 1-3: Schema, BranchStock service, branchContext, API route scoping, inventory consumption, PO receiving
