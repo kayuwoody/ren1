@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     const perPage = toNum(sp.get('per_page'), 50);
 
     // See if user is logged in (server-trusted cookie set by /api/login)
-    const userIdCookie = cookies().get('userId')?.value;
+    const userIdCookie = (await cookies()).get('userId')?.value;
 
     // ----- Logged-in path -----
     if (userIdCookie) {

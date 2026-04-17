@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { wcApi } from '@/lib/wooClient';
 
 export async function GET() {
-  const userId = cookies().get('userId')?.value;
+  const userId = (await cookies()).get('userId')?.value;
   if (userId) {
     try {
       const { data } = (await wcApi.get(`customers/${userId}`)) as { data: any };

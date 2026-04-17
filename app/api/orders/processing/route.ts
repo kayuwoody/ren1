@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    const c = cookies();
+    const c = await cookies();
     const userIdCookie = c.get('userId')?.value;
     const url = new URL(req.url);
     const guestId = url.searchParams.get('guestId') || undefined;

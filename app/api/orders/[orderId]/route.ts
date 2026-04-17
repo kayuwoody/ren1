@@ -133,7 +133,7 @@ export async function PATCH(
     // 5) If order is now ready, send push notification
     if (body.status === 'ready-for-pickup') {
       try {
-        const cookieStore = cookies();
+        const cookieStore = await cookies();
         const userIdCookie = cookieStore.get('userId');
         const userId = userIdCookie?.value;
 

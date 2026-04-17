@@ -24,7 +24,7 @@ export async function GET(req: Request) {
       userId = Number(userIdParam);
     } else {
       // Fall back to cookie (customer use case)
-      const cookieStore = cookies();
+      const cookieStore = await cookies();
       const userIdCookie = cookieStore.get('userId');
 
       if (!userIdCookie?.value) {
