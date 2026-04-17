@@ -3,8 +3,9 @@ import { useCart } from "@/context/cartContext";
 import Image from "next/image";
 import Link from "next/link";
 
-export default async function ProductDetail({ params }: { params: { id: string } }) {
-  const product = await getProductById(params.id);
+export default async function ProductDetail({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const product = await getProductById(id);
   if (!product) return <div>Product not found</div>;
 
   return (

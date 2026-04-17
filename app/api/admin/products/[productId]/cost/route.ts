@@ -9,10 +9,10 @@ import { handleApiError, validationError, notFoundError } from '@/lib/api/error-
  */
 export async function PATCH(
   req: Request,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const { productId } = params;
+    const { productId } = await params;
     const { supplierCost } = await req.json();
 
     console.log(`📝 Updating product ${productId} supplierCost to RM ${supplierCost}`);

@@ -13,10 +13,10 @@ import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
  */
 export async function PATCH(
   req: Request,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params;
     const { line_items } = await req.json();
 
     if (!line_items || !Array.isArray(line_items)) {

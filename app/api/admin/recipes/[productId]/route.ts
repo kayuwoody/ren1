@@ -1,10 +1,3 @@
-/**
- * API Route: Product Recipe Management
- * GET /api/admin/recipes/[productId] - Get product recipe
- * PUT /api/admin/recipes/[productId] - Update product recipe
- * DELETE /api/admin/recipes/[productId] - Clear product recipe
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getRecipeWithMaterials,
@@ -19,10 +12,10 @@ import { handleApiError, notFoundError, validationError } from '@/lib/api/error-
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const { productId } = params;
+    const { productId } = await params;
 
     const product = getProduct(productId);
     if (!product) {
@@ -31,7 +24,6 @@ export async function GET(
 
     const recipeSummary = getRecipeSummary(productId);
 
-    // Format recipe to match frontend expectations
     const recipe = recipeSummary.items.length > 0 ? {
       productId: product.id,
       productName: product.name,
@@ -48,10 +40,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const { productId } = params;
+    const { productId } = await params;
     const body = await request.json();
     const { items } = body;
 
@@ -64,10 +56,8 @@ export async function PUT(
       return notFoundError('Product not found', '/api/admin/recipes/[productId]');
     }
 
-    // Replace entire recipe
     setProductRecipe(productId, items);
 
-    // Get updated recipe with proper formatting
     const recipeSummary = getRecipeSummary(productId);
     const recipe = {
       productId: product.id,
@@ -88,10 +78,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const { productId } = params;
+    const { productId } = await params;
 
     const product = getProduct(productId);
     if (!product) {

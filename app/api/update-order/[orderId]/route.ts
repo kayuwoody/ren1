@@ -8,9 +8,9 @@ import { saveOrderLocally } from '@/lib/db/orderService';
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
-  const { orderId } = params;
+  const { orderId } = await params;
   let body: any;
   try {
     body = await req.json();

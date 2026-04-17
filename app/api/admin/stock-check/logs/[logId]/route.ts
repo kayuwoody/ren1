@@ -2,17 +2,13 @@ import { NextResponse } from 'next/server';
 import { getStockCheckLogWithItems, deleteStockCheckLog } from '@/lib/db/stockCheckLogService';
 import { handleApiError, notFoundError } from '@/lib/api/error-handler';
 
-/**
- * GET /api/admin/stock-check/logs/[logId]
- *
- * Get a single stock check log with all its items
- */
 export async function GET(
   req: Request,
-  { params }: { params: { logId: string } }
+  { params }: { params: Promise<{ logId: string }> }
 ) {
   try {
-    const log = getStockCheckLogWithItems(params.logId);
+    const { logId } = await params;
+    const log = getStockCheckLogWithItems(logId);
 
     if (!log) {
       return notFoundError('Stock check log not found', '/api/admin/stock-check/logs/[logId]');
@@ -24,17 +20,13 @@ export async function GET(
   }
 }
 
-/**
- * DELETE /api/admin/stock-check/logs/[logId]
- *
- * Delete a stock check log
- */
 export async function DELETE(
   req: Request,
-  { params }: { params: { logId: string } }
+  { params }: { params: Promise<{ logId: string }> }
 ) {
   try {
-    const deleted = deleteStockCheckLog(params.logId);
+    const { logId } = await params;
+    const deleted = deleteStockCheckLog(logId);
 
     if (!deleted) {
       return notFoundError('Stock check log not found', '/api/admin/stock-check/logs/[logId]');

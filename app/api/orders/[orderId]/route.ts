@@ -7,11 +7,12 @@ import { broadcastOrderUpdate } from '@/lib/sse/orderStreamManager';
 
 export async function GET(
   _req: Request,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
+    const { orderId } = await params;
     // Fetch the *full* order, meta_data included
-    const order = await getWooOrder(params.orderId);
+    const order = await getWooOrder(orderId);
     return NextResponse.json(order, { status: 200 });
   } catch (error: unknown) {
     // Check if this is a 404 (order not found/deleted)
@@ -29,9 +30,9 @@ export async function GET(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
-  const { orderId } = params;
+  const { orderId } = await params;
 
   let body: Record<string, unknown>;
   try {

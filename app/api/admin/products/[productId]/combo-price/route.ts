@@ -10,10 +10,10 @@ import { handleApiError, validationError, notFoundError } from '@/lib/api/error-
  */
 export async function PATCH(
   req: Request,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const { productId } = params;
+    const { productId } = await params;
     const { comboPriceOverride } = await req.json();
 
     console.log(`📝 Updating product ${productId} comboPriceOverride to ${comboPriceOverride === null ? 'NULL (removed)' : `RM ${comboPriceOverride}`}`);

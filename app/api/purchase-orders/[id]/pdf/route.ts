@@ -25,13 +25,14 @@ function sanitizeText(text: string): string {
  */
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const purchaseOrder = getPurchaseOrder(params.id);
+    const { id } = await params;
+    const purchaseOrder = getPurchaseOrder(id);
 
     if (!purchaseOrder) {
-      return notFoundError(`Purchase order not found: ${params.id}`, '/api/purchase-orders/[id]/pdf');
+      return notFoundError(`Purchase order not found: ${id}`, '/api/purchase-orders/[id]/pdf');
     }
 
     // Look up branch info for letterhead
