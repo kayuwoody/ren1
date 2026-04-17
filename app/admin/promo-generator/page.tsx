@@ -39,8 +39,7 @@ export default function PromoGeneratorPage() {
 
   async function loadComboProducts() {
     try {
-      // Force sync from WooCommerce to get full category data
-      const res = await fetch('/api/products?force_sync=true');
+      const res = await fetch('/api/products');
       const data = await res.json();
 
       // Handle both array response and {products: []} response

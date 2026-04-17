@@ -153,8 +153,7 @@ const ProductListPage: React.FC = () => {
   };
 
   useEffect(() => {
-    // Always force sync on page load to get fresh stock levels
-    const apiUrl = "/api/products?force_sync=true";
+    const apiUrl = "/api/products";
 
     console.log(`🔍 Fetching products with fresh stock data...`);
 

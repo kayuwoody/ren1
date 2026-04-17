@@ -395,9 +395,7 @@ export default function RecipesPage() {
         setSelectedProduct(updatedProduct);
         setProducts(products.map(p => p.id === selectedProduct.id ? updatedProduct : p));
 
-        if (!result.wooCommerceUpdated) {
-          console.warn('Stock updated locally but not in WooCommerce:', result.error);
-        }
+        // Stock updated successfully
       } else {
         alert(`Failed to update stock: ${result.error || 'Unknown error'}`);
       }

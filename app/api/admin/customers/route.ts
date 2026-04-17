@@ -1,29 +1,29 @@
 import { NextResponse } from 'next/server';
-import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
+import { db } from '@/lib/db/init';
 import { handleApiError } from '@/lib/api/error-handler';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * GET /api/admin/customers
- * Fetch all customers from WooCommerce. Returns [] when WC is unreachable
- * so the UI degrades gracefully on offline branches.
- */
 export async function GET(req: Request) {
   try {
-    const customers = await fetchAllWooPages('customers', {
-      orderby: 'registered_date',
-      order: 'desc',
-    });
-    return NextResponse.json(customers);
-  } catch (error: any) {
-    const msg = String(error?.message || '');
-    const offline =
-      msg.includes('ENOTFOUND') || msg.includes('ETIMEDOUT') || msg.includes('ECONNREFUSED');
-    if (offline) {
-      console.warn('⚠️ /api/admin/customers: WooCommerce unreachable, returning empty list');
-      return NextResponse.json([]);
-    }
+    const customers = db.prepare(
+      'SELECT * FROM Customer ORDER BY createdAt DESC'
+    ).all() as any[];
+
+    const formatted = customers.map(c => ({
+      id: c.id,
+      email: c.email || '',
+      first_name: c.name || '',
+      billing: {
+        phone: c.phone || '',
+        first_name: c.name || '',
+        email: c.email || '',
+      },
+      date_created: c.createdAt,
+    }));
+
+    return NextResponse.json(formatted);
+  } catch (error) {
     return handleApiError(error, '/api/admin/customers');
   }
 }

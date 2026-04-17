@@ -291,6 +291,20 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Customer table (local identity — replaces WooCommerce customers)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS Customer (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      email TEXT,
+      phone TEXT UNIQUE,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_customer_phone ON Customer(phone);
+    CREATE INDEX IF NOT EXISTS idx_customer_email ON Customer(email);
+  `);
+
   // Material Price History (audit trail for cost changes)
   db.exec(`
     CREATE TABLE IF NOT EXISTS MaterialPriceHistory (
@@ -501,6 +515,27 @@ export function initDatabase() {
       console.log('branchId column added to StockCheckLogItem table');
     }
   } catch (e) { /* column already exists */ }
+
+  // Migration: Add operational columns to Order table (WC decoupling)
+  {
+    const cols = db.prepare('PRAGMA table_info("Order")').all() as any[];
+    const has = (name: string) => cols.some((c: any) => c.name === name);
+    if (cols.length > 0) {
+      if (!has('customerId'))     db.exec(`ALTER TABLE "Order" ADD COLUMN customerId TEXT REFERENCES Customer(id)`);
+      if (!has('guestId'))        db.exec(`ALTER TABLE "Order" ADD COLUMN guestId TEXT`);
+      if (!has('startTime'))      db.exec(`ALTER TABLE "Order" ADD COLUMN startTime TEXT`);
+      if (!has('endTime'))        db.exec(`ALTER TABLE "Order" ADD COLUMN endTime TEXT`);
+      if (!has('kitchenReady'))   db.exec(`ALTER TABLE "Order" ADD COLUMN kitchenReady INTEGER NOT NULL DEFAULT 0`);
+      if (!has('outForDelivery')) db.exec(`ALTER TABLE "Order" ADD COLUMN outForDelivery INTEGER NOT NULL DEFAULT 0`);
+      if (!has('readyTimestamp')) db.exec(`ALTER TABLE "Order" ADD COLUMN readyTimestamp TEXT`);
+      if (!has('lockerNumber'))   db.exec(`ALTER TABLE "Order" ADD COLUMN lockerNumber TEXT`);
+      if (!has('pickupCode'))     db.exec(`ALTER TABLE "Order" ADD COLUMN pickupCode TEXT`);
+      if (!has('billingName'))    db.exec(`ALTER TABLE "Order" ADD COLUMN billingName TEXT`);
+      if (!has('billingPhone'))   db.exec(`ALTER TABLE "Order" ADD COLUMN billingPhone TEXT`);
+      if (!has('billingEmail'))   db.exec(`ALTER TABLE "Order" ADD COLUMN billingEmail TEXT`);
+      if (!has('billingAddress')) db.exec(`ALTER TABLE "Order" ADD COLUMN billingAddress TEXT`);
+    }
+  }
 
   // Indexes for branchId columns on core tables
   db.exec(`

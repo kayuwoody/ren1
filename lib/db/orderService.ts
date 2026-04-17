@@ -426,10 +426,19 @@ export function parseItemVariations(item: LocalOrderItem): Record<string, any> {
  * Used by /api/admin/orders.
  */
 export function toWcOrderShape(order: OrderWithItems): any {
+  const o = order as any;
   const metaData: any[] = [
     { key: '_branch_id', value: order.branchId },
     { key: '_final_total', value: String(order.total) },
   ];
+  if (o.startTime) metaData.push({ key: 'startTime', value: o.startTime });
+  if (o.endTime) metaData.push({ key: 'endTime', value: o.endTime });
+  if (o.kitchenReady) metaData.push({ key: 'kitchen_ready', value: 'yes' });
+  if (o.outForDelivery) metaData.push({ key: 'out_for_delivery', value: 'yes' });
+  if (o.lockerNumber) metaData.push({ key: '_locker_number', value: o.lockerNumber });
+  if (o.pickupCode) metaData.push({ key: '_pickup_code', value: o.pickupCode });
+  if (o.readyTimestamp) metaData.push({ key: '_ready_timestamp', value: o.readyTimestamp });
+  if (o.guestId) metaData.push({ key: 'guestId', value: o.guestId });
 
   const lineItems = order.items.map((item) => {
     const v = parseItemVariations(item);
