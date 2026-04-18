@@ -251,18 +251,12 @@ export default function CheckoutPage() {
                   {/* Discount controls - Staff only */}
                   {isStaffMode && (
                     <div className="flex flex-wrap gap-2">
-                      {/* Quick discount buttons */}
+                      {/* Quick percentage discount buttons */}
                       <button
                         onClick={() => applyQuickDiscount(index, 10)}
                         className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
                       >
                         10% off
-                      </button>
-                      <button
-                        onClick={() => applyQuickDiscount(index, 15)}
-                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
-                      >
-                        15% off
                       </button>
                       <button
                         onClick={() => applyQuickDiscount(index, 20)}
@@ -271,16 +265,29 @@ export default function CheckoutPage() {
                         20% off
                       </button>
                       <button
-                        onClick={() => applyQuickDiscount(index, 25)}
-                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
-                      >
-                        25% off
-                      </button>
-                      <button
                         onClick={() => applyQuickDiscount(index, 50)}
                         className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
                       >
                         50% off
+                      </button>
+                      {/* Quick RM discount buttons */}
+                      <button
+                        onClick={() => updateItemDiscount(index, { type: 'amount', value: 1, reason: 'RM1 off' })}
+                        className="px-3 py-1 bg-green-100 text-green-700 rounded text-xs font-medium hover:bg-green-200"
+                      >
+                        RM1 off
+                      </button>
+                      <button
+                        onClick={() => updateItemDiscount(index, { type: 'amount', value: 1.5, reason: 'RM1.50 off' })}
+                        className="px-3 py-1 bg-green-100 text-green-700 rounded text-xs font-medium hover:bg-green-200"
+                      >
+                        RM1.50 off
+                      </button>
+                      <button
+                        onClick={() => updateItemDiscount(index, { type: 'amount', value: 2, reason: 'RM2 off' })}
+                        className="px-3 py-1 bg-green-100 text-green-700 rounded text-xs font-medium hover:bg-green-200"
+                      >
+                        RM2 off
                       </button>
                       <button
                         onClick={() => applyQuickDiscount(index, 100, "Unicorns")}
