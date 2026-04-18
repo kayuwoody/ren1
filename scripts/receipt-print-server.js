@@ -133,72 +133,61 @@ function findWindowsPrinter() {
   }
 }
 
-// Print raw bytes on Windows using file copy to printer port
+// Print raw bytes on Windows via the Win32 Print Spooler API (PowerShell)
 async function printRawWindows(data, printerNameOverride) {
   const fs = require('fs');
   const { execSync } = require('child_process');
   const path = require('path');
 
-  // Write to temp file
   const tmpFile = path.join(process.env.TEMP || '.', `receipt-${Date.now()}.bin`);
   fs.writeFileSync(tmpFile, data);
 
   try {
     const detected = findWindowsPrinter();
     const printerName = printerNameOverride || (detected && detected.name);
-    const detectedPort = detected && detected.port;
 
     if (!printerName) {
       throw new Error('No thermal printer found. Please share your printer or check printer name.');
     }
 
-    console.log(`Printing to: ${printerName} (detected port: ${detectedPort || 'unknown'})`);
+    console.log(`Printing to: ${printerName}`);
 
-    // Build port list: env override first, then detected port, then defaults
-    const envPort = process.env.PRINTER_PORT;
-    const defaultPorts = ['USB001', 'USB002', 'USB003', 'LPT1'];
-    const portSet = new Set();
-    if (envPort) portSet.add(envPort);
-    if (detectedPort) portSet.add(detectedPort);
-    for (const p of defaultPorts) portSet.add(p);
-    const ports = Array.from(portSet);
-
-    console.log(`Trying ports in order: ${ports.join(', ')}`);
-
-    // Method 1: Try USB port directly (most reliable for raw ESC/POS)
-    for (const port of ports) {
-      try {
-        execSync(`copy /b "${tmpFile}" ${port}`, { encoding: 'utf8', shell: true, timeout: 5000 });
-        fs.unlinkSync(tmpFile);
-        return { success: true, method: 'port', port };
-      } catch (e) {
-        console.log(`  Port ${port}: failed`);
-      }
+    // Primary method: Use Win32 WritePrinter API via PowerShell
+    // This sends raw bytes through the spooler — the only reliable way on Windows
+    const psScript = path.join(__dirname, 'raw-print.ps1');
+    try {
+      const output = execSync(
+        `powershell -ExecutionPolicy Bypass -File "${psScript}" -PrinterName "${printerName}" -FilePath "${tmpFile}"`,
+        { encoding: 'utf8', timeout: 15000 }
+      );
+      console.log(`  PowerShell raw print: ${output.trim()}`);
+      fs.unlinkSync(tmpFile);
+      return { success: true, method: 'spooler-raw', printer: printerName };
+    } catch (e) {
+      console.log(`  PowerShell raw print failed: ${e.message}`);
     }
 
-    // Method 2: Try direct copy to shared printer
+    // Fallback: Try direct copy to shared printer name
     try {
       execSync(`copy /b "${tmpFile}" "\\\\%COMPUTERNAME%\\${printerName}"`, {
-        encoding: 'utf8',
-        shell: true,
-        timeout: 5000
+        encoding: 'utf8', shell: true, timeout: 5000
       });
       fs.unlinkSync(tmpFile);
-      return { success: true, method: 'copy', printer: printerName };
+      return { success: true, method: 'share-copy', printer: printerName };
     } catch (e) {
-      console.log('Direct copy failed, trying print command...');
+      console.log('  Share copy failed');
     }
 
-    // Method 3: Use print command (fallback)
+    // Fallback: print command
     try {
       execSync(`print /D:"${printerName}" "${tmpFile}"`, { encoding: 'utf8', shell: true, timeout: 10000 });
       fs.unlinkSync(tmpFile);
-      return { success: true, method: 'print', printer: printerName };
+      return { success: true, method: 'print-cmd', printer: printerName };
     } catch (e) {
-      console.log('Print command failed...');
+      console.log('  Print command failed');
     }
 
-    throw new Error(`Could not print to ${printerName}. Try sharing the printer.`);
+    throw new Error(`Could not print to ${printerName}. Check printer is online and not paused.`);
   } catch (err) {
     try { fs.unlinkSync(tmpFile); } catch (e) {}
     throw err;
