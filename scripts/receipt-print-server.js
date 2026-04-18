@@ -116,6 +116,7 @@ function findWindowsPrinter() {
           name.toLowerCase().includes('thermal') ||
           name.toLowerCase().includes('receipt') ||
           name.toLowerCase().includes('xprinter') ||
+          name.toLowerCase().includes('kprinter') ||
           name.toLowerCase().includes('58') ||
           name.toLowerCase().includes('80')) {
         // Extract just the printer name (first column)
@@ -153,7 +154,10 @@ async function printRawWindows(data, printerName) {
     console.log(`Printing to: ${printerName}`);
 
     // Method 1: Try USB port directly (most reliable for raw ESC/POS)
-    const ports = ['USB003', 'USB001', 'USB002', 'LPT1'];
+    // Override with PRINTER_PORT env var, e.g. PRINTER_PORT=USB001
+    const envPort = process.env.PRINTER_PORT;
+    const defaultPorts = ['USB001', 'USB002', 'USB003', 'LPT1'];
+    const ports = envPort ? [envPort, ...defaultPorts.filter(p => p !== envPort)] : defaultPorts;
     for (const port of ports) {
       try {
         execSync(`copy /b "${tmpFile}" ${port}`, { encoding: 'utf8', shell: true });
