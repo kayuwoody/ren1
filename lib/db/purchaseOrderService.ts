@@ -12,7 +12,8 @@ import {
   PurchaseOrderWithItems,
   generatePONumber,
 } from './purchaseOrderSchema';
-import { adjustBranchStock, syncLegacyStockColumns } from './branchStockService';
+import { adjustBranchStock, syncLegacyStockColumns, getBranchStock } from './branchStockService';
+import { logStockMovement } from './stockMovementService';
 
 interface CreatePurchaseOrderInput {
   supplier: string;
@@ -272,11 +273,37 @@ export async function markPurchaseOrderReceived(id: string): Promise<PurchaseOrd
   const branchId = order.branchId || 'branch-main';
   for (const item of order.items) {
     if (item.itemType === 'material' && item.materialId) {
+      const stockBefore = getBranchStock(branchId, 'material', item.materialId);
       adjustBranchStock(branchId, 'material', item.materialId, item.quantity);
       console.log(`   ✅ Material: ${item.materialName} +${item.quantity} ${item.unit}`);
+
+      logStockMovement({
+        itemType: 'material',
+        itemId: item.materialId,
+        itemName: item.materialName || 'Unknown',
+        movementType: 'po_received',
+        quantityChange: item.quantity,
+        stockBefore,
+        stockAfter: stockBefore + item.quantity,
+        referenceId: order.id,
+        referenceNote: `PO: ${order.poNumber}`,
+      });
     } else if (item.itemType === 'product' && item.productId) {
+      const stockBefore = getBranchStock(branchId, 'product', item.productId);
       adjustBranchStock(branchId, 'product', item.productId, item.quantity);
       console.log(`   ✅ Product: ${item.productName} +${item.quantity}`);
+
+      logStockMovement({
+        itemType: 'product',
+        itemId: item.productId,
+        itemName: item.productName || 'Unknown',
+        movementType: 'po_received',
+        quantityChange: item.quantity,
+        stockBefore,
+        stockAfter: stockBefore + item.quantity,
+        referenceId: order.id,
+        referenceNote: `PO: ${order.poNumber}`,
+      });
     }
   }
 

@@ -4,6 +4,7 @@ import { getProductRecipe } from './recipeService';
 import { getMaterial } from './materialService';
 import { getProduct, getProductByWcId } from './productService';
 import { adjustBranchStock } from './branchStockService';
+import { logStockMovement } from './stockMovementService';
 
 // Ensure database is initialized
 initDatabase();
@@ -105,7 +106,7 @@ async function _recordProductSaleInternal(
       productName,
       productSku: product.sku,
       quantitySold,
-      itemType: 'material', // Use 'material' type for consistency
+      itemType: 'material',
       materialId: undefined,
       linkedProductId: undefined,
       materialName: `${productName} (Base Supplier Cost)`,
@@ -117,7 +118,6 @@ async function _recordProductSaleInternal(
       consumedAt: now,
     };
 
-    // Insert into database
     const stmt = db.prepare(`
       INSERT INTO InventoryConsumption
       (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
@@ -127,23 +127,11 @@ async function _recordProductSaleInternal(
     `);
 
     stmt.run(
-      consumptionId,
-      orderId,
-      orderItemId || null,
-      productId,
-      productName,
-      quantitySold,
-      'material',
-      null,
-      null,
-      `${productName} (Base Supplier Cost)`,
-      null,
-      quantitySold,
-      'unit',
-      product.supplierCost,
-      baseCostConsumption.totalCost,
-      now,
-      branchId
+      consumptionId, orderId, orderItemId || null, productId, productName,
+      quantitySold, 'material', null, null,
+      `${productName} (Base Supplier Cost)`, null,
+      quantitySold, 'unit', product.supplierCost, baseCostConsumption.totalCost,
+      now, branchId
     );
 
     consumptions.push(baseCostConsumption);
@@ -155,19 +143,16 @@ async function _recordProductSaleInternal(
   console.log(`${indent}   📋 Recipe: ${recipe.length} items`);
 
   if (recipe.length === 0) {
-    // If no recipe but has base cost, that's fine (e.g., bought muffin with no additional materials)
     if (product.supplierCost === 0) {
       if (depth === 0) {
         console.log(`${indent}⚠️  No recipe and no supplier cost for ${productName} - no COGS tracked`);
-        console.log(`${indent}   💡 Tip: Either add a recipe or set supplierCost in product settings`);
       } else {
         console.warn(`${indent}⚠️  Linked product "${productName}" has no recipe!`);
       }
     }
 
-    // Still deduct stock for products with no recipe (e.g., supplier-bought items like pies)
     if (depth === 0) {
-      deductLocalProductStock(productId, quantitySold, productName, branchId);
+      deductLocalProductStock(productId, quantitySold, productName, branchId, orderId);
       console.log(`${indent}📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
     }
 
@@ -176,165 +161,92 @@ async function _recordProductSaleInternal(
 
   // Process each recipe item
   for (const recipeItem of recipe) {
-    // Skip optional items (add-ons that weren't necessarily used)
-    if (recipeItem.isOptional) {
-      continue;
-    }
+    if (recipeItem.isOptional) continue;
 
-    // Handle bundle selection filtering (works at all depths with unified selection format)
+    // Handle bundle selection filtering
     if (bundleSelection && recipeItem.selectionGroup) {
       const uniqueKey = depth === 0 ? `root:${recipeItem.selectionGroup}` : `${productId}:${recipeItem.selectionGroup}`;
-
       const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
-
-      // Check if this specific item was selected
       const isSelected = recipeItem.linkedProductId === selectedItemId;
 
       if (!isSelected) {
-        console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
-        continue; // Skip this item - it wasn't selected
+        console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup})`);
+        continue;
       } else {
-        console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
+        console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup})`);
       }
     }
 
-    // Calculate total consumed (recipe quantity × units sold)
     const quantityConsumed = recipeItem.quantity * quantitySold;
 
-    // Handle material vs linked product
     if (recipeItem.itemType === 'material' && recipeItem.materialId) {
-      // Direct material - record consumption and deduct from stock
       console.log(`${indent}   ✓ Material: ${recipeItem.materialName} -${quantityConsumed}${recipeItem.unit}`);
 
       const consumptionId = uuidv4();
       const consumption: InventoryConsumption = {
-        id: consumptionId,
-        orderId,
-        orderItemId,
-        productId,
-        productName,
-        productSku: '',
-        quantitySold,
+        id: consumptionId, orderId, orderItemId, productId, productName,
+        productSku: '', quantitySold,
         itemType: recipeItem.itemType,
-        materialId: recipeItem.materialId,
-        linkedProductId: undefined,
-        materialName: recipeItem.materialName,
-        linkedProductName: undefined,
-        quantityConsumed,
-        unit: recipeItem.unit,
+        materialId: recipeItem.materialId, linkedProductId: undefined,
+        materialName: recipeItem.materialName, linkedProductName: undefined,
+        quantityConsumed, unit: recipeItem.unit,
         costPerUnit: recipeItem.costPerUnit || 0,
         totalCost: recipeItem.costPerUnit ? quantityConsumed * recipeItem.costPerUnit : 0,
         consumedAt: now,
       };
 
-      // Insert into database
-      const stmt = db.prepare(`
+      db.prepare(`
         INSERT INTO InventoryConsumption
         (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
          materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
          unit, costPerUnit, totalCost, consumedAt, branchId)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      stmt.run(
-        consumptionId,
-        orderId,
-        orderItemId || null,
-        productId,
-        productName,
-        quantitySold,
-        'material',
-        recipeItem.materialId,
-        null,
-        recipeItem.materialName,
-        null,
-        quantityConsumed,
-        recipeItem.unit,
-        recipeItem.costPerUnit || 0,
-        consumption.totalCost,
-        now,
-        branchId
+      `).run(
+        consumptionId, orderId, orderItemId || null, productId, productName,
+        quantitySold, 'material', recipeItem.materialId, null,
+        recipeItem.materialName, null, quantityConsumed, recipeItem.unit,
+        recipeItem.costPerUnit || 0, consumption.totalCost, now, branchId
       );
 
-      console.log(`${indent}      💾 Stored consumption: orderItemId=${orderItemId || 'null'}, material=${recipeItem.materialName}`);
-
       consumptions.push(consumption);
-      deductMaterialStock(recipeItem.materialId, quantityConsumed, branchId);
+      deductMaterialStock(recipeItem.materialId, quantityConsumed, branchId, orderId);
     } else if (recipeItem.itemType === 'product' && recipeItem.linkedProductId) {
-      // Linked product - record the product itself AND recursively process its materials
       console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
 
-      // Get the linked product to find its WC ID
       const linkedProduct = getProduct(recipeItem.linkedProductId);
       if (linkedProduct && linkedProduct.wcId) {
-        // Record the linked product itself as a consumption entry (for visibility only)
         const consumptionId = uuidv4();
         const linkedProductConsumption: InventoryConsumption = {
-          id: consumptionId,
-          orderId,
-          orderItemId,
-          productId,
-          productName,
-          productSku: product.sku,
-          quantitySold,
+          id: consumptionId, orderId, orderItemId, productId, productName,
+          productSku: product.sku, quantitySold,
           itemType: 'product',
-          materialId: undefined,
-          linkedProductId: recipeItem.linkedProductId,
-          materialName: undefined,
-          linkedProductName: recipeItem.linkedProductName,
-          quantityConsumed,
-          unit: 'unit',
-          costPerUnit: 0,
-          totalCost: 0,
+          materialId: undefined, linkedProductId: recipeItem.linkedProductId,
+          materialName: undefined, linkedProductName: recipeItem.linkedProductName,
+          quantityConsumed, unit: 'unit', costPerUnit: 0, totalCost: 0,
           consumedAt: now,
         };
 
-        // Insert the linked product consumption record
-        const stmt = db.prepare(`
+        db.prepare(`
           INSERT INTO InventoryConsumption
           (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
            materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
            unit, costPerUnit, totalCost, consumedAt, branchId)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        stmt.run(
-          consumptionId,
-          orderId,
-          orderItemId || null,
-          productId,
-          productName,
-          quantitySold,
-          'product',
-          null,
-          recipeItem.linkedProductId,
-          null,
-          recipeItem.linkedProductName,
-          quantityConsumed,
-          'unit',
-          0,
-          0,
-          now,
-          branchId
+        `).run(
+          consumptionId, orderId, orderItemId || null, productId, productName,
+          quantitySold, 'product', null, recipeItem.linkedProductId,
+          null, recipeItem.linkedProductName, quantityConsumed, 'unit',
+          0, 0, now, branchId
         );
 
-        console.log(`${indent}      💾 Stored linked product (visibility only): ${recipeItem.linkedProductName} x${quantityConsumed}`);
         consumptions.push(linkedProductConsumption);
 
-        // Deduct BranchStock for linked product
-        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name, branchId);
+        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name, branchId, orderId);
 
-        // Then recursively process the linked product's materials
         const linkedConsumptions = await _recordProductSaleInternal(
-          orderId,
-          linkedProduct.wcId,
-          linkedProduct.name,
-          quantityConsumed,
-          orderItemId,
-          bundleSelection,
-          depth + 1,
-          chain,
-          branchId
+          orderId, linkedProduct.wcId, linkedProduct.name,
+          quantityConsumed, orderItemId, bundleSelection,
+          depth + 1, chain, branchId
         );
         consumptions.push(...linkedConsumptions);
       } else {
@@ -343,9 +255,8 @@ async function _recordProductSaleInternal(
     }
   }
 
-  // Deduct local DB stock for the main product (only at root level, not for linked products)
   if (depth === 0) {
-    deductLocalProductStock(productId, quantitySold, productName, branchId);
+    deductLocalProductStock(productId, quantitySold, productName, branchId, orderId);
     console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
   }
 
@@ -353,9 +264,9 @@ async function _recordProductSaleInternal(
 }
 
 /**
- * Deduct material from BranchStock (source of truth)
+ * Deduct material from BranchStock and log the movement
  */
-function deductMaterialStock(materialId: string, quantity: number, branchId: string): void {
+function deductMaterialStock(materialId: string, quantity: number, branchId: string, orderId?: string): void {
   const material = getMaterial(materialId);
   if (!material) {
     console.error(`❌ Material ${materialId} not found - cannot deduct stock`);
@@ -370,17 +281,41 @@ function deductMaterialStock(materialId: string, quantity: number, branchId: str
   if (newBranchStock <= material.lowStockThreshold && newBranchStock > material.lowStockThreshold - quantity) {
     console.warn(`🔔 Low stock alert: ${material.name} = ${newBranchStock} ${material.purchaseUnit} (threshold: ${material.lowStockThreshold})`);
   }
+
+  logStockMovement({
+    itemType: 'material',
+    itemId: materialId,
+    itemName: material.name,
+    movementType: 'sale',
+    quantityChange: -quantity,
+    stockBefore: newBranchStock + quantity,
+    stockAfter: newBranchStock,
+    referenceId: orderId,
+    referenceNote: orderId ? `Sale: Order ${orderId}` : undefined,
+  });
 }
 
 /**
- * Deduct product from BranchStock (source of truth)
+ * Deduct product from BranchStock and log the movement
  */
-function deductLocalProductStock(productId: string, quantity: number, productName: string, branchId: string): void {
+function deductLocalProductStock(productId: string, quantity: number, productName: string, branchId: string, orderId?: string): void {
   const newBranchStock = adjustBranchStock(branchId, 'product', productId, -quantity);
   console.log(`   📦 BranchStock: ${productName} → ${newBranchStock}`);
   if (newBranchStock < 0) {
     console.warn(`   ⚠️  BranchStock: ${productName} went negative: ${newBranchStock}`);
   }
+
+  logStockMovement({
+    itemType: 'product',
+    itemId: productId,
+    itemName: productName,
+    movementType: 'sale',
+    quantityChange: -quantity,
+    stockBefore: newBranchStock + quantity,
+    stockAfter: newBranchStock,
+    referenceId: orderId,
+    referenceNote: orderId ? `Sale: Order ${orderId}` : undefined,
+  });
 }
 
 /**
@@ -392,15 +327,7 @@ export function getOrderConsumptions(orderId: string): InventoryConsumption[] {
     WHERE orderId = ?
     ORDER BY consumedAt
   `);
-  const results = stmt.all(orderId) as InventoryConsumption[];
-
-  // Debug logging
-  console.log(`🔍 getOrderConsumptions("${orderId}"): Found ${results.length} records`);
-  if (results.length > 0) {
-    console.log(`   First record: orderItemId=${results[0].orderItemId} (type: ${typeof results[0].orderItemId})`);
-  }
-
-  return results;
+  return stmt.all(orderId) as InventoryConsumption[];
 }
 
 /**
@@ -414,20 +341,11 @@ export function getProductConsumptions(
   let query = 'SELECT * FROM InventoryConsumption WHERE productId = ?';
   const params: any[] = [productId];
 
-  if (startDate) {
-    query += ' AND consumedAt >= ?';
-    params.push(startDate);
-  }
-
-  if (endDate) {
-    query += ' AND consumedAt <= ?';
-    params.push(endDate);
-  }
+  if (startDate) { query += ' AND consumedAt >= ?'; params.push(startDate); }
+  if (endDate) { query += ' AND consumedAt <= ?'; params.push(endDate); }
 
   query += ' ORDER BY consumedAt DESC';
-
-  const stmt = db.prepare(query);
-  return stmt.all(...params) as InventoryConsumption[];
+  return db.prepare(query).all(...params) as InventoryConsumption[];
 }
 
 /**
@@ -441,20 +359,11 @@ export function getMaterialConsumptions(
   let query = 'SELECT * FROM InventoryConsumption WHERE materialId = ?';
   const params: any[] = [materialId];
 
-  if (startDate) {
-    query += ' AND consumedAt >= ?';
-    params.push(startDate);
-  }
-
-  if (endDate) {
-    query += ' AND consumedAt <= ?';
-    params.push(endDate);
-  }
+  if (startDate) { query += ' AND consumedAt >= ?'; params.push(startDate); }
+  if (endDate) { query += ' AND consumedAt <= ?'; params.push(endDate); }
 
   query += ' ORDER BY consumedAt DESC';
-
-  const stmt = db.prepare(query);
-  return stmt.all(...params) as InventoryConsumption[];
+  return db.prepare(query).all(...params) as InventoryConsumption[];
 }
 
 /**
@@ -475,31 +384,25 @@ export function getConsumptionSummary(
     totalCost: number;
   }>;
 } {
-  // Total orders and products
-  const summaryStmt = db.prepare(`
+  const summary = db.prepare(`
     SELECT
       COUNT(DISTINCT orderId) as totalOrders,
       SUM(quantitySold) as totalProductsSold,
       SUM(totalCost) as totalCost
     FROM InventoryConsumption
     WHERE consumedAt >= ? AND consumedAt <= ?
-  `);
-  const summary = summaryStmt.get(startDate, endDate) as any;
+  `).get(startDate, endDate) as any;
 
-  // Group by material
-  const byMaterialStmt = db.prepare(`
+  const byMaterial = db.prepare(`
     SELECT
-      materialId,
-      materialName,
+      materialId, materialName,
       SUM(quantityConsumed) as quantityConsumed,
-      unit,
-      SUM(totalCost) as totalCost
+      unit, SUM(totalCost) as totalCost
     FROM InventoryConsumption
     WHERE consumedAt >= ? AND consumedAt <= ? AND materialId IS NOT NULL
     GROUP BY materialId, materialName, unit
     ORDER BY totalCost DESC
-  `);
-  const byMaterial = byMaterialStmt.all(startDate, endDate) as any[];
+  `).all(startDate, endDate) as any[];
 
   return {
     totalOrders: summary.totalOrders || 0,
@@ -541,7 +444,6 @@ export function calculateProductCOGS(
     productChain: string;
   }>;
 } {
-  // Find product by WooCommerce ID
   const product = getProductByWcId(Number(wcProductId));
 
   if (!product) {
@@ -554,90 +456,59 @@ export function calculateProductCOGS(
 
   const breakdown: Array<{
     itemType: 'material' | 'product' | 'base';
-    itemId: string;
-    itemName: string;
-    quantityUsed: number;
-    unit: string;
-    costPerUnit: number;
-    totalCost: number;
-    depth: number;
-    productChain: string;
+    itemId: string; itemName: string; quantityUsed: number;
+    unit: string; costPerUnit: number; totalCost: number;
+    depth: number; productChain: string;
   }> = [];
 
-  // Add base product cost if it exists (e.g., buying muffins from supplier)
   if (product.supplierCost > 0) {
     breakdown.push({
-      itemType: 'base',
-      itemId: product.id,
+      itemType: 'base', itemId: product.id,
       itemName: `${product.name} (Base Supplier Cost)`,
-      quantityUsed: quantity,
-      unit: 'unit',
+      quantityUsed: quantity, unit: 'unit',
       costPerUnit: product.supplierCost,
       totalCost: product.supplierCost * quantity,
-      depth,
-      productChain: chain,
+      depth, productChain: chain,
     });
   }
 
-  // Add recipe materials/linked products
   recipe
     .filter(item => !item.isOptional)
     .forEach(item => {
-      // Handle bundle selection filtering (works at all depths with unified selection format)
       if (bundleSelection && item.selectionGroup) {
         const uniqueKey = depth === 0 ? `root:${item.selectionGroup}` : `${product.id}:${item.selectionGroup}`;
         const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
-
-        const isSelected = item.linkedProductId === selectedItemId;
-
-        if (!isSelected) {
-          return;
-        }
+        if (item.linkedProductId !== selectedItemId) return;
       }
 
       if (item.itemType === 'material' && item.materialId) {
         breakdown.push({
-          itemType: 'material',
-          itemId: item.materialId,
+          itemType: 'material', itemId: item.materialId,
           itemName: item.materialName || '',
-          quantityUsed: item.quantity * quantity,
-          unit: item.unit,
+          quantityUsed: item.quantity * quantity, unit: item.unit,
           costPerUnit: item.costPerUnit || 0,
           totalCost: item.calculatedCost * quantity,
-          depth,
-          productChain: chain,
+          depth, productChain: chain,
         });
       } else if (item.itemType === 'product' && item.linkedProductId) {
         const linkedProduct = getProduct(item.linkedProductId);
         if (linkedProduct && linkedProduct.wcId) {
           breakdown.push({
-            itemType: 'product',
-            itemId: item.linkedProductId,
+            itemType: 'product', itemId: item.linkedProductId,
             itemName: item.linkedProductName || linkedProduct.name,
-            quantityUsed: item.quantity * quantity,
-            unit: 'unit',
-            costPerUnit: 0,
-            totalCost: 0,
-            depth,
-            productChain: chain,
+            quantityUsed: item.quantity * quantity, unit: 'unit',
+            costPerUnit: 0, totalCost: 0,
+            depth, productChain: chain,
           });
 
           const linkedCOGS = calculateProductCOGS(
-            linkedProduct.wcId,
-            item.quantity * quantity,
-            bundleSelection,
-            depth + 1,
-            chain
+            linkedProduct.wcId, item.quantity * quantity,
+            bundleSelection, depth + 1, chain
           );
           breakdown.push(...linkedCOGS.breakdown);
         }
       }
     });
 
-  const totalCOGS = breakdown.reduce((sum, item) => sum + item.totalCost, 0);
-
-  return {
-    totalCOGS,
-    breakdown,
-  };
+  return { totalCOGS: breakdown.reduce((sum, item) => sum + item.totalCost, 0), breakdown };
 }

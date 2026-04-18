@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2 } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
 
@@ -388,6 +388,17 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-semibold">Stock Check</h2>
                 </div>
                 <p className="text-teal-50">Physical inventory count and stock update</p>
+              </Link>
+
+              <Link
+                href="/admin/stock-usage"
+                className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <BarChart3 className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Stock Usage</h2>
+                </div>
+                <p className="text-orange-50">Track all stock level changes and movements</p>
               </Link>
             </div>
           </div>

@@ -563,6 +563,31 @@ export function initDatabase() {
     }
   } catch (e) { /* table may not have data yet */ }
 
+  // Stock Movement Log (unified audit trail for all stock changes)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS StockMovement (
+      id TEXT PRIMARY KEY,
+      itemType TEXT NOT NULL,
+      itemId TEXT NOT NULL,
+      itemName TEXT NOT NULL,
+      movementType TEXT NOT NULL,
+      quantityChange REAL NOT NULL,
+      stockBefore REAL NOT NULL,
+      stockAfter REAL NOT NULL,
+      referenceId TEXT,
+      referenceNote TEXT,
+      notes TEXT,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Indexes for stock movement log
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_stock_movement_item ON StockMovement(itemType, itemId);
+    CREATE INDEX IF NOT EXISTS idx_stock_movement_type ON StockMovement(movementType);
+    CREATE INDEX IF NOT EXISTS idx_stock_movement_date ON StockMovement(createdAt);
+  `);
+
   // Initialize purchase order tables
   try {
     const { initPurchaseOrderTables } = require('./purchaseOrderSchema');
