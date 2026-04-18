@@ -297,6 +297,17 @@ export default function AdminDashboard() {
             <h3 className="text-lg font-semibold text-gray-700 mb-3 px-2">Inventory & Recipes</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <Link
+                href="/admin/products"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Package className="w-6 h-6 text-indigo-600" />
+                  <h2 className="text-xl font-semibold">Products</h2>
+                </div>
+                <p className="text-gray-600">Add, edit, and manage your product catalog</p>
+              </Link>
+
+              <Link
                 href="/admin/materials"
                 className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
               >
