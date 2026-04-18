@@ -103,7 +103,7 @@ function buildEscPosReceipt(order) {
   return Buffer.from(result);
 }
 
-// Find Windows printer name
+// Find Windows printer name and its assigned port
 function findWindowsPrinter() {
   const { execSync } = require('child_process');
   try {
@@ -111,18 +111,19 @@ function findWindowsPrinter() {
     const lines = output.split('\n').filter(l => l.trim());
 
     for (const line of lines) {
-      const name = line.trim();
-      if (name.toLowerCase().includes('pos') ||
-          name.toLowerCase().includes('thermal') ||
-          name.toLowerCase().includes('receipt') ||
-          name.toLowerCase().includes('xprinter') ||
-          name.toLowerCase().includes('kprinter') ||
-          name.toLowerCase().includes('58') ||
-          name.toLowerCase().includes('80')) {
-        // Extract just the printer name (first column)
-        const printerName = name.split(/\s{2,}/)[0];
+      const lower = line.toLowerCase();
+      if (lower.includes('pos') ||
+          lower.includes('thermal') ||
+          lower.includes('receipt') ||
+          lower.includes('xprinter') ||
+          lower.includes('kprinter') ||
+          lower.includes('58') ||
+          lower.includes('80')) {
+        const parts = line.trim().split(/\s{2,}/);
+        const printerName = parts[0];
+        const portName = parts[1] || null;
         if (printerName && printerName !== 'Name') {
-          return printerName;
+          return { name: printerName, port: portName };
         }
       }
     }
@@ -133,7 +134,7 @@ function findWindowsPrinter() {
 }
 
 // Print raw bytes on Windows using file copy to printer port
-async function printRawWindows(data, printerName) {
+async function printRawWindows(data, printerNameOverride) {
   const fs = require('fs');
   const { execSync } = require('child_process');
   const path = require('path');
@@ -143,28 +144,35 @@ async function printRawWindows(data, printerName) {
   fs.writeFileSync(tmpFile, data);
 
   try {
-    if (!printerName) {
-      printerName = findWindowsPrinter();
-    }
+    const detected = findWindowsPrinter();
+    const printerName = printerNameOverride || (detected && detected.name);
+    const detectedPort = detected && detected.port;
 
     if (!printerName) {
       throw new Error('No thermal printer found. Please share your printer or check printer name.');
     }
 
-    console.log(`Printing to: ${printerName}`);
+    console.log(`Printing to: ${printerName} (detected port: ${detectedPort || 'unknown'})`);
 
-    // Method 1: Try USB port directly (most reliable for raw ESC/POS)
-    // Override with PRINTER_PORT env var, e.g. PRINTER_PORT=USB001
+    // Build port list: env override first, then detected port, then defaults
     const envPort = process.env.PRINTER_PORT;
     const defaultPorts = ['USB001', 'USB002', 'USB003', 'LPT1'];
-    const ports = envPort ? [envPort, ...defaultPorts.filter(p => p !== envPort)] : defaultPorts;
+    const portSet = new Set();
+    if (envPort) portSet.add(envPort);
+    if (detectedPort) portSet.add(detectedPort);
+    for (const p of defaultPorts) portSet.add(p);
+    const ports = Array.from(portSet);
+
+    console.log(`Trying ports in order: ${ports.join(', ')}`);
+
+    // Method 1: Try USB port directly (most reliable for raw ESC/POS)
     for (const port of ports) {
       try {
-        execSync(`copy /b "${tmpFile}" ${port}`, { encoding: 'utf8', shell: true });
+        execSync(`copy /b "${tmpFile}" ${port}`, { encoding: 'utf8', shell: true, timeout: 5000 });
         fs.unlinkSync(tmpFile);
         return { success: true, method: 'port', port };
       } catch (e) {
-        // Try next port
+        console.log(`  Port ${port}: failed`);
       }
     }
 
@@ -172,7 +180,8 @@ async function printRawWindows(data, printerName) {
     try {
       execSync(`copy /b "${tmpFile}" "\\\\%COMPUTERNAME%\\${printerName}"`, {
         encoding: 'utf8',
-        shell: true
+        shell: true,
+        timeout: 5000
       });
       fs.unlinkSync(tmpFile);
       return { success: true, method: 'copy', printer: printerName };
@@ -182,7 +191,7 @@ async function printRawWindows(data, printerName) {
 
     // Method 3: Use print command (fallback)
     try {
-      execSync(`print /D:"${printerName}" "${tmpFile}"`, { encoding: 'utf8', shell: true });
+      execSync(`print /D:"${printerName}" "${tmpFile}"`, { encoding: 'utf8', shell: true, timeout: 10000 });
       fs.unlinkSync(tmpFile);
       return { success: true, method: 'print', printer: printerName };
     } catch (e) {
@@ -212,10 +221,12 @@ const server = http.createServer(async (req, res) => {
   // Health check
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
+    const detected = findWindowsPrinter();
     res.end(JSON.stringify({
       status: 'ok',
       port: PORT,
-      escpos: !!escpos
+      printer: detected ? detected.name : null,
+      printerPort: detected ? detected.port : null,
     }));
     return;
   }
@@ -304,7 +315,7 @@ server.listen(PORT, '127.0.0.1', () => {
   // Show detected printer
   const printer = findWindowsPrinter();
   if (printer) {
-    console.log(`\n✅ Detected printer: ${printer}`);
+    console.log(`\n✅ Detected printer: ${printer.name} on port: ${printer.port || 'unknown'}`);
   } else {
     console.log('\n⚠️  No thermal printer detected. Available printers:');
     try {
