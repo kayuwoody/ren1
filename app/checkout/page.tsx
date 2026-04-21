@@ -3,14 +3,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
-import { Percent, DollarSign, Edit2, X, Tag, Shield, ArrowLeft, Plus, Minus } from "lucide-react";
-import Link from "next/link";
+import { Percent, DollarSign, Edit2, X, Tag, Plus, Minus } from "lucide-react";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { cartItems, removeFromCart, updateQuantity, updateItemDiscount, updateItemSurcharge } = useCart();
   const [error, setError] = useState("");
-  const [isStaffMode, setIsStaffMode] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
     isOpen: boolean;
     itemIndex: number | null;
@@ -25,12 +23,6 @@ export default function CheckoutPage() {
   const [discountType, setDiscountType] = useState<"percent" | "amount" | "override">("percent");
   const [discountValue, setDiscountValue] = useState("");
   const [discountReason, setDiscountReason] = useState("");
-
-  // Check if staff is logged in
-  useEffect(() => {
-    const authToken = sessionStorage.getItem('admin_auth');
-    setIsStaffMode(authToken === 'authenticated');
-  }, []);
 
   // Calculate totals
   const retailTotal = cartItems.reduce(
@@ -118,28 +110,6 @@ export default function CheckoutPage() {
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-6 pb-24">
-      {/* Staff Mode Banner */}
-      {isStaffMode && (
-        <div className="bg-blue-600 text-white rounded-lg p-4 shadow-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="w-6 h-6" />
-              <div>
-                <p className="font-semibold">Staff Mode Active</p>
-                <p className="text-sm text-blue-100">Apply discounts using the controls below</p>
-              </div>
-            </div>
-            <Link
-              href="/admin/pos"
-              className="px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition font-medium text-sm flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to POS
-            </Link>
-          </div>
-        </div>
-      )}
-
       <h1 className="text-2xl font-bold">Checkout</h1>
 
       {cartItems.length === 0 ? (
@@ -258,9 +228,8 @@ export default function CheckoutPage() {
                     )}
                   </div>
 
-                  {/* Discount controls - Staff only */}
-                  {isStaffMode && (
-                    <div className="flex flex-wrap gap-2">
+                  {/* Discount / surcharge controls */}
+                  <div className="flex flex-wrap gap-2">
                       {/* Quick percentage discount buttons */}
                       <button
                         onClick={() => applyQuickDiscount(index, 10)}
@@ -340,7 +309,6 @@ export default function CheckoutPage() {
                         </button>
                       )}
                     </div>
-                  )}
                 </div>
               );
             })}
