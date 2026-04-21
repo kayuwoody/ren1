@@ -11,7 +11,7 @@ import { handleApiError } from '@/lib/api/error-handler';
 export async function POST(req: Request) {
   try {
     // Get userId from cookie
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const userIdCookie = cookieStore.get('userId');
     const userId = userIdCookie?.value || 'guest';
 

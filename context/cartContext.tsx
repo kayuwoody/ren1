@@ -8,7 +8,9 @@ export interface CartItem {
   discountPercent?: number;   // Discount as percentage (0-100)
   discountAmount?: number;    // Discount as fixed amount
   discountReason?: string;    // Why discount was applied
-  finalPrice: number;         // Actual selling price after discount
+  surchargeAmount?: number;   // Fixed amount added to price (e.g., upgrade)
+  surchargeReason?: string;   // Why surcharge was applied
+  finalPrice: number;         // Actual selling price after discount/surcharge
   quantity: number;
   bundle?: {                  // Optional: for products with mandatory/optional components
     baseProductId: number;
@@ -33,25 +35,30 @@ interface CartContextType {
     value: number,
     reason?: string
   }) => void;
+  updateItemSurcharge: (index: number, amount: number, reason?: string) => void;
   clearCart: () => void;
   loadCart: (items: CartItem[]) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// Calculate final price based on discount
+// Calculate final price based on discount and surcharge
 function calculateFinalPrice(item: Omit<CartItem, 'finalPrice'>): number {
-  const { retailPrice, discountPercent, discountAmount } = item;
+  const { retailPrice, discountPercent, discountAmount, surchargeAmount } = item;
+
+  let price = retailPrice;
 
   if (discountAmount !== undefined && discountAmount > 0) {
-    return Math.max(0, retailPrice - discountAmount);
+    price = Math.max(0, price - discountAmount);
+  } else if (discountPercent !== undefined && discountPercent > 0) {
+    price = price * (1 - discountPercent / 100);
   }
 
-  if (discountPercent !== undefined && discountPercent > 0) {
-    return retailPrice * (1 - discountPercent / 100);
+  if (surchargeAmount !== undefined && surchargeAmount > 0) {
+    price += surchargeAmount;
   }
 
-  return retailPrice;
+  return price;
 }
 
 // Check if two cart items are the same (considering bundle variations)
@@ -238,6 +245,25 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
+  const updateItemSurcharge = (index: number, amount: number, reason?: string) => {
+    console.log('💰 Updating surcharge for cart item at index:', index, { amount, reason });
+
+    setCartItems(prev => prev.map((item, i) => {
+      if (i !== index) return item;
+
+      const updated: Omit<CartItem, 'finalPrice'> = {
+        ...item,
+        surchargeAmount: amount > 0 ? amount : undefined,
+        surchargeReason: amount > 0 ? (reason || 'Surcharge') : undefined,
+      };
+
+      return {
+        ...updated,
+        finalPrice: calculateFinalPrice(updated)
+      };
+    }));
+  };
+
   const clearCart = () => {
     console.log('🗑️ Clearing cart');
     setCartItems([]);
@@ -251,7 +277,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateQuantity, updateItemDiscount, clearCart, loadCart }}>
+    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateQuantity, updateItemDiscount, updateItemSurcharge, clearCart, loadCart }}>
       {children}
     </CartContext.Provider>
   );

@@ -12,13 +12,15 @@ import {
   PurchaseOrderWithItems,
   generatePONumber,
 } from './purchaseOrderSchema';
-import { wcApi } from '../wooClient';
+import { adjustBranchStock, syncLegacyStockColumns, getBranchStock } from './branchStockService';
+import { logStockMovement } from './stockMovementService';
 
 interface CreatePurchaseOrderInput {
   supplier: string;
   notes?: string;
   orderDate?: string;
   expectedDeliveryDate?: string;
+  branchId?: string;
   items: Array<{
     itemType: 'material' | 'product';
     materialId?: string;
@@ -44,7 +46,13 @@ interface UpdatePurchaseOrderInput {
  */
 export function createPurchaseOrder(input: CreatePurchaseOrderInput): PurchaseOrderWithItems {
   const id = uuidv4();
-  const poNumber = generatePONumber();
+
+  // Look up branch code for PO number prefix
+  const branchRecord = input.branchId
+    ? (db.prepare('SELECT code FROM Branch WHERE id = ?').get(input.branchId) as { code: string } | undefined)
+    : undefined;
+  const branchCode = branchRecord?.code || 'MAIN';
+  const poNumber = generatePONumber(branchCode);
   const now = new Date().toISOString();
 
   // Calculate total amount
@@ -93,8 +101,8 @@ export function createPurchaseOrder(input: CreatePurchaseOrderInput): PurchaseOr
 
   // Insert purchase order
   db.prepare(`
-    INSERT INTO PurchaseOrder (id, poNumber, supplier, status, totalAmount, notes, orderDate, expectedDeliveryDate, createdAt, updatedAt)
-    VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)
+    INSERT INTO PurchaseOrder (id, poNumber, supplier, status, totalAmount, notes, orderDate, expectedDeliveryDate, branchId, createdAt, updatedAt)
+    VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     poNumber,
@@ -103,6 +111,7 @@ export function createPurchaseOrder(input: CreatePurchaseOrderInput): PurchaseOr
     input.notes || null,
     input.orderDate || null,
     input.expectedDeliveryDate || null,
+    input.branchId || 'branch-main',
     now,
     now
   );
@@ -149,10 +158,12 @@ export function createPurchaseOrder(input: CreatePurchaseOrderInput): PurchaseOr
 }
 
 /**
- * Get all purchase orders
+ * Get all purchase orders, optionally filtered by branch
  */
-export function getAllPurchaseOrders(): PurchaseOrderWithItems[] {
-  const orders = db.prepare('SELECT * FROM PurchaseOrder ORDER BY createdAt DESC').all() as PurchaseOrder[];
+export function getAllPurchaseOrders(branchId?: string): PurchaseOrderWithItems[] {
+  const orders = branchId
+    ? db.prepare('SELECT * FROM PurchaseOrder WHERE branchId = ? ORDER BY createdAt DESC').all(branchId) as PurchaseOrder[]
+    : db.prepare('SELECT * FROM PurchaseOrder ORDER BY createdAt DESC').all() as PurchaseOrder[];
 
   return orders.map(order => {
     const items = db.prepare('SELECT * FROM PurchaseOrderItem WHERE purchaseOrderId = ?').all(order.id) as PurchaseOrderItem[];
@@ -240,39 +251,7 @@ export function updatePurchaseOrder(id: string, updates: UpdatePurchaseOrderInpu
 }
 
 /**
- * Add stock to WooCommerce product (when receiving inventory)
- */
-async function addWooProductStock(wcProductId: number, quantity: number, productName: string): Promise<void> {
-  try {
-    // Fetch current product from WooCommerce
-    const response = await wcApi.get(`products/${wcProductId}`);
-    const product = (response as any).data;
-
-    // Check if product manages stock
-    if (!product.manage_stock) {
-      console.log(`   ℹ️  Product "${productName}" does not manage stock in WooCommerce - skipping inventory update`);
-      return;
-    }
-
-    const currentStock = product.stock_quantity || 0;
-    const newStock = currentStock + quantity;
-
-    console.log(`   📦 WooCommerce Inventory (Receiving): ${productName} (${currentStock} → ${newStock})`);
-
-    // Update WooCommerce product stock
-    await wcApi.put(`products/${wcProductId}`, {
-      stock_quantity: newStock
-    });
-
-  } catch (error: any) {
-    console.error(`   ❌ Failed to update WooCommerce stock for ${productName}:`, error.message);
-    // Don't fail the whole operation if WooCommerce update fails
-  }
-}
-
-/**
  * Mark a purchase order as received and update inventory
- * Updates both local database AND WooCommerce stock levels
  */
 export async function markPurchaseOrderReceived(id: string): Promise<PurchaseOrderWithItems | null> {
   const order = getPurchaseOrder(id);
@@ -290,28 +269,46 @@ export async function markPurchaseOrderReceived(id: string): Promise<PurchaseOrd
 
   console.log(`📦 Receiving PO ${order.poNumber} - Updating inventory...`);
 
-  // Update inventory for materials and products
+  // Update BranchStock for each received item (BranchStock is the source of truth)
+  const branchId = order.branchId || 'branch-main';
   for (const item of order.items) {
     if (item.itemType === 'material' && item.materialId) {
-      // Update local material stock
-      db.prepare('UPDATE Material SET stockQuantity = stockQuantity + ? WHERE id = ?')
-        .run(item.quantity, item.materialId);
+      const stockBefore = getBranchStock(branchId, 'material', item.materialId);
+      adjustBranchStock(branchId, 'material', item.materialId, item.quantity);
       console.log(`   ✅ Material: ${item.materialName} +${item.quantity} ${item.unit}`);
-    } else if (item.itemType === 'product' && item.productId) {
-      // Update local product stock
-      db.prepare('UPDATE Product SET stockQuantity = stockQuantity + ? WHERE id = ?')
-        .run(item.quantity, item.productId);
-      console.log(`   ✅ Local Product: ${item.productName} +${item.quantity}`);
 
-      // Update WooCommerce stock if product has wcId
-      const product = db.prepare('SELECT wcId, name FROM Product WHERE id = ?').get(item.productId) as { wcId?: number; name: string } | undefined;
-      if (product?.wcId) {
-        await addWooProductStock(product.wcId, item.quantity, product.name);
-      } else {
-        console.log(`   ℹ️  Product "${item.productName}" has no WooCommerce ID - skipping WooCommerce sync`);
-      }
+      logStockMovement({
+        itemType: 'material',
+        itemId: item.materialId,
+        itemName: item.materialName || 'Unknown',
+        movementType: 'po_received',
+        quantityChange: item.quantity,
+        stockBefore,
+        stockAfter: stockBefore + item.quantity,
+        referenceId: order.id,
+        referenceNote: `PO: ${order.poNumber}`,
+      });
+    } else if (item.itemType === 'product' && item.productId) {
+      const stockBefore = getBranchStock(branchId, 'product', item.productId);
+      adjustBranchStock(branchId, 'product', item.productId, item.quantity);
+      console.log(`   ✅ Product: ${item.productName} +${item.quantity}`);
+
+      logStockMovement({
+        itemType: 'product',
+        itemId: item.productId,
+        itemName: item.productName || 'Unknown',
+        movementType: 'po_received',
+        quantityChange: item.quantity,
+        stockBefore,
+        stockAfter: stockBefore + item.quantity,
+        referenceId: order.id,
+        referenceNote: `PO: ${order.poNumber}`,
+      });
     }
   }
+
+  // Sync legacy columns as aggregate totals across all branches (safety net)
+  syncLegacyStockColumns();
 
   console.log(`✅ PO ${order.poNumber} marked as received and inventory updated`);
 

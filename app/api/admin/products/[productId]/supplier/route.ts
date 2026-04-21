@@ -8,10 +8,10 @@ import { handleApiError, validationError, notFoundError } from '@/lib/api/error-
  */
 export async function PATCH(
   req: Request,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const { productId: id } = params;
+    const { productId: id } = await params;
     const body = await req.json();
     const { supplier } = body;
 

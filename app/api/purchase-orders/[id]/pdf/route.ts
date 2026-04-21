@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { getPurchaseOrder } from '@/lib/db/purchaseOrderService';
+import { getBranch, getDefaultBranch } from '@/lib/db/branchService';
 import { handleApiError, notFoundError } from '@/lib/api/error-handler';
 import fs from 'fs';
 import path from 'path';
@@ -24,14 +25,20 @@ function sanitizeText(text: string): string {
  */
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const purchaseOrder = getPurchaseOrder(params.id);
+    const { id } = await params;
+    const purchaseOrder = getPurchaseOrder(id);
 
     if (!purchaseOrder) {
-      return notFoundError(`Purchase order not found: ${params.id}`, '/api/purchase-orders/[id]/pdf');
+      return notFoundError(`Purchase order not found: ${id}`, '/api/purchase-orders/[id]/pdf');
     }
+
+    // Look up branch info for letterhead
+    const branch = purchaseOrder.branchId
+      ? getBranch(purchaseOrder.branchId) ?? getDefaultBranch()
+      : getDefaultBranch();
 
     // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
@@ -69,51 +76,47 @@ export async function GET(
     // Move below logo and add spacing
     y -= logoHeight + 20;
 
-    // Contact information (right-aligned)
-    const contactPerson = 'Contact Person: Dan Lim';
-    const contactPersonWidth = font.widthOfTextAtSize(contactPerson, 10);
-    page.drawText(contactPerson, {
-      x: width - 50 - contactPersonWidth,
+    // Branch name (right-aligned, bold)
+    const branchNameText = sanitizeText(branch.name);
+    const branchNameWidth = fontBold.widthOfTextAtSize(branchNameText, 11);
+    page.drawText(branchNameText, {
+      x: width - 50 - branchNameWidth,
       y: y,
-      size: 10,
-      font: font,
+      size: 11,
+      font: fontBold,
       color: rgb(0, 0, 0),
     });
-
     y -= 14;
 
-    const contactNo = 'Contact No: 017-2099411';
-    const contactNoWidth = font.widthOfTextAtSize(contactNo, 10);
-    page.drawText(contactNo, {
-      x: width - 50 - contactNoWidth,
-      y: y,
-      size: 10,
-      font: font,
-      color: rgb(0, 0, 0),
-    });
-
-    y -= 14;
-
-    // Company address (right-aligned)
-    const addressLines = [
-      'Cafe',
-      '9ine Condominium',
-      'Jalan Suria Residen 1/1',
-      'Taman Kemacahaya',
-      '43200 Cheras, Selangor',
-    ];
-
-    addressLines.forEach((line) => {
-      const textWidth = font.widthOfTextAtSize(line, 10);
-      page.drawText(line, {
-        x: width - 50 - textWidth,
+    // Branch phone (right-aligned)
+    if (branch.phone) {
+      const phoneText = sanitizeText(`Tel: ${branch.phone}`);
+      const phoneWidth = font.widthOfTextAtSize(phoneText, 10);
+      page.drawText(phoneText, {
+        x: width - 50 - phoneWidth,
         y: y,
         size: 10,
         font: font,
         color: rgb(0, 0, 0),
       });
       y -= 14;
-    });
+    }
+
+    // Branch address (right-aligned, line-wrapped)
+    if (branch.address) {
+      const addressLines = sanitizeText(branch.address).split('\n').filter(Boolean);
+      addressLines.forEach((line) => {
+        const textWidth = font.widthOfTextAtSize(line, 10);
+        page.drawText(line, {
+          x: width - 50 - textWidth,
+          y: y,
+          size: 10,
+          font: font,
+          color: rgb(0, 0, 0),
+        });
+        y -= 14;
+      });
+    }
 
     y -= 20; // Add spacing after letterhead
 

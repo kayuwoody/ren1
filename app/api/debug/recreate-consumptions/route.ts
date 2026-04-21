@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
-import { wcApi } from '@/lib/wooClient';
+import { db } from '@/lib/db/init';
 import { recordProductSale } from '@/lib/db/inventoryConsumptionService';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
-/**
- * POST /api/debug/recreate-consumptions
- * Recreate consumption records for specific orders
- */
 export async function POST(req: Request) {
   try {
+    const branchId = getBranchIdFromRequest(req);
     const { orderIds } = await req.json();
 
     if (!Array.isArray(orderIds) || orderIds.length === 0) {
@@ -20,81 +18,56 @@ export async function POST(req: Request) {
     for (const orderId of orderIds) {
       console.log(`\n🔄 Recreating consumption records for order ${orderId}...`);
 
-      // Fetch order from WooCommerce
-      const { data: order } = await wcApi.get(`orders/${orderId}`) as { data: any };
-
-      if (!order || !order.line_items) {
-        console.warn(`⚠️  Order ${orderId} not found or has no line items`);
-        results.push({
-          orderId,
-          success: false,
-          error: 'Order not found or has no line items',
-        });
+      const order = db.prepare('SELECT * FROM "Order" WHERE id = ?').get(orderId) as any;
+      if (!order) {
+        results.push({ orderId, success: false, error: 'Order not found' });
         continue;
       }
 
-      console.log(`📦 Order ${orderId}: ${order.line_items.length} line items`);
+      const items = db.prepare('SELECT * FROM OrderItem WHERE orderId = ?').all(orderId) as any[];
+      if (items.length === 0) {
+        results.push({ orderId, success: false, error: 'No line items' });
+        continue;
+      }
 
       let totalCOGS = 0;
       let totalConsumptions = 0;
 
-      // Process each line item
-      for (const item of order.line_items) {
-        const { product_id, name, quantity, id: orderItemId, meta_data } = item;
-
-        console.log(`  Processing: ${name} (qty: ${quantity}, orderItemId: ${orderItemId})`);
-
-        // Extract bundle metadata if present
-        let bundleSelection: { selectedMandatory: Record<string, string>, selectedOptional: string[] } | undefined;
-        if (meta_data) {
-          const isBundle = meta_data.find((m: any) => m.key === '_is_bundle')?.value === 'true';
-          if (isBundle) {
-            const mandatoryJson = meta_data.find((m: any) => m.key === '_bundle_mandatory')?.value;
-            const optionalJson = meta_data.find((m: any) => m.key === '_bundle_optional')?.value;
-
-            try {
+      for (const item of items) {
+        let bundleSelection: any;
+        if (item.variations) {
+          try {
+            const v = JSON.parse(item.variations);
+            if (v._is_bundle === 'true') {
+              const mandatoryJson = v._bundle_mandatory;
+              const optionalJson = v._bundle_optional;
               bundleSelection = {
                 selectedMandatory: mandatoryJson ? JSON.parse(mandatoryJson) : {},
                 selectedOptional: optionalJson ? JSON.parse(optionalJson) : [],
               };
-            } catch (e) {
-              console.warn(`   ⚠️  Failed to parse bundle metadata`);
             }
-          }
+          } catch {}
         }
 
-        // Record consumption
-        const consumptions = await recordProductSale(
-          String(orderId),
-          String(product_id),
-          name,
-          quantity,
-          String(orderItemId),
-          bundleSelection
-        );
+        const consumptions = await recordProductSale({
+          orderId: String(orderId),
+          wcProductId: String(item.productId),
+          productName: item.productName,
+          quantitySold: item.quantity,
+          orderItemId: String(item.id),
+          bundleSelection,
+          branchId,
+        });
 
         const itemCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
         totalCOGS += itemCOGS;
         totalConsumptions += consumptions.length;
-
-        console.log(`    ✅ Created ${consumptions.length} consumption records, COGS = RM ${itemCOGS.toFixed(2)}`);
       }
 
-      results.push({
-        orderId,
-        success: true,
-        consumptionsCreated: totalConsumptions,
-        totalCOGS,
-      });
-
-      console.log(`✅ Order ${orderId}: Created ${totalConsumptions} consumption records, Total COGS = RM ${totalCOGS.toFixed(2)}`);
+      results.push({ orderId, success: true, consumptionsCreated: totalConsumptions, totalCOGS });
     }
 
-    return NextResponse.json({
-      success: true,
-      results,
-    });
-
+    return NextResponse.json({ success: true, results });
   } catch (error) {
     return handleApiError(error, '/api/debug/recreate-consumptions');
   }

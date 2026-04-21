@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
+import { useBranch } from '@/context/branchContext';
 
 /**
  * Admin Dashboard
@@ -41,6 +42,7 @@ interface DailyStats {
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { currentBranch, branches, setBranch, branchFetch } = useBranch();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [lockers, setLockers] = useState<LockerStatus[]>([]);
@@ -115,7 +117,7 @@ export default function AdminDashboard() {
 
   const fetchDailyStats = async () => {
     try {
-      const res = await fetch('/api/admin/daily-stats');
+      const res = await branchFetch('/api/admin/daily-stats');
       if (res.ok) {
         const data = await res.json();
         setDailyStats(data);
@@ -186,6 +188,26 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {/* Branch indicator / selector */}
+            {branches.length > 1 ? (
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-gray-500" />
+                <select
+                  value={currentBranch?.id || ''}
+                  onChange={(e) => setBranch(e.target.value)}
+                  className="text-sm border border-gray-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                >
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                  ))}
+                </select>
+              </div>
+            ) : currentBranch ? (
+              <div className="flex items-center gap-1 text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-lg">
+                <Building2 className="w-4 h-4" />
+                <span>{currentBranch.name}</span>
+              </div>
+            ) : null}
             <button
               onClick={() => {
                 fetchLockerStatus();
@@ -275,6 +297,17 @@ export default function AdminDashboard() {
             <h3 className="text-lg font-semibold text-gray-700 mb-3 px-2">Inventory & Recipes</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <Link
+                href="/admin/products"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Package className="w-6 h-6 text-indigo-600" />
+                  <h2 className="text-xl font-semibold">Products</h2>
+                </div>
+                <p className="text-gray-600">Add, edit, and manage your product catalog</p>
+              </Link>
+
+              <Link
                 href="/admin/materials"
                 className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
               >
@@ -356,6 +389,17 @@ export default function AdminDashboard() {
                 </div>
                 <p className="text-teal-50">Physical inventory count and stock update</p>
               </Link>
+
+              <Link
+                href="/admin/stock-usage"
+                className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <BarChart3 className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Stock Usage</h2>
+                </div>
+                <p className="text-orange-50">Track all stock level changes and movements</p>
+              </Link>
             </div>
           </div>
 
@@ -363,6 +407,17 @@ export default function AdminDashboard() {
           <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-3 px-2">System & Customer</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Link
+                href="/admin/branches"
+                className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Building2 className="w-6 h-6 text-blue-600" />
+                  <h2 className="text-xl font-semibold">Branches</h2>
+                </div>
+                <p className="text-gray-600">Manage branch locations and settings</p>
+              </Link>
+
               <Link
                 href="/admin/lockers"
                 className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"

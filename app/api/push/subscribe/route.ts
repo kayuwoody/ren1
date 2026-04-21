@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const subscription = await req.json();
 
     // Get userId from cookie
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const userIdCookie = cookieStore.get('userId');
     const userId = userIdCookie?.value || 'guest';
 

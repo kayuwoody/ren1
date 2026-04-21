@@ -11,12 +11,13 @@ import { handleApiError, notFoundError } from '@/lib/api/error-handler';
  */
 export async function GET(
   req: Request,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
+    const { productId } = await params;
     const { searchParams } = new URL(req.url);
     const quantity = parseInt(searchParams.get('quantity') || '1');
-    const wcProductId = parseInt(params.productId);
+    const wcProductId = parseInt(productId);
 
     if (isNaN(wcProductId)) {
       return NextResponse.json(

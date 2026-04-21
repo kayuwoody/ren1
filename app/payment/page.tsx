@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
+import { useBranch } from "@/context/branchContext";
 import CashPayment from "@/components/CashPayment";
 
 export default function PaymentPage() {
   const router = useRouter();
   const { cartItems, clearCart } = useCart();
+  const { branchFetch } = useBranch();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,8 +51,8 @@ export default function PaymentPage() {
         return sum;
       }, 0);
 
-      // Create order in WooCommerce
-      const response = await fetch("/api/orders/create-with-payment", {
+      // Create order in WooCommerce, tagged with current branch
+      const response = await branchFetch("/api/orders/create-with-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -63,6 +65,14 @@ export default function PaymentPage() {
                 { key: "_discount_reason", value: item.discountReason },
                 { key: "_retail_price", value: item.retailPrice.toString() },
                 { key: "_discount_amount", value: (item.retailPrice - item.finalPrice).toString() }
+              );
+            }
+
+            // Add surcharge metadata if applicable
+            if (item.surchargeAmount && item.surchargeAmount > 0) {
+              meta_data.push(
+                { key: "_surcharge_amount", value: item.surchargeAmount.toString() },
+                { key: "_surcharge_reason", value: item.surchargeReason || 'Upgrade' }
               );
             }
 

@@ -1,19 +1,28 @@
 import { NextResponse } from 'next/server';
-import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
+import { db } from '@/lib/db/init';
 import { handleApiError } from '@/lib/api/error-handler';
 
-/**
- * GET /api/admin/customers
- * Fetch all customers from WooCommerce
- */
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   try {
-    const customers = await fetchAllWooPages('customers', {
-      orderby: 'registered_date',
-      order: 'desc'
-    });
+    const customers = db.prepare(
+      'SELECT * FROM Customer ORDER BY createdAt DESC'
+    ).all() as any[];
 
-    return NextResponse.json(customers);
+    const formatted = customers.map(c => ({
+      id: c.id,
+      email: c.email || '',
+      first_name: c.name || '',
+      billing: {
+        phone: c.phone || '',
+        first_name: c.name || '',
+        email: c.email || '',
+      },
+      date_created: c.createdAt,
+    }));
+
+    return NextResponse.json(formatted);
   } catch (error) {
     return handleApiError(error, '/api/admin/customers');
   }

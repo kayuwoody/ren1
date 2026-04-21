@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Minus, Trash2, ArrowLeft } from "lucide-react";
+import { useBranch } from "@/context/branchContext";
 
 interface Material {
   id: string;
@@ -39,6 +40,7 @@ interface POItem {
 
 export default function CreatePurchaseOrderPage() {
   const router = useRouter();
+  const { branchFetch, currentBranch } = useBranch();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
@@ -224,7 +226,7 @@ export default function CreatePurchaseOrderPage() {
     setSubmitting(true);
 
     try {
-      const response = await fetch("/api/purchase-orders", {
+      const response = await branchFetch("/api/purchase-orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -232,6 +234,7 @@ export default function CreatePurchaseOrderPage() {
           orderDate: orderDate || undefined,
           expectedDeliveryDate: expectedDeliveryDate || undefined,
           notes: notes || undefined,
+          branchId: currentBranch?.id,
           items: items.map((item) => ({
             itemType: item.itemType,
             materialId: item.materialId,

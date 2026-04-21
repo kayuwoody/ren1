@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAllProducts } from '@/lib/db/productService';
+import { getAllProducts, upsertProduct, getProductBySku } from '@/lib/db/productService';
 import { handleApiError } from '@/lib/api/error-handler';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +37,40 @@ export async function GET(req: Request) {
     return NextResponse.json({
       products: transformedProducts,
     });
+  } catch (error) {
+    return handleApiError(error, '/api/admin/products');
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { name, sku, category, basePrice, manageStock, imageUrl, supplier, quantityPerCarton } = body;
+
+    if (!name || !sku || !category) {
+      return NextResponse.json({ error: 'name, sku, and category are required' }, { status: 400 });
+    }
+
+    const existing = getProductBySku(sku);
+    if (existing) {
+      return NextResponse.json({ error: `A product with SKU "${sku}" already exists` }, { status: 409 });
+    }
+
+    const product = upsertProduct({
+      name,
+      sku,
+      category,
+      basePrice: parseFloat(basePrice) || 0,
+      supplierCost: 0,
+      unitCost: 0,
+      stockQuantity: 0,
+      manageStock: manageStock ?? false,
+      imageUrl: imageUrl || undefined,
+      supplier: supplier || undefined,
+      quantityPerCarton: quantityPerCarton || undefined,
+    });
+
+    return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
     return handleApiError(error, '/api/admin/products');
   }

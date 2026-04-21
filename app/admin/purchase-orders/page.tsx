@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FileDown, Plus, Package, TruckIcon, FileText } from "lucide-react";
+import { useBranch } from "@/context/branchContext";
 
 interface PurchaseOrderItem {
   id: string;
@@ -33,17 +34,18 @@ interface PurchaseOrder {
 
 export default function PurchaseOrdersPage() {
   const router = useRouter();
+  const { branchFetch, currentBranch } = useBranch();
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
 
   useEffect(() => {
     loadPurchaseOrders();
-  }, []);
+  }, [currentBranch]);
 
   const loadPurchaseOrders = async () => {
     try {
-      const response = await fetch("/api/purchase-orders");
+      const response = await branchFetch("/api/purchase-orders");
       const data = await response.json();
       setPurchaseOrders(data);
     } catch (error) {

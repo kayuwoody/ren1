@@ -1,44 +1,47 @@
 import { NextResponse } from "next/server";
-import { wcApi } from "@/lib/wooClient";
+import { db } from "@/lib/db/init";
+import { getOrderItems } from "@/lib/db/orderService";
 
-// Force dynamic rendering for this API route
 export const dynamic = 'force-dynamic';
 
-/**
- * GET /api/kitchen/orders
- *
- * Returns processing orders NOT yet marked as ready for kitchen display
- * Filters out orders with kitchen_ready metadata
- */
 export async function GET(req: Request) {
   try {
-    // Fetch all orders with status=processing (no user filter)
-    // Add timestamp to bust WooCommerce cache
-    const response: any = await wcApi.get("orders", {
-      status: "processing",
-      per_page: 100, // Max orders to show
-      orderby: "date",
-      order: "asc", // Oldest first (highest priority)
-      _fields: "id,number,status,date_created,total,line_items,meta_data", // Explicitly request meta_data
-      _: Date.now(), // Cache buster
-    });
+    const orders = db.prepare(`
+      SELECT * FROM "Order"
+      WHERE status = 'processing' AND kitchenReady = 0
+      ORDER BY createdAt ASC
+    `).all() as any[];
 
-    const allProcessingOrders = response.data || [];
-
-    // Filter out orders that are already marked as ready
-    const kitchenOrders = allProcessingOrders.filter((order: any) => {
-      const kitchenReady = order.meta_data?.find((m: any) => m.key === "kitchen_ready")?.value;
-      return kitchenReady !== "yes";
+    const kitchenOrders = orders.map(order => {
+      const items = getOrderItems(order.id);
+      return {
+        id: order.id,
+        number: order.orderNumber,
+        status: order.status,
+        date_created: order.createdAt,
+        total: String(order.total),
+        line_items: items.map(item => ({
+          id: item.id,
+          product_id: item.productId,
+          name: item.productName,
+          quantity: item.quantity,
+          meta_data: item.variations
+            ? Object.entries(JSON.parse(item.variations)).map(([key, value]) => ({ key, value: String(value) }))
+            : [],
+        })),
+        meta_data: [
+          { key: '_branch_id', value: order.branchId || '' },
+          ...(order.startTime ? [{ key: 'startTime', value: order.startTime }] : []),
+          ...(order.endTime ? [{ key: 'endTime', value: order.endTime }] : []),
+        ],
+      };
     });
 
     return NextResponse.json(kitchenOrders);
   } catch (err: any) {
     console.error("❌ /api/kitchen/orders error:", err);
     return NextResponse.json(
-      {
-        error: "Failed to load kitchen orders",
-        details: err?.message || "Unknown error",
-      },
+      { error: "Failed to load kitchen orders", details: err?.message || "Unknown error" },
       { status: 500 }
     );
   }

@@ -1,85 +1,78 @@
 import { NextResponse } from 'next/server';
-import { getWooOrder, updateWooOrder } from '@/lib/orderService';
+import { db } from '@/lib/db/init';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { getProductByWcId } from '@/lib/db/productService';
+import { v4 as uuidv4 } from 'uuid';
 
-/**
- * PATCH /api/orders/[orderId]/update-items
- *
- * Update line_items on a pending order
- * Only allowed for orders with status: pending
- * Used when user modifies cart before paying
- */
 export async function PATCH(
   req: Request,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params;
     const { line_items } = await req.json();
 
     if (!line_items || !Array.isArray(line_items)) {
       return validationError('line_items array required', '/api/orders/[orderId]/update-items');
     }
 
-    // 1. Fetch existing order
-    const existing = await getWooOrder(orderId);
-
-    // 2. Only allow updates on pending orders
+    const existing = db.prepare('SELECT * FROM "Order" WHERE id = ?').get(orderId) as any;
+    if (!existing) {
+      return validationError('Order not found', '/api/orders/[orderId]/update-items');
+    }
     if (existing.status !== 'pending') {
       return validationError('Can only update pending orders', '/api/orders/[orderId]/update-items');
     }
 
-    // 3. Match cart items to existing line_items by product_id
-    // This prevents duplicates by preserving WooCommerce line item IDs
-    const mergedLineItems = line_items.map((cartItem: any) => {
-      // Find existing line item with same product_id
-      const existingItem = existing.line_items?.find(
-        (li: any) => li.product_id === cartItem.product_id
-      );
+    const now = new Date().toISOString();
+    const branchId = existing.branchId || 'branch-main';
 
-      // If found, update quantity and keep the id
-      if (existingItem) {
-        return {
-          id: existingItem.id,  // CRITICAL: include id to UPDATE, not ADD
-          product_id: cartItem.product_id,
-          quantity: cartItem.quantity
-        };
+    const replaceItems = db.transaction(() => {
+      db.prepare('DELETE FROM OrderItem WHERE orderId = ?').run(orderId);
+
+      let subtotal = 0;
+      let totalCost = 0;
+      const insertItem = db.prepare(`
+        INSERT INTO OrderItem (id, orderId, productId, productName, category, sku,
+                               quantity, basePrice, unitPrice, subtotal, unitCost, totalCost,
+                               itemProfit, itemMargin, variations, discountApplied, finalPrice,
+                               branchId, soldAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const item of line_items) {
+        const product = getProductByWcId(item.product_id);
+        const qty = item.quantity || 1;
+        const price = parseFloat(item.price || product?.basePrice || '0');
+        const lineTotal = price * qty;
+        const unitCost = product?.unitCost || 0;
+        const lineCost = unitCost * qty;
+        subtotal += lineTotal;
+        totalCost += lineCost;
+
+        insertItem.run(
+          uuidv4(), orderId,
+          product?.id || String(item.product_id),
+          product?.name || item.name || 'Unknown',
+          product?.category || '', product?.sku || '',
+          qty, price, price, lineTotal, unitCost, lineCost,
+          lineTotal - lineCost,
+          lineTotal > 0 ? ((lineTotal - lineCost) / lineTotal) * 100 : 0,
+          null, 0, price, branchId, now,
+        );
       }
 
-      // New item, no id needed
-      return {
-        product_id: cartItem.product_id,
-        quantity: cartItem.quantity
-      };
+      const totalProfit = subtotal - totalCost;
+      const margin = subtotal > 0 ? (totalProfit / subtotal) * 100 : 0;
+      db.prepare(`
+        UPDATE "Order" SET subtotal = ?, total = ?, totalCost = ?, totalProfit = ?,
+                           overallMargin = ?, updatedAt = ? WHERE id = ?
+      `).run(subtotal, subtotal, totalCost, totalProfit, margin, now, orderId);
     });
 
-    // 4. Remove items that are no longer in cart
-    // Mark removed items with quantity: 0
-    const removedItems = existing.line_items
-      ?.filter((existingItem: any) =>
-        !line_items.some((cartItem: any) => cartItem.product_id === existingItem.product_id)
-      )
-      .map((item: any) => ({
-        id: item.id,
-        quantity: 0  // Setting quantity to 0 removes the item
-      })) || [];
+    replaceItems();
 
-    const finalLineItems = [...mergedLineItems, ...removedItems];
-
-    console.log(`🔄 Updating order #${orderId}:`, {
-      cartItems: line_items.length,
-      existingItems: existing.line_items?.length || 0,
-      merged: mergedLineItems.length,
-      removed: removedItems.length
-    });
-
-    // 5. Update line_items
-    const updated = await updateWooOrder(orderId, {
-      line_items: finalLineItems
-    });
-
-    console.log(`✅ Updated line_items for order #${orderId}`);
-
+    const updated = db.prepare('SELECT * FROM "Order" WHERE id = ?').get(orderId) as any;
     return NextResponse.json(updated);
   } catch (error) {
     return handleApiError(error, '/api/orders/[orderId]/update-items');

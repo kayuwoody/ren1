@@ -33,30 +33,38 @@ const KNOWN_PRINTERS = [
 const ESC = 0x1B;
 const GS = 0x1D;
 
-function buildEscPosReceipt(order) {
-  const commands = [];
-  const encoder = new TextEncoder();
+// Convert string to ASCII buffer, stripping non-printable/non-ASCII chars
+function ascii(str) {
+  return Buffer.from(str.replace(/[^\x0A\x20-\x7E]/g, ''), 'binary');
+}
 
-  // Initialize
-  commands.push(new Uint8Array([ESC, 0x40])); // ESC @ - Initialize
+function buildEscPosReceipt(order) {
+  const parts = [];
+
+  // Initialize printer
+  parts.push(Buffer.from([ESC, 0x40]));
+
+  // Select character code page PC437 (USA)
+  parts.push(Buffer.from([ESC, 0x74, 0x00]));
 
   // Bold + Center for header
-  commands.push(new Uint8Array([ESC, 0x45, 0x01])); // Bold ON
-  commands.push(new Uint8Array([ESC, 0x61, 0x01])); // Center
+  parts.push(Buffer.from([ESC, 0x45, 0x01])); // Bold ON
+  parts.push(Buffer.from([ESC, 0x61, 0x01])); // Center
 
-  commands.push(encoder.encode('COFFEE OASIS\n'));
-  commands.push(encoder.encode(`Receipt #${order.id || order.number}\n`));
+  parts.push(ascii('COFFEE OASIS\n'));
 
-  const dateStr = order.date_created
-    ? new Date(order.date_created).toLocaleString('en-MY')
-    : new Date().toLocaleString('en-MY');
-  commands.push(encoder.encode(`${dateStr}\n\n`));
+  const orderId = (order.id || order.number || '').substring(0, 8);
+  parts.push(ascii(`Receipt #${orderId}\n`));
+
+  const d = order.date_created ? new Date(order.date_created) : new Date();
+  const dateStr = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  parts.push(ascii(`${dateStr}\n\n`));
 
   // Regular + Left for items
-  commands.push(new Uint8Array([ESC, 0x45, 0x00])); // Bold OFF
-  commands.push(new Uint8Array([ESC, 0x61, 0x00])); // Left align
+  parts.push(Buffer.from([ESC, 0x45, 0x00])); // Bold OFF
+  parts.push(Buffer.from([ESC, 0x61, 0x00])); // Left align
 
-  commands.push(encoder.encode('--------------------------------\n'));
+  parts.push(ascii('--------------------------------\n'));
 
   // Line items
   const lineItems = order.line_items || order.items || [];
@@ -65,45 +73,40 @@ function buildEscPosReceipt(order) {
     const qty = item.quantity || 1;
     const price = parseFloat(item.total || item.price || 0).toFixed(2);
 
-    commands.push(encoder.encode(`${qty}x ${name}\n`));
+    parts.push(ascii(`${qty}x ${name}\n`));
     const priceStr = `RM ${price}`;
-    commands.push(encoder.encode(`${' '.repeat(32 - priceStr.length)}${priceStr}\n`));
+    const pad = Math.max(0, 32 - priceStr.length);
+    parts.push(ascii(`${' '.repeat(pad)}${priceStr}\n`));
   }
 
-  commands.push(encoder.encode('--------------------------------\n'));
+  parts.push(ascii('--------------------------------\n'));
 
   // Total
-  commands.push(new Uint8Array([ESC, 0x45, 0x01])); // Bold ON
+  parts.push(Buffer.from([ESC, 0x45, 0x01])); // Bold ON
   const total = parseFloat(order.total || 0).toFixed(2);
   const totalLine = `TOTAL: RM ${total}`;
-  commands.push(encoder.encode(`${' '.repeat(32 - totalLine.length)}${totalLine}\n`));
-  commands.push(new Uint8Array([ESC, 0x45, 0x00])); // Bold OFF
+  const totalPad = Math.max(0, 32 - totalLine.length);
+  parts.push(ascii(`${' '.repeat(totalPad)}${totalLine}\n`));
+  parts.push(Buffer.from([ESC, 0x45, 0x00])); // Bold OFF
 
   // Payment method
-  const paymentMethod = order.payment_method_title || order.payment_method || 'Cash';
-  commands.push(encoder.encode(`\nPaid by: ${paymentMethod}\n`));
+  const paymentMethod = (order.payment_method_title || order.payment_method || 'Cash')
+    .replace(/[^\x20-\x7E]/g, '');
+  parts.push(ascii(`\nPaid by: ${paymentMethod}\n`));
 
   // Footer
-  commands.push(new Uint8Array([ESC, 0x61, 0x01])); // Center
-  commands.push(encoder.encode('\n\nThank you!\n'));
-  commands.push(encoder.encode('Come again soon\n\n\n'));
+  parts.push(Buffer.from([ESC, 0x61, 0x01])); // Center
+  parts.push(ascii('\n\nThank you!\n'));
+  parts.push(ascii('Come again soon\n\n\n'));
 
-  // Cut paper (partial cut)
-  commands.push(new Uint8Array([GS, 0x56, 0x01])); // GS V - Cut
+  // Feed and cut
+  parts.push(Buffer.from([ESC, 0x64, 0x03])); // Feed 3 lines
+  parts.push(Buffer.from([GS, 0x56, 0x00]));  // Full cut
 
-  // Combine all commands
-  const totalLength = commands.reduce((sum, arr) => sum + arr.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const cmd of commands) {
-    result.set(cmd, offset);
-    offset += cmd.length;
-  }
-
-  return Buffer.from(result);
+  return Buffer.concat(parts);
 }
 
-// Find Windows printer name
+// Find Windows printer name and its assigned port
 function findWindowsPrinter() {
   const { execSync } = require('child_process');
   try {
@@ -111,17 +114,19 @@ function findWindowsPrinter() {
     const lines = output.split('\n').filter(l => l.trim());
 
     for (const line of lines) {
-      const name = line.trim();
-      if (name.toLowerCase().includes('pos') ||
-          name.toLowerCase().includes('thermal') ||
-          name.toLowerCase().includes('receipt') ||
-          name.toLowerCase().includes('xprinter') ||
-          name.toLowerCase().includes('58') ||
-          name.toLowerCase().includes('80')) {
-        // Extract just the printer name (first column)
-        const printerName = name.split(/\s{2,}/)[0];
+      const lower = line.toLowerCase();
+      if (lower.includes('pos') ||
+          lower.includes('thermal') ||
+          lower.includes('receipt') ||
+          lower.includes('xprinter') ||
+          lower.includes('kprinter') ||
+          lower.includes('58') ||
+          lower.includes('80')) {
+        const parts = line.trim().split(/\s{2,}/);
+        const printerName = parts[0];
+        const portName = parts[1] || null;
         if (printerName && printerName !== 'Name') {
-          return printerName;
+          return { name: printerName, port: portName };
         }
       }
     }
@@ -131,20 +136,18 @@ function findWindowsPrinter() {
   }
 }
 
-// Print raw bytes on Windows using file copy to printer port
-async function printRawWindows(data, printerName) {
+// Print raw bytes on Windows via the Win32 Print Spooler API (PowerShell)
+async function printRawWindows(data, printerNameOverride) {
   const fs = require('fs');
   const { execSync } = require('child_process');
   const path = require('path');
 
-  // Write to temp file
   const tmpFile = path.join(process.env.TEMP || '.', `receipt-${Date.now()}.bin`);
   fs.writeFileSync(tmpFile, data);
 
   try {
-    if (!printerName) {
-      printerName = findWindowsPrinter();
-    }
+    const detected = findWindowsPrinter();
+    const printerName = printerNameOverride || (detected && detected.name);
 
     if (!printerName) {
       throw new Error('No thermal printer found. Please share your printer or check printer name.');
@@ -152,40 +155,42 @@ async function printRawWindows(data, printerName) {
 
     console.log(`Printing to: ${printerName}`);
 
-    // Method 1: Try USB port directly (most reliable for raw ESC/POS)
-    const ports = ['USB003', 'USB001', 'USB002', 'LPT1'];
-    for (const port of ports) {
-      try {
-        execSync(`copy /b "${tmpFile}" ${port}`, { encoding: 'utf8', shell: true });
-        fs.unlinkSync(tmpFile);
-        return { success: true, method: 'port', port };
-      } catch (e) {
-        // Try next port
-      }
+    // Primary method: Use Win32 WritePrinter API via PowerShell
+    // This sends raw bytes through the spooler — the only reliable way on Windows
+    const psScript = path.join(__dirname, 'raw-print.ps1');
+    try {
+      const output = execSync(
+        `powershell -ExecutionPolicy Bypass -File "${psScript}" -PrinterName "${printerName}" -FilePath "${tmpFile}"`,
+        { encoding: 'utf8', timeout: 15000 }
+      );
+      console.log(`  PowerShell raw print: ${output.trim()}`);
+      fs.unlinkSync(tmpFile);
+      return { success: true, method: 'spooler-raw', printer: printerName };
+    } catch (e) {
+      console.log(`  PowerShell raw print failed: ${e.message}`);
     }
 
-    // Method 2: Try direct copy to shared printer
+    // Fallback: Try direct copy to shared printer name
     try {
       execSync(`copy /b "${tmpFile}" "\\\\%COMPUTERNAME%\\${printerName}"`, {
-        encoding: 'utf8',
-        shell: true
+        encoding: 'utf8', shell: true, timeout: 5000
       });
       fs.unlinkSync(tmpFile);
-      return { success: true, method: 'copy', printer: printerName };
+      return { success: true, method: 'share-copy', printer: printerName };
     } catch (e) {
-      console.log('Direct copy failed, trying print command...');
+      console.log('  Share copy failed');
     }
 
-    // Method 3: Use print command (fallback)
+    // Fallback: print command
     try {
-      execSync(`print /D:"${printerName}" "${tmpFile}"`, { encoding: 'utf8', shell: true });
+      execSync(`print /D:"${printerName}" "${tmpFile}"`, { encoding: 'utf8', shell: true, timeout: 10000 });
       fs.unlinkSync(tmpFile);
-      return { success: true, method: 'print', printer: printerName };
+      return { success: true, method: 'print-cmd', printer: printerName };
     } catch (e) {
-      console.log('Print command failed...');
+      console.log('  Print command failed');
     }
 
-    throw new Error(`Could not print to ${printerName}. Try sharing the printer.`);
+    throw new Error(`Could not print to ${printerName}. Check printer is online and not paused.`);
   } catch (err) {
     try { fs.unlinkSync(tmpFile); } catch (e) {}
     throw err;
@@ -208,10 +213,12 @@ const server = http.createServer(async (req, res) => {
   // Health check
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
+    const detected = findWindowsPrinter();
     res.end(JSON.stringify({
       status: 'ok',
       port: PORT,
-      escpos: !!escpos
+      printer: detected ? detected.name : null,
+      printerPort: detected ? detected.port : null,
     }));
     return;
   }
@@ -300,7 +307,7 @@ server.listen(PORT, '127.0.0.1', () => {
   // Show detected printer
   const printer = findWindowsPrinter();
   if (printer) {
-    console.log(`\n✅ Detected printer: ${printer}`);
+    console.log(`\n✅ Detected printer: ${printer.name} on port: ${printer.port || 'unknown'}`);
   } else {
     console.log('\n⚠️  No thermal printer detected. Available printers:');
     try {

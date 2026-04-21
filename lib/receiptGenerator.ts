@@ -6,7 +6,14 @@
  * Images use relative paths (./mascot.jpg) - upload mascot.jpg to the same directory on Hostinger.
  */
 
-export function generateReceiptHTML(order: any): string {
+export interface BranchInfo {
+  name?: string;
+  address?: string;
+  phone?: string;
+  code?: string;
+}
+
+export function generateReceiptHTML(order: any, branch?: BranchInfo): string {
   const getItemMeta = (item: any, key: string) => {
     return item.meta_data?.find((m: any) => m.key === key)?.value;
   };
@@ -242,8 +249,8 @@ export function generateReceiptHTML(order: any): string {
     <div class="header">
       <img src="./mascot.jpg" alt="Coffee Oasis Logo" class="logo" />
       <h1>Coffee Oasis</h1>
-      <p class="subtitle">Your friendly local Coffee Shop</p>
-      <p class="location">📍 9ine | 🌐 coffee-oasis.com.my</p>
+      <p class="subtitle">${branch?.name || 'Your friendly local Coffee Shop'}</p>
+      <p class="location">${branch?.address ? `📍 ${branch.address}` : '📍 9ine'} | 🌐 coffee-oasis.com.my${branch?.phone ? ` | 📞 ${branch.phone}` : ''}</p>
     </div>
 
     <!-- Order Info -->

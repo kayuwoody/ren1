@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     });
 
     // Try to get userId from multiple sources
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const userIdCookie = cookieStore.get('userId');
     const userIdFromHeader = req.headers.get('x-user-id');
 

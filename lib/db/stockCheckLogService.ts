@@ -6,6 +6,7 @@
 
 import { db } from './init';
 import { v4 as uuidv4 } from 'uuid';
+import { logStockMovement } from './stockMovementService';
 
 export interface StockCheckLog {
   id: string;
@@ -38,6 +39,7 @@ export interface StockCheckLogWithItems extends StockCheckLog {
 
 export interface CreateStockCheckLogInput {
   notes?: string;
+  branchId?: string;
   items: {
     itemType: 'product' | 'material';
     itemId: string;
@@ -65,10 +67,10 @@ export function createStockCheckLog(input: CreateStockCheckLogInput): StockCheck
 
   // Insert the main log entry
   const insertLog = db.prepare(`
-    INSERT INTO StockCheckLog (id, checkDate, itemsChecked, itemsAdjusted, notes, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO StockCheckLog (id, checkDate, itemsChecked, itemsAdjusted, notes, branchId, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  insertLog.run(logId, now, input.items.length, itemsAdjusted, input.notes || null, now);
+  insertLog.run(logId, now, input.items.length, itemsAdjusted, input.notes || null, input.branchId || 'branch-main', now);
 
   // Insert all log items
   const insertItem = db.prepare(`
@@ -93,6 +95,22 @@ export function createStockCheckLog(input: CreateStockCheckLogInput): StockCheck
       item.wcSynced ? 1 : 0,
       now
     );
+
+    // Log stock movement for items that were actually adjusted
+    if (difference !== 0) {
+      logStockMovement({
+        itemType: item.itemType,
+        itemId: item.itemId,
+        itemName: item.itemName,
+        movementType: 'stock_check',
+        quantityChange: difference,
+        stockBefore: item.previousStock,
+        stockAfter: item.countedStock,
+        referenceId: logId,
+        referenceNote: `Stock Check`,
+        notes: item.note,
+      });
+    }
   }
 
   return {

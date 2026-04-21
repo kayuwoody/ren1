@@ -6,12 +6,16 @@ export default function ProfilePage() {
   const [customer, setCustomer] = useState<any>(null);
 
   useEffect(() => {
-    const wooCustomerId = localStorage.getItem('wooCustomerId');
-    if (!wooCustomerId) return;
-
-    fetch(`/api/profile?id=${wooCustomerId}`)
+    fetch('/api/session')
       .then(res => res.json())
-      .then(setCustomer)
+      .then(data => {
+        if (data.userId) {
+          fetch(`/api/profile?id=${data.userId}`)
+            .then(res => res.json())
+            .then(setCustomer)
+            .catch(console.error);
+        }
+      })
       .catch(console.error);
   }, []);
 
@@ -22,10 +26,9 @@ export default function ProfilePage() {
   return (
     <div className="p-4 max-w-xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Your Profile</h1>
-      <p><strong>Name:</strong> {customer.first_name} {customer.last_name}</p>
-      <p><strong>Email:</strong> {customer.email}</p>
-      <p><strong>Phone:</strong> {customer.billing?.phone}</p>
-      <p><strong>Address:</strong> {customer.billing?.address_1}</p>
+      <p><strong>Name:</strong> {customer.name || '-'}</p>
+      <p><strong>Email:</strong> {customer.email || '-'}</p>
+      <p><strong>Phone:</strong> {customer.phone || '-'}</p>
     </div>
   );
 }

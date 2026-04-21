@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getWooOrder } from '@/lib/orderService';
+import { getOrderWithItems, toWcOrderShape } from '@/lib/db/orderService';
 import { generateReceiptHTML } from '@/lib/receiptGenerator';
 import { uploadReceiptHTML } from '@/lib/ftpUpload';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
+import { getBranch } from '@/lib/db/branchService';
 
-/**
- * POST /api/receipts/generate
- *
- * Generates static HTML receipt and uploads to Hostinger via FTP.
- *
- * Body: { orderId: string | number }
- * Returns: { success: true, receiptUrl: string }
- */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -21,22 +15,19 @@ export async function POST(req: Request) {
       return validationError('orderId is required', '/api/receipts/generate');
     }
 
-    console.log(`📄 Generating receipt for order #${orderId}...`);
-
-    // Fetch order from WooCommerce
-    const order = await getWooOrder(orderId);
-
-    if (!order) {
+    const orderWithItems = getOrderWithItems(orderId);
+    if (!orderWithItems) {
       return validationError(`Order #${orderId} not found`, '/api/receipts/generate');
     }
 
-    // Generate static HTML
-    const htmlContent = generateReceiptHTML(order);
-    console.log(`✅ Generated HTML receipt (${htmlContent.length} bytes)`);
+    const order = toWcOrderShape(orderWithItems);
+    const branchId = getBranchIdFromRequest(req);
+    const branch = getBranch(branchId);
+    const branchInfo = branch ? { name: branch.name, address: branch.address, phone: branch.phone, code: branch.code } : undefined;
 
-    // Upload to FTP
+    const htmlContent = generateReceiptHTML(order, branchInfo);
+
     const receiptUrl = await uploadReceiptHTML(orderId, htmlContent);
-    console.log(`✅ Receipt uploaded: ${receiptUrl}`);
 
     return NextResponse.json({
       success: true,

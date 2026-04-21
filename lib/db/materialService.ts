@@ -1,5 +1,7 @@
 import { db, initDatabase } from './init';
 import { v4 as uuidv4 } from 'uuid';
+import { getLowStockItems, initBranchStockForItem } from './branchStockService';
+import { logStockMovement } from './stockMovementService';
 
 // Ensure database is initialized
 initDatabase();
@@ -48,11 +50,11 @@ export function upsertMaterial(
     : null;
 
   if (existing) {
-    // Update existing material
+    // Update existing material — do NOT write stockQuantity (managed by BranchStock)
     const stmt = db.prepare(`
       UPDATE Material
       SET name = ?, category = ?, purchaseUnit = ?, purchaseQuantity = ?,
-          purchaseCost = ?, costPerUnit = ?, stockQuantity = ?, lowStockThreshold = ?,
+          purchaseCost = ?, costPerUnit = ?, lowStockThreshold = ?,
           supplier = ?, lastPurchaseDate = ?, updatedAt = ?
       WHERE id = ?
     `);
@@ -64,7 +66,6 @@ export function upsertMaterial(
       material.purchaseQuantity,
       material.purchaseCost,
       costPerUnit,
-      material.stockQuantity,
       material.lowStockThreshold,
       material.supplier || null,
       material.lastPurchaseDate || null,
@@ -75,6 +76,20 @@ export function upsertMaterial(
     // Record price change if cost changed
     if (existing.costPerUnit !== costPerUnit) {
       recordPriceChange(id, existing.purchaseCost, material.purchaseCost, existing.costPerUnit, costPerUnit, material.purchaseQuantity);
+    }
+
+    // Log stock movement if stock changed
+    if (existing.stockQuantity !== material.stockQuantity) {
+      logStockMovement({
+        itemType: 'material',
+        itemId: id,
+        itemName: material.name,
+        movementType: 'manual_adjustment',
+        quantityChange: material.stockQuantity - existing.stockQuantity,
+        stockBefore: existing.stockQuantity,
+        stockAfter: material.stockQuantity,
+        referenceNote: 'Manual adjustment (Materials page)',
+      });
     }
   } else {
     // Insert new material
@@ -100,6 +115,9 @@ export function upsertMaterial(
       now,
       now
     );
+
+    // Create BranchStock entries for the new material across all active branches
+    initBranchStockForItem('material', id);
   }
 
   return getMaterial(id)!;
@@ -234,27 +252,8 @@ export function getMaterialPriceHistory(materialId: string): MaterialPriceHistor
 }
 
 /**
- * Update material stock
+ * Get materials with low stock (branch-aware via BranchStock)
  */
-export function updateMaterialStock(materialId: string, quantity: number): Material {
-  const stmt = db.prepare(`
-    UPDATE Material
-    SET stockQuantity = ?, updatedAt = ?
-    WHERE id = ?
-  `);
-
-  stmt.run(quantity, new Date().toISOString(), materialId);
-  return getMaterial(materialId)!;
-}
-
-/**
- * Get materials with low stock
- */
-export function getLowStockMaterials(): Material[] {
-  const stmt = db.prepare(`
-    SELECT * FROM Material
-    WHERE stockQuantity <= lowStockThreshold
-    ORDER BY category, name
-  `);
-  return stmt.all() as Material[];
+export function getLowStockMaterials(branchId: string) {
+  return getLowStockItems(branchId).filter(item => item.itemType === 'material');
 }

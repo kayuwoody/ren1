@@ -1,34 +1,33 @@
 import { NextResponse } from 'next/server';
-import { fetchAllWooPages } from '@/lib/api/woocommerce-helpers';
+import { getOrders, getOrderItems, toWcOrderShape } from '@/lib/db/orderService';
 import { handleApiError } from '@/lib/api/error-handler';
+import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
-// Force dynamic rendering for this API route
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/admin/orders
  *
- * Admin endpoint to fetch ALL orders (not filtered by user)
- * Used by staff dashboard for order management
+ * Admin endpoint to fetch ALL orders (not filtered by user) from local SQLite.
  *
- * Security: Should add admin authentication in production
+ * Query params:
+ * - branchId=all: show orders from all branches
  */
 export async function GET(req: Request) {
   try {
-    // TODO: Add admin authentication check here
-    // const isAdmin = await checkAdminAuth(req);
-    // if (!isAdmin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const branchId = getBranchIdFromRequest(req);
+    const { searchParams } = new URL(req.url);
+    const showAll = searchParams.get('branchId') === 'all';
 
-    // Fetch all orders with expanded parameters (using pagination helper)
-    // Explicitly exclude trash status - only show active orders
-    const orders = await fetchAllWooPages('orders', {
-      status: 'any',  // 'any' means all statuses EXCEPT trash
-      orderby: 'date',
-      order: 'desc',
-      _: Date.now()  // Cache buster to ensure fresh data
+    const baseOrders = getOrders({
+      branchId: showAll ? undefined : branchId,
+      showAll,
     });
 
-    return NextResponse.json(orders);
+    const withItems = baseOrders.map((o) => ({ ...o, items: getOrderItems(o.id) }));
+    const shaped = withItems.map(toWcOrderShape);
+
+    return NextResponse.json(shaped);
   } catch (error) {
     return handleApiError(error, '/api/admin/orders');
   }

@@ -14,13 +14,14 @@ import { handleApiError, validationError, notFoundError } from '@/lib/api/error-
  */
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const purchaseOrder = getPurchaseOrder(params.id);
+    const { id } = await params;
+    const purchaseOrder = getPurchaseOrder(id);
 
     if (!purchaseOrder) {
-      return notFoundError(`Purchase order not found: ${params.id}`, '/api/purchase-orders/[id]');
+      return notFoundError(`Purchase order not found: ${id}`, '/api/purchase-orders/[id]');
     }
 
     return NextResponse.json(purchaseOrder);
@@ -45,20 +46,20 @@ export async function GET(
  */
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await req.json();
 
-    // Validate status if provided
     if (body.status && !['draft', 'ordered', 'received', 'cancelled'].includes(body.status)) {
       return validationError('Invalid status. Must be: draft, ordered, received, or cancelled', '/api/purchase-orders/[id]');
     }
 
-    const purchaseOrder = updatePurchaseOrder(params.id, body);
+    const purchaseOrder = updatePurchaseOrder(id, body);
 
     if (!purchaseOrder) {
-      return notFoundError(`Purchase order not found: ${params.id}`, '/api/purchase-orders/[id]');
+      return notFoundError(`Purchase order not found: ${id}`, '/api/purchase-orders/[id]');
     }
 
     return NextResponse.json(purchaseOrder);
@@ -74,13 +75,14 @@ export async function PATCH(
  */
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const success = deletePurchaseOrder(params.id);
+    const { id } = await params;
+    const success = deletePurchaseOrder(id);
 
     if (!success) {
-      return notFoundError(`Purchase order not found: ${params.id}`, '/api/purchase-orders/[id]');
+      return notFoundError(`Purchase order not found: ${id}`, '/api/purchase-orders/[id]');
     }
 
     return NextResponse.json({ success: true });

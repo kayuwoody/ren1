@@ -1,9 +1,10 @@
 import { db, initDatabase } from './init';
 import { v4 as uuidv4 } from 'uuid';
 import { getProductRecipe } from './recipeService';
-import { getMaterial, updateMaterialStock } from './materialService';
+import { getMaterial } from './materialService';
 import { getProduct, getProductByWcId } from './productService';
-import { wcApi } from '../wooClient';
+import { adjustBranchStock } from './branchStockService';
+import { logStockMovement } from './stockMovementService';
 
 // Ensure database is initialized
 initDatabase();
@@ -28,23 +29,41 @@ export interface InventoryConsumption {
   consumedAt: string;
 }
 
+export interface RecordProductSaleOptions {
+  orderId: string;
+  wcProductId: string | number;
+  productName: string;
+  quantitySold: number;
+  orderItemId?: string;
+  bundleSelection?: {
+    selectedMandatory: Record<string, string>;
+    selectedOptional: string[];
+  };
+  branchId: string;
+}
+
 /**
  * Record inventory consumption when a product is sold
  * This automatically deducts materials from stock based on the product's recipe
  * Recursively processes linked products to deduct all materials in the chain
  */
 export async function recordProductSale(
+  options: RecordProductSaleOptions
+): Promise<InventoryConsumption[]> {
+  const { orderId, wcProductId, productName, quantitySold, orderItemId, bundleSelection, branchId } = options;
+  return _recordProductSaleInternal(orderId, wcProductId, productName, quantitySold, orderItemId, bundleSelection, 0, '', branchId);
+}
+
+async function _recordProductSaleInternal(
   orderId: string,
   wcProductId: string | number,
   productName: string,
   quantitySold: number,
-  orderItemId?: string,
-  bundleSelection?: {
-    selectedMandatory: Record<string, string>;
-    selectedOptional: string[];
-  },
-  depth: number = 0,
-  parentChain: string = ''
+  orderItemId: string | undefined,
+  bundleSelection: { selectedMandatory: Record<string, string>; selectedOptional: string[] } | undefined,
+  depth: number,
+  parentChain: string,
+  branchId: string
 ): Promise<InventoryConsumption[]> {
   const consumptions: InventoryConsumption[] = [];
   const indent = '  '.repeat(depth);
@@ -87,7 +106,7 @@ export async function recordProductSale(
       productName,
       productSku: product.sku,
       quantitySold,
-      itemType: 'material', // Use 'material' type for consistency
+      itemType: 'material',
       materialId: undefined,
       linkedProductId: undefined,
       materialName: `${productName} (Base Supplier Cost)`,
@@ -99,32 +118,20 @@ export async function recordProductSale(
       consumedAt: now,
     };
 
-    // Insert into database
     const stmt = db.prepare(`
       INSERT INTO InventoryConsumption
       (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
        materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-       unit, costPerUnit, totalCost, consumedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       unit, costPerUnit, totalCost, consumedAt, branchId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
-      consumptionId,
-      orderId,
-      orderItemId || null,
-      productId,
-      productName,
-      quantitySold,
-      'material',
-      null,
-      null,
-      `${productName} (Base Supplier Cost)`,
-      null,
-      quantitySold,
-      'unit',
-      product.supplierCost,
-      baseCostConsumption.totalCost,
-      now
+      consumptionId, orderId, orderItemId || null, productId, productName,
+      quantitySold, 'material', null, null,
+      `${productName} (Base Supplier Cost)`, null,
+      quantitySold, 'unit', product.supplierCost, baseCostConsumption.totalCost,
+      now, branchId
     );
 
     consumptions.push(baseCostConsumption);
@@ -136,26 +143,17 @@ export async function recordProductSale(
   console.log(`${indent}   📋 Recipe: ${recipe.length} items`);
 
   if (recipe.length === 0) {
-    // If no recipe but has base cost, that's fine (e.g., bought muffin with no additional materials)
     if (product.supplierCost === 0) {
       if (depth === 0) {
         console.log(`${indent}⚠️  No recipe and no supplier cost for ${productName} - no COGS tracked`);
-        console.log(`${indent}   💡 Tip: Either add a recipe or set supplierCost in product settings`);
       } else {
         console.warn(`${indent}⚠️  Linked product "${productName}" has no recipe!`);
       }
     }
 
-    // Still deduct stock for products with no recipe (e.g., supplier-bought items like pies)
     if (depth === 0) {
-      deductLocalProductStock(productId, quantitySold, productName);
+      deductLocalProductStock(productId, quantitySold, productName, branchId, orderId);
       console.log(`${indent}📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
-
-      // Log stock comparison for root product
-      if (product.wcId) {
-        console.log(`\n📊 Stock Comparison After Consumption:`);
-        await logStockComparison(productId, product.wcId, productName);
-      }
     }
 
     return consumptions;
@@ -163,179 +161,92 @@ export async function recordProductSale(
 
   // Process each recipe item
   for (const recipeItem of recipe) {
-    // Skip optional items (add-ons that weren't necessarily used)
-    if (recipeItem.isOptional) {
-      continue;
-    }
+    if (recipeItem.isOptional) continue;
 
-    // Handle bundle selection filtering (works at all depths with unified selection format)
+    // Handle bundle selection filtering
     if (bundleSelection && recipeItem.selectionGroup) {
-      // Generate the uniqueKey for this selection group
-      // At root level: "root:groupName"
-      // At nested levels: "currentProductId:groupName" (the product that owns this XOR group)
-      // NOTE: At nested levels, we need to find which linked product has this XOR group
-      // For items IN an XOR group, the linkedProductId represents one of the choices
-      // We need to use the ID of the product that HAS the XOR group (parent of the group items)
       const uniqueKey = depth === 0 ? `root:${recipeItem.selectionGroup}` : `${productId}:${recipeItem.selectionGroup}`;
-
       const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
-
-      // Check if this specific item was selected
       const isSelected = recipeItem.linkedProductId === selectedItemId;
 
       if (!isSelected) {
-        console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
-        continue; // Skip this item - it wasn't selected
+        console.log(`${indent}   ⏭️  Skipping ${recipeItem.linkedProductName} (not selected in group: ${recipeItem.selectionGroup})`);
+        continue;
       } else {
-        console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup}, key: ${uniqueKey})`);
+        console.log(`${indent}   ✅ Including ${recipeItem.linkedProductName} (selected in group: ${recipeItem.selectionGroup})`);
       }
     }
 
-    // Calculate total consumed (recipe quantity × units sold)
     const quantityConsumed = recipeItem.quantity * quantitySold;
 
-    // Handle material vs linked product
     if (recipeItem.itemType === 'material' && recipeItem.materialId) {
-      // Direct material - record consumption and deduct from stock
       console.log(`${indent}   ✓ Material: ${recipeItem.materialName} -${quantityConsumed}${recipeItem.unit}`);
 
       const consumptionId = uuidv4();
       const consumption: InventoryConsumption = {
-        id: consumptionId,
-        orderId,
-        orderItemId,
-        productId,
-        productName,
-        productSku: '',
-        quantitySold,
+        id: consumptionId, orderId, orderItemId, productId, productName,
+        productSku: '', quantitySold,
         itemType: recipeItem.itemType,
-        materialId: recipeItem.materialId,
-        linkedProductId: undefined,
-        materialName: recipeItem.materialName,
-        linkedProductName: undefined,
-        quantityConsumed,
-        unit: recipeItem.unit,
+        materialId: recipeItem.materialId, linkedProductId: undefined,
+        materialName: recipeItem.materialName, linkedProductName: undefined,
+        quantityConsumed, unit: recipeItem.unit,
         costPerUnit: recipeItem.costPerUnit || 0,
         totalCost: recipeItem.costPerUnit ? quantityConsumed * recipeItem.costPerUnit : 0,
         consumedAt: now,
       };
 
-      // Insert into database
-      const stmt = db.prepare(`
+      db.prepare(`
         INSERT INTO InventoryConsumption
         (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
          materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-         unit, costPerUnit, totalCost, consumedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      stmt.run(
-        consumptionId,
-        orderId,
-        orderItemId || null,
-        productId,
-        productName,
-        quantitySold,
-        'material',
-        recipeItem.materialId,
-        null,
-        recipeItem.materialName,
-        null,
-        quantityConsumed,
-        recipeItem.unit,
-        recipeItem.costPerUnit || 0,
-        consumption.totalCost,
-        now
+         unit, costPerUnit, totalCost, consumedAt, branchId)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        consumptionId, orderId, orderItemId || null, productId, productName,
+        quantitySold, 'material', recipeItem.materialId, null,
+        recipeItem.materialName, null, quantityConsumed, recipeItem.unit,
+        recipeItem.costPerUnit || 0, consumption.totalCost, now, branchId
       );
 
-      console.log(`${indent}      💾 Stored consumption: orderItemId=${orderItemId || 'null'}, material=${recipeItem.materialName}`);
-
       consumptions.push(consumption);
-      deductMaterialStock(recipeItem.materialId, quantityConsumed);
+      deductMaterialStock(recipeItem.materialId, quantityConsumed, branchId, orderId);
     } else if (recipeItem.itemType === 'product' && recipeItem.linkedProductId) {
-      // Linked product - record the product itself AND recursively process its materials
       console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
 
-      // Get the linked product to find its WC ID
       const linkedProduct = getProduct(recipeItem.linkedProductId);
       if (linkedProduct && linkedProduct.wcId) {
-        // First, record the linked product itself as a consumption entry (for visibility only - cost tracked via materials)
-        // This allows reports to show "1x Americano" as part of the combo
-        // Cost is set to 0 to avoid double-counting (actual costs come from recursive material expansion)
         const consumptionId = uuidv4();
         const linkedProductConsumption: InventoryConsumption = {
-          id: consumptionId,
-          orderId,
-          orderItemId,
-          productId,
-          productName,
-          productSku: product.sku,
-          quantitySold,
+          id: consumptionId, orderId, orderItemId, productId, productName,
+          productSku: product.sku, quantitySold,
           itemType: 'product',
-          materialId: undefined,
-          linkedProductId: recipeItem.linkedProductId,
-          materialName: undefined,
-          linkedProductName: recipeItem.linkedProductName,
-          quantityConsumed,
-          unit: 'unit',
-          costPerUnit: 0, // Cost is 0 - actual cost tracked via materials below
-          totalCost: 0,   // Cost is 0 - actual cost tracked via materials below
+          materialId: undefined, linkedProductId: recipeItem.linkedProductId,
+          materialName: undefined, linkedProductName: recipeItem.linkedProductName,
+          quantityConsumed, unit: 'unit', costPerUnit: 0, totalCost: 0,
           consumedAt: now,
         };
 
-        // Insert the linked product consumption record
-        const stmt = db.prepare(`
+        db.prepare(`
           INSERT INTO InventoryConsumption
           (id, orderId, orderItemId, productId, productName, quantitySold, itemType,
            materialId, linkedProductId, materialName, linkedProductName, quantityConsumed,
-           unit, costPerUnit, totalCost, consumedAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        stmt.run(
-          consumptionId,
-          orderId,
-          orderItemId || null,
-          productId,
-          productName,
-          quantitySold,
-          'product',
-          null,
-          recipeItem.linkedProductId,
-          null,
-          recipeItem.linkedProductName,
-          quantityConsumed,
-          'unit',
-          0, // Cost is 0 - actual cost tracked via materials
-          0, // Cost is 0 - actual cost tracked via materials
-          now
+           unit, costPerUnit, totalCost, consumedAt, branchId)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          consumptionId, orderId, orderItemId || null, productId, productName,
+          quantitySold, 'product', null, recipeItem.linkedProductId,
+          null, recipeItem.linkedProductName, quantityConsumed, 'unit',
+          0, 0, now, branchId
         );
 
-        console.log(`${indent}      💾 Stored linked product (visibility only): ${recipeItem.linkedProductName} x${quantityConsumed}`);
         consumptions.push(linkedProductConsumption);
 
-        // Deduct local DB inventory for linked products
-        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name);
+        deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name, branchId, orderId);
 
-        // Deduct WooCommerce inventory for ALL linked products
-        // These are component products that WooCommerce doesn't automatically deduct
-        // (Only the root product inventory is handled by WooCommerce when the order is created)
-        await deductWooProductStock(linkedProduct.wcId, quantityConsumed, linkedProduct.name);
-
-        // Log stock comparison for linked product
-        await logStockComparison(linkedProduct.id, linkedProduct.wcId, linkedProduct.name);
-
-        // Then recursively process the linked product's materials
-        // Pass bundleSelection through so nested XOR choices are respected
-        const linkedConsumptions = await recordProductSale(
-          orderId,
-          linkedProduct.wcId,
-          linkedProduct.name,
-          quantityConsumed,
-          orderItemId,
-          bundleSelection,  // Pass selections through to handle nested XORs
-          depth + 1,
-          chain
+        const linkedConsumptions = await _recordProductSaleInternal(
+          orderId, linkedProduct.wcId, linkedProduct.name,
+          quantityConsumed, orderItemId, bundleSelection,
+          depth + 1, chain, branchId
         );
         consumptions.push(...linkedConsumptions);
       } else {
@@ -344,138 +255,67 @@ export async function recordProductSale(
     }
   }
 
-  // Deduct local DB stock for the main product (only at root level, not for linked products)
   if (depth === 0) {
-    deductLocalProductStock(productId, quantitySold, productName);
+    deductLocalProductStock(productId, quantitySold, productName, branchId, orderId);
     console.log(`📦 Recorded ${consumptions.length} total consumptions for ${productName} x${quantitySold}`);
-
-    // Log stock comparison for root product (WC was auto-deducted when order was created)
-    if (product.wcId) {
-      console.log(`\n📊 Stock Comparison After Consumption:`);
-      await logStockComparison(productId, product.wcId, productName);
-    }
   }
 
   return consumptions;
 }
 
 /**
- * Deduct material from stock
+ * Deduct material from BranchStock and log the movement
  */
-function deductMaterialStock(materialId: string, quantity: number): void {
+function deductMaterialStock(materialId: string, quantity: number, branchId: string, orderId?: string): void {
   const material = getMaterial(materialId);
   if (!material) {
     console.error(`❌ Material ${materialId} not found - cannot deduct stock`);
     return;
   }
 
-  const newStock = material.stockQuantity - quantity;
+  const newBranchStock = adjustBranchStock(branchId, 'material', materialId, -quantity);
 
-  // Allow negative stock (backorder) but log warning
-  if (newStock < 0) {
-    console.warn(`⚠️  Material ${material.name} stock went negative: ${newStock} ${material.purchaseUnit}`);
+  if (newBranchStock < 0) {
+    console.warn(`⚠️  Material ${material.name} branch stock went negative: ${newBranchStock} ${material.purchaseUnit}`);
+  }
+  if (newBranchStock <= material.lowStockThreshold && newBranchStock > material.lowStockThreshold - quantity) {
+    console.warn(`🔔 Low stock alert: ${material.name} = ${newBranchStock} ${material.purchaseUnit} (threshold: ${material.lowStockThreshold})`);
   }
 
-  // Log low stock warning
-  if (newStock <= material.lowStockThreshold && newStock > material.lowStockThreshold - quantity) {
-    console.warn(`🔔 Low stock alert: ${material.name} = ${newStock} ${material.purchaseUnit} (threshold: ${material.lowStockThreshold})`);
-  }
-
-  updateMaterialStock(materialId, newStock);
+  logStockMovement({
+    itemType: 'material',
+    itemId: materialId,
+    itemName: material.name,
+    movementType: 'sale',
+    quantityChange: -quantity,
+    stockBefore: newBranchStock + quantity,
+    stockAfter: newBranchStock,
+    referenceId: orderId,
+    referenceNote: orderId ? `Sale: Order ${orderId}` : undefined,
+  });
 }
 
 /**
- * Deduct product from local DB stock
- * NOTE: Always updates local stock unconditionally (like PO receiving does)
- * The WC sync in deductWooProductStock will check WC's manage_stock independently
+ * Deduct product from BranchStock and log the movement
  */
-function deductLocalProductStock(productId: string, quantity: number, productName: string): void {
-  const product = getProduct(productId);
-  if (!product) {
-    console.error(`❌ Product ${productId} not found - cannot deduct local stock`);
-    return;
+function deductLocalProductStock(productId: string, quantity: number, productName: string, branchId: string, orderId?: string): void {
+  const newBranchStock = adjustBranchStock(branchId, 'product', productId, -quantity);
+  console.log(`   📦 BranchStock: ${productName} → ${newBranchStock}`);
+  if (newBranchStock < 0) {
+    console.warn(`   ⚠️  BranchStock: ${productName} went negative: ${newBranchStock}`);
   }
 
-  const currentStock = product.stockQuantity || 0;
-  const newStock = currentStock - quantity;
-
-  console.log(`   📦 Local DB Inventory: ${productName} (${currentStock} → ${newStock})`);
-
-  // Update local database stock (always update, matching PO receiving behavior)
-  db.prepare('UPDATE Product SET stockQuantity = ? WHERE id = ?').run(newStock, productId);
-
-  // Verify the update
-  const verified = db.prepare('SELECT stockQuantity FROM Product WHERE id = ?').get(productId) as { stockQuantity: number } | undefined;
-  console.log(`   ✅ Local DB verified: ${productName} stock = ${verified?.stockQuantity}`);
-
-  // Log warnings
-  if (newStock < 0) {
-    console.warn(`   ⚠️  Local DB: ${productName} stock went negative: ${newStock}`);
-  }
-}
-
-/**
- * Deduct WooCommerce product stock (for linked products in combos)
- * When a combo contains finished products (like Danish), we need to update WooCommerce inventory
- */
-async function deductWooProductStock(wcProductId: number, quantity: number, productName: string): Promise<void> {
-  try {
-    // Fetch current product from WooCommerce
-    const response = await wcApi.get(`products/${wcProductId}`);
-    const product = (response as any).data;
-
-    // Check if product manages stock
-    if (!product.manage_stock) {
-      console.log(`   ℹ️  Product "${productName}" does not manage stock in WooCommerce - skipping inventory update`);
-      return;
-    }
-
-    const currentStock = product.stock_quantity || 0;
-    const newStock = currentStock - quantity;
-
-    console.log(`   📦 WooCommerce Inventory: ${productName} (${currentStock} → ${newStock})`);
-
-    // Update WooCommerce product stock
-    await wcApi.put(`products/${wcProductId}`, {
-      stock_quantity: newStock
-    });
-
-    // Log warnings
-    if (newStock < 0) {
-      console.warn(`   ⚠️  WooCommerce: ${productName} stock went negative: ${newStock}`);
-    }
-
-  } catch (error: any) {
-    console.error(`   ❌ Failed to update WooCommerce stock for ${productName}:`, error.message);
-    // Don't fail the whole operation if WooCommerce update fails
-  }
-}
-
-/**
- * Compare and log local DB vs WooCommerce stock levels for verification
- */
-async function logStockComparison(productId: string, wcProductId: number, productName: string): Promise<void> {
-  try {
-    // Get local stock
-    const localProduct = getProduct(productId);
-    const localStock = localProduct?.stockQuantity ?? 'N/A';
-
-    // Get WooCommerce stock
-    const response = await wcApi.get(`products/${wcProductId}`);
-    const wcProduct = (response as any).data;
-    const wcStock = wcProduct.manage_stock ? (wcProduct.stock_quantity ?? 0) : 'not managed';
-
-    // Log comparison
-    const match = localStock === wcStock;
-    const icon = match ? '✅' : '⚠️';
-    console.log(`   ${icon} Stock Comparison: "${productName}" - Local: ${localStock}, WC: ${wcStock}${match ? '' : ' (MISMATCH!)'}`);
-
-    if (!match && typeof localStock === 'number' && typeof wcStock === 'number') {
-      console.warn(`   🔍 Stock drift detected for "${productName}": Local=${localStock}, WC=${wcStock}, Diff=${localStock - wcStock}`);
-    }
-  } catch (error: any) {
-    console.error(`   ❌ Failed to compare stock for ${productName}:`, error.message);
-  }
+  logStockMovement({
+    itemType: 'product',
+    itemId: productId,
+    itemName: productName,
+    movementType: 'sale',
+    quantityChange: -quantity,
+    stockBefore: newBranchStock + quantity,
+    stockAfter: newBranchStock,
+    referenceId: orderId,
+    referenceNote: orderId ? `Sale: Order ${orderId}` : undefined,
+  });
 }
 
 /**
@@ -487,15 +327,7 @@ export function getOrderConsumptions(orderId: string): InventoryConsumption[] {
     WHERE orderId = ?
     ORDER BY consumedAt
   `);
-  const results = stmt.all(orderId) as InventoryConsumption[];
-
-  // Debug logging
-  console.log(`🔍 getOrderConsumptions("${orderId}"): Found ${results.length} records`);
-  if (results.length > 0) {
-    console.log(`   First record: orderItemId=${results[0].orderItemId} (type: ${typeof results[0].orderItemId})`);
-  }
-
-  return results;
+  return stmt.all(orderId) as InventoryConsumption[];
 }
 
 /**
@@ -509,20 +341,11 @@ export function getProductConsumptions(
   let query = 'SELECT * FROM InventoryConsumption WHERE productId = ?';
   const params: any[] = [productId];
 
-  if (startDate) {
-    query += ' AND consumedAt >= ?';
-    params.push(startDate);
-  }
-
-  if (endDate) {
-    query += ' AND consumedAt <= ?';
-    params.push(endDate);
-  }
+  if (startDate) { query += ' AND consumedAt >= ?'; params.push(startDate); }
+  if (endDate) { query += ' AND consumedAt <= ?'; params.push(endDate); }
 
   query += ' ORDER BY consumedAt DESC';
-
-  const stmt = db.prepare(query);
-  return stmt.all(...params) as InventoryConsumption[];
+  return db.prepare(query).all(...params) as InventoryConsumption[];
 }
 
 /**
@@ -536,20 +359,11 @@ export function getMaterialConsumptions(
   let query = 'SELECT * FROM InventoryConsumption WHERE materialId = ?';
   const params: any[] = [materialId];
 
-  if (startDate) {
-    query += ' AND consumedAt >= ?';
-    params.push(startDate);
-  }
-
-  if (endDate) {
-    query += ' AND consumedAt <= ?';
-    params.push(endDate);
-  }
+  if (startDate) { query += ' AND consumedAt >= ?'; params.push(startDate); }
+  if (endDate) { query += ' AND consumedAt <= ?'; params.push(endDate); }
 
   query += ' ORDER BY consumedAt DESC';
-
-  const stmt = db.prepare(query);
-  return stmt.all(...params) as InventoryConsumption[];
+  return db.prepare(query).all(...params) as InventoryConsumption[];
 }
 
 /**
@@ -570,31 +384,25 @@ export function getConsumptionSummary(
     totalCost: number;
   }>;
 } {
-  // Total orders and products
-  const summaryStmt = db.prepare(`
+  const summary = db.prepare(`
     SELECT
       COUNT(DISTINCT orderId) as totalOrders,
       SUM(quantitySold) as totalProductsSold,
       SUM(totalCost) as totalCost
     FROM InventoryConsumption
     WHERE consumedAt >= ? AND consumedAt <= ?
-  `);
-  const summary = summaryStmt.get(startDate, endDate) as any;
+  `).get(startDate, endDate) as any;
 
-  // Group by material
-  const byMaterialStmt = db.prepare(`
+  const byMaterial = db.prepare(`
     SELECT
-      materialId,
-      materialName,
+      materialId, materialName,
       SUM(quantityConsumed) as quantityConsumed,
-      unit,
-      SUM(totalCost) as totalCost
+      unit, SUM(totalCost) as totalCost
     FROM InventoryConsumption
     WHERE consumedAt >= ? AND consumedAt <= ? AND materialId IS NOT NULL
     GROUP BY materialId, materialName, unit
     ORDER BY totalCost DESC
-  `);
-  const byMaterial = byMaterialStmt.all(startDate, endDate) as any[];
+  `).all(startDate, endDate) as any[];
 
   return {
     totalOrders: summary.totalOrders || 0,
@@ -636,7 +444,6 @@ export function calculateProductCOGS(
     productChain: string;
   }>;
 } {
-  // Find product by WooCommerce ID
   const product = getProductByWcId(Number(wcProductId));
 
   if (!product) {
@@ -649,98 +456,59 @@ export function calculateProductCOGS(
 
   const breakdown: Array<{
     itemType: 'material' | 'product' | 'base';
-    itemId: string;
-    itemName: string;
-    quantityUsed: number;
-    unit: string;
-    costPerUnit: number;
-    totalCost: number;
-    depth: number;
-    productChain: string;
+    itemId: string; itemName: string; quantityUsed: number;
+    unit: string; costPerUnit: number; totalCost: number;
+    depth: number; productChain: string;
   }> = [];
 
-  // Add base product cost if it exists (e.g., buying muffins from supplier)
   if (product.supplierCost > 0) {
     breakdown.push({
-      itemType: 'base',
-      itemId: product.id,
+      itemType: 'base', itemId: product.id,
       itemName: `${product.name} (Base Supplier Cost)`,
-      quantityUsed: quantity,
-      unit: 'unit',
+      quantityUsed: quantity, unit: 'unit',
       costPerUnit: product.supplierCost,
       totalCost: product.supplierCost * quantity,
-      depth,
-      productChain: chain,
+      depth, productChain: chain,
     });
   }
 
-  // Add recipe materials/linked products
   recipe
     .filter(item => !item.isOptional)
     .forEach(item => {
-      // Handle bundle selection filtering (works at all depths with unified selection format)
       if (bundleSelection && item.selectionGroup) {
-        // Generate the uniqueKey for this selection group
         const uniqueKey = depth === 0 ? `root:${item.selectionGroup}` : `${product.id}:${item.selectionGroup}`;
         const selectedItemId = bundleSelection.selectedMandatory[uniqueKey];
-
-        // Check if this specific item was selected
-        const isSelected = item.linkedProductId === selectedItemId;
-
-        if (!isSelected) {
-          // Skip this item - it wasn't selected in the XOR group
-          return;
-        }
+        if (item.linkedProductId !== selectedItemId) return;
       }
 
       if (item.itemType === 'material' && item.materialId) {
-        // Direct material - add to breakdown
         breakdown.push({
-          itemType: 'material',
-          itemId: item.materialId,
+          itemType: 'material', itemId: item.materialId,
           itemName: item.materialName || '',
-          quantityUsed: item.quantity * quantity,
-          unit: item.unit,
+          quantityUsed: item.quantity * quantity, unit: item.unit,
           costPerUnit: item.costPerUnit || 0,
           totalCost: item.calculatedCost * quantity,
-          depth,
-          productChain: chain,
+          depth, productChain: chain,
         });
       } else if (item.itemType === 'product' && item.linkedProductId) {
-        // Linked product - add product entry for visibility, then recursively expand its materials
         const linkedProduct = getProduct(item.linkedProductId);
         if (linkedProduct && linkedProduct.wcId) {
-          // Add the linked product itself to the breakdown for reporting visibility
-          // Cost is 0 to avoid double-counting (actual costs come from recursive expansion below)
           breakdown.push({
-            itemType: 'product',
-            itemId: item.linkedProductId,
+            itemType: 'product', itemId: item.linkedProductId,
             itemName: item.linkedProductName || linkedProduct.name,
-            quantityUsed: item.quantity * quantity,
-            unit: 'unit',
-            costPerUnit: 0, // Cost is 0 - actual cost tracked via materials
-            totalCost: 0,   // Cost is 0 - actual cost tracked via materials
-            depth,
-            productChain: chain,
+            quantityUsed: item.quantity * quantity, unit: 'unit',
+            costPerUnit: 0, totalCost: 0,
+            depth, productChain: chain,
           });
 
-          // Pass bundleSelection through to handle nested XORs
           const linkedCOGS = calculateProductCOGS(
-            linkedProduct.wcId,
-            item.quantity * quantity,
-            bundleSelection, // Pass selections through
-            depth + 1,
-            chain
+            linkedProduct.wcId, item.quantity * quantity,
+            bundleSelection, depth + 1, chain
           );
           breakdown.push(...linkedCOGS.breakdown);
         }
       }
     });
 
-  const totalCOGS = breakdown.reduce((sum, item) => sum + item.totalCost, 0);
-
-  return {
-    totalCOGS,
-    breakdown,
-  };
+  return { totalCOGS: breakdown.reduce((sum, item) => sum + item.totalCost, 0), breakdown };
 }

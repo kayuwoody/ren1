@@ -9,13 +9,14 @@ import { handleApiError, notFoundError } from '@/lib/api/error-handler';
  */
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const purchaseOrder = await markPurchaseOrderReceived(params.id);
+    const { id } = await params;
+    const purchaseOrder = await markPurchaseOrderReceived(id);
 
     if (!purchaseOrder) {
-      return notFoundError(`Purchase order not found: ${params.id}`, '/api/purchase-orders/[id]/receive');
+      return notFoundError(`Purchase order not found: ${id}`, '/api/purchase-orders/[id]/receive');
     }
 
     return NextResponse.json({

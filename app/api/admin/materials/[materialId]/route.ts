@@ -1,10 +1,3 @@
-/**
- * API Route: Single Material Operations
- * GET /api/admin/materials/[id] - Get material
- * PUT /api/admin/materials/[id] - Update material
- * DELETE /api/admin/materials/[id] - Delete material
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getMaterial, upsertMaterial, deleteMaterial, updateMaterialPrice } from '@/lib/db/materialService';
 import { recalculateRecipeCostsForMaterial } from '@/lib/db/recipeService';
@@ -12,10 +5,10 @@ import { handleApiError, notFoundError } from '@/lib/api/error-handler';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { materialId: string } }
+  { params }: { params: Promise<{ materialId: string }> }
 ) {
   try {
-    const { materialId } = params;
+    const { materialId } = await params;
     const material = getMaterial(materialId);
 
     if (!material) {
@@ -30,10 +23,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { materialId: string } }
+  { params }: { params: Promise<{ materialId: string }> }
 ) {
   try {
-    const { materialId } = params;
+    const { materialId } = await params;
     const body = await request.json();
 
     const existing = getMaterial(materialId);
@@ -52,13 +45,11 @@ export async function PUT(
       supplier,
     } = body;
 
-    // Check if price changed
     const priceChanged = purchaseQuantity !== existing.purchaseQuantity ||
                         purchaseCost !== existing.purchaseCost;
 
     let material;
     if (priceChanged) {
-      // Use updateMaterialPrice to track history
       material = updateMaterialPrice(
         materialId,
         parseFloat(purchaseQuantity),
@@ -66,7 +57,6 @@ export async function PUT(
         'Price updated via admin'
       );
 
-      // Update other fields
       material = upsertMaterial({
         id: materialId,
         name,
@@ -79,10 +69,8 @@ export async function PUT(
         supplier,
       });
 
-      // Recalculate all recipes using this material
       recalculateRecipeCostsForMaterial(materialId);
     } else {
-      // No price change, just update
       material = upsertMaterial({
         id: materialId,
         name,
@@ -108,10 +96,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { materialId: string } }
+  { params }: { params: Promise<{ materialId: string }> }
 ) {
   try {
-    const { materialId } = params;
+    const { materialId } = await params;
 
     const material = getMaterial(materialId);
     if (!material) {

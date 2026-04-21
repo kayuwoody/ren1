@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Package, Search, Filter, Clock, CheckCircle, AlertCircle, User } from 'lucide-react';
+import { useBranch } from '@/context/branchContext';
 
 interface Customer {
   id: number;
@@ -30,6 +31,7 @@ interface Order {
 }
 
 export default function AdminOrdersPage() {
+  const { branchFetch } = useBranch();
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -53,7 +55,7 @@ export default function AdminOrdersPage() {
     setLoading(true);
     try {
       // Fetch all orders (you may need to create a special admin endpoint)
-      const res = await fetch('/api/admin/orders');
+      const res = await branchFetch('/api/admin/orders');
       if (res.ok) {
         const data = await res.json();
         setOrders(Array.isArray(data) ? data : []);

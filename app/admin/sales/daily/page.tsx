@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Calendar, DollarSign, TrendingUp, ShoppingBag, ChevronDown, ChevronUp } from 'lucide-react';
+import { useBranch } from '@/context/branchContext';
 
 interface OrderItem {
   id: number;
@@ -53,6 +54,7 @@ interface DailySalesData {
 }
 
 export default function DailySalesDetailPage() {
+  const { branchFetch } = useBranch();
   const [data, setData] = useState<DailySalesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState('');
@@ -77,7 +79,7 @@ export default function DailySalesDetailPage() {
     setLoading(true);
     try {
       const url = `/api/admin/sales/daily?date=${selectedDate}`;
-      const res = await fetch(url);
+      const res = await branchFetch(url);
       if (res.ok) {
         const data = await res.json();
         setData(data);
