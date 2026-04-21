@@ -36,7 +36,7 @@ import HoldOrderManager from '@/components/HoldOrderManager';
 
 export default function POSPage() {
   const router = useRouter();
-  const { cartItems, clearCart, updateItemDiscount, removeFromCart, updateQuantity, loadCart } = useCart();
+  const { cartItems, clearCart, updateItemDiscount, updateItemSurcharge, removeFromCart, updateQuantity, loadCart } = useCart();
   const { branchFetch } = useBranch();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
@@ -392,6 +392,44 @@ export default function POSPage() {
                           >
                             50% off
                           </button>
+                          {/* RM discount buttons */}
+                          <button
+                            onClick={() => updateItemDiscount(index, { type: 'amount', value: 1, reason: 'RM1 off' })}
+                            className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium hover:bg-green-200 transition"
+                          >
+                            RM1 off
+                          </button>
+                          <button
+                            onClick={() => updateItemDiscount(index, { type: 'amount', value: 1.5, reason: 'RM1.50 off' })}
+                            className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium hover:bg-green-200 transition"
+                          >
+                            RM1.50 off
+                          </button>
+                          <button
+                            onClick={() => updateItemDiscount(index, { type: 'amount', value: 2, reason: 'RM2 off' })}
+                            className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium hover:bg-green-200 transition"
+                          >
+                            RM2 off
+                          </button>
+                          {/* Surcharge/upgrade buttons */}
+                          <button
+                            onClick={() => updateItemSurcharge(index, 1, 'RM1 upgrade')}
+                            className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-xs font-medium hover:bg-orange-200 transition"
+                          >
+                            +RM1
+                          </button>
+                          <button
+                            onClick={() => updateItemSurcharge(index, 1.5, 'RM1.50 upgrade')}
+                            className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-xs font-medium hover:bg-orange-200 transition"
+                          >
+                            +RM1.50
+                          </button>
+                          <button
+                            onClick={() => updateItemSurcharge(index, 2, 'RM2 upgrade')}
+                            className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-xs font-medium hover:bg-orange-200 transition"
+                          >
+                            +RM2
+                          </button>
                           <button
                             onClick={() => applyQuickDiscount(index, 100, "Unicorns")}
                             className="px-3 py-1.5 bg-pink-100 text-pink-700 rounded-lg text-xs font-medium hover:bg-pink-200 transition"
@@ -405,12 +443,12 @@ export default function POSPage() {
                             <Edit2 className="w-3 h-3" />
                             Custom
                           </button>
-                          {hasDiscount && (
+                          {(hasDiscount || item.surchargeAmount) && (
                             <button
-                              onClick={() => removeDiscount(index)}
+                              onClick={() => { removeDiscount(index); updateItemSurcharge(index, 0); }}
                               className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-medium hover:bg-red-200 transition"
                             >
-                              Remove discount
+                              Reset price
                             </button>
                           )}
                         </div>
