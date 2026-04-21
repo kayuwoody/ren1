@@ -68,6 +68,14 @@ export default function PaymentPage() {
               );
             }
 
+            // Add surcharge metadata if applicable
+            if (item.surchargeAmount && item.surchargeAmount > 0) {
+              meta_data.push(
+                { key: "_surcharge_amount", value: item.surchargeAmount.toString() },
+                { key: "_surcharge_reason", value: item.surchargeReason || 'Upgrade' }
+              );
+            }
+
             // Add final price metadata (always)
             meta_data.push({ key: "_final_price", value: item.finalPrice.toString() });
 
