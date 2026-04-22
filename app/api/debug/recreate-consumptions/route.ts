@@ -1,21 +1,48 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/init';
 import { recordProductSale } from '@/lib/db/inventoryConsumptionService';
-import { handleApiError, validationError } from '@/lib/api/error-handler';
+import { handleApiError } from '@/lib/api/error-handler';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
+/**
+ * POST /api/debug/recreate-consumptions
+ *
+ * Backfill COGS records for orders missing consumption data.
+ * Pass { orderIds: [...] } to target specific orders,
+ * or { backfillAll: true } to find and fix all orders with 0 COGS.
+ */
 export async function POST(req: Request) {
   try {
     const branchId = getBranchIdFromRequest(req);
-    const { orderIds } = await req.json();
+    const body = await req.json();
+    const { orderIds, backfillAll } = body;
 
-    if (!Array.isArray(orderIds) || orderIds.length === 0) {
-      return validationError('orderIds array is required', '/api/debug/recreate-consumptions');
+    let targetOrderIds: string[] = [];
+
+    if (backfillAll) {
+      const ordersWithNoCOGS = db.prepare(`
+        SELECT o.id FROM "Order" o
+        WHERE o.status IN ('processing', 'completed', 'ready-for-pickup')
+        AND NOT EXISTS (
+          SELECT 1 FROM InventoryConsumption ic WHERE ic.orderId = o.id
+        )
+        ORDER BY o.createdAt DESC
+      `).all() as Array<{ id: string }>;
+      targetOrderIds = ordersWithNoCOGS.map(o => o.id);
+      console.log(`🔍 Found ${targetOrderIds.length} orders missing consumption records`);
+    } else if (Array.isArray(orderIds) && orderIds.length > 0) {
+      targetOrderIds = orderIds;
+    } else {
+      return NextResponse.json({ error: 'Pass { backfillAll: true } or { orderIds: [...] }' }, { status: 400 });
+    }
+
+    if (targetOrderIds.length === 0) {
+      return NextResponse.json({ success: true, message: 'No orders need backfilling', results: [] });
     }
 
     const results = [];
 
-    for (const orderId of orderIds) {
+    for (const orderId of targetOrderIds) {
       console.log(`\n🔄 Recreating consumption records for order ${orderId}...`);
 
       const order = db.prepare('SELECT * FROM "Order" WHERE id = ?').get(orderId) as any;
@@ -64,10 +91,18 @@ export async function POST(req: Request) {
         totalConsumptions += consumptions.length;
       }
 
-      results.push({ orderId, success: true, consumptionsCreated: totalConsumptions, totalCOGS });
+      // Update the Order row with correct COGS
+      if (totalCOGS > 0) {
+        const totalProfit = order.total - totalCOGS;
+        const margin = order.total > 0 ? (totalProfit / order.total) * 100 : 0;
+        db.prepare('UPDATE "Order" SET totalCost = ?, totalProfit = ?, overallMargin = ? WHERE id = ?')
+          .run(totalCOGS, totalProfit, margin, orderId);
+      }
+
+      results.push({ orderId, orderNumber: order.orderNumber, success: true, consumptionsCreated: totalConsumptions, totalCOGS });
     }
 
-    return NextResponse.json({ success: true, results });
+    return NextResponse.json({ success: true, backfilled: results.length, results });
   } catch (error) {
     return handleApiError(error, '/api/debug/recreate-consumptions');
   }
