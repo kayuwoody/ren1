@@ -80,8 +80,8 @@ export async function GET(
     return NextResponse.json({
       success: true,
       product: {
-        id: product.wcId,
-        localId: product.id,
+        id: product.id,
+        wcId: product.wcId,
         name: product.name,
         sku: product.sku,
         basePrice: product.basePrice,

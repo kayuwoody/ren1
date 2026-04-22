@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getProductByWcId } from '@/lib/db/productService';
+import { getProduct, getProductByWcId } from '@/lib/db/productService';
 import { getSelectedComponents } from '@/lib/db/recursiveProductExpansion';
 
 /**
@@ -18,8 +18,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
     }
 
-    // Find product by WC ID
-    const product = getProductByWcId(wcProductId);
+    let product = getProduct(String(wcProductId));
+    if (!product) {
+      product = getProductByWcId(wcProductId);
+    }
     if (!product) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
