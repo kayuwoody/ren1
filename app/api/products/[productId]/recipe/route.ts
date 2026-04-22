@@ -20,8 +20,11 @@ export async function GET(
   try {
     const { productId } = await params;
 
-    // Find product by WooCommerce ID
-    const product = getProductByWcId(Number(productId));
+    // Try local UUID first, then WooCommerce ID
+    let product = getProduct(productId);
+    if (!product) {
+      product = getProductByWcId(Number(productId));
+    }
 
     if (!product) {
       return notFoundError('Product not found', '/api/products/[productId]/recipe');

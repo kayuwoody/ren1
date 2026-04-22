@@ -16,7 +16,8 @@ export async function GET(req: Request) {
     );
 
     const products = visibleProducts.map(product => ({
-      id: product.wcId,
+      id: product.wcId || product.id,
+      localId: product.id,
       name: product.name,
       sku: product.sku,
       price: product.basePrice.toString(),
