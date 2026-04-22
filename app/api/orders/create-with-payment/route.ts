@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getBranchIdFromRequest } from "@/lib/api/branchHelper";
 import { db } from "@/lib/db/init";
 import { v4 as uuidv4 } from "uuid";
-import { getProductByWcId } from "@/lib/db/productService";
+import { getProduct, getProductByWcId } from "@/lib/db/productService";
 import { calculateProductCOGS } from "@/lib/db/inventoryConsumptionService";
 
 /**
@@ -43,7 +43,10 @@ export async function POST(req: Request) {
     const itemRows: any[] = [];
 
     for (const item of line_items) {
-      const product = getProductByWcId(item.product_id);
+      let product = getProduct(String(item.product_id));
+      if (!product) {
+        product = getProductByWcId(item.product_id);
+      }
       const qty = item.quantity || 1;
 
       const getMeta = (metaArr: any[] | undefined, key: string) =>
