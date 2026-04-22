@@ -3,7 +3,7 @@ import { getBranchIdFromRequest } from "@/lib/api/branchHelper";
 import { db } from "@/lib/db/init";
 import { v4 as uuidv4 } from "uuid";
 import { getProduct, getProductByWcId } from "@/lib/db/productService";
-import { calculateProductCOGS } from "@/lib/db/inventoryConsumptionService";
+import { calculateProductCOGS, recordProductSale } from "@/lib/db/inventoryConsumptionService";
 
 /**
  * POST /api/orders/create-with-payment
@@ -175,6 +175,37 @@ export async function POST(req: Request) {
     };
 
     console.log(`✅ Order created: #${orderNumber} (${orderId})`);
+
+    // Record inventory consumption (COGS) for each line item
+    try {
+      for (const item of itemRows) {
+        let bundleSelection: any;
+        if (item.variations) {
+          try {
+            const v = JSON.parse(item.variations);
+            if (v._is_bundle === 'true') {
+              bundleSelection = {
+                selectedMandatory: v._bundle_mandatory ? JSON.parse(v._bundle_mandatory) : {},
+                selectedOptional: v._bundle_optional ? JSON.parse(v._bundle_optional) : [],
+              };
+            }
+          } catch {}
+        }
+
+        await recordProductSale({
+          orderId,
+          wcProductId: item.productId,
+          productName: item.productName,
+          quantitySold: item.quantity,
+          orderItemId: item.id,
+          bundleSelection,
+          branchId,
+        });
+      }
+      console.log(`📦 Inventory consumption recorded for order #${orderNumber}`);
+    } catch (consumptionErr) {
+      console.error('⚠️ Error recording consumption (order still created):', consumptionErr);
+    }
 
     return NextResponse.json({
       success: true,
