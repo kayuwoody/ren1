@@ -23,14 +23,14 @@ const CartPage: React.FC = () => {
         <p className="text-gray-600">Your cart is empty.</p>
       ) : (
         <div>
-          {cartItems.map((item) => (
+          {cartItems.map((item, index) => (
             <CartItem
               key={item.productId}
               name={item.name}
               quantity={item.quantity}
               price={item.retailPrice}
               customizations={undefined}
-              onRemove={() => removeFromCart(item.productId)}
+              onRemove={() => removeFromCart(index)}
             />
           ))}
           <div className="border-t pt-4 mt-4">
