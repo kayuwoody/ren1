@@ -113,6 +113,7 @@ export async function POST(req: Request) {
     const overallMargin = subtotal > 0 ? (totalProfit / subtotal) * 100 : 0;
 
     const insertAll = db.transaction(() => {
+      console.log(`📝 Inserting Order: ${orderId}, branch: ${branchId}`);
       db.prepare(`
         INSERT INTO "Order" (id, orderNumber, status, customerName, customerPhone,
                              subtotal, tax, total, totalCost, totalProfit, overallMargin,
@@ -127,6 +128,7 @@ export async function POST(req: Request) {
         branchId, userId || null, guestId || null,
         now, now,
       );
+      console.log(`✅ Order row inserted`);
 
       const insertItem = db.prepare(`
         INSERT INTO OrderItem (id, orderId, productId, productName, category, sku,
@@ -137,12 +139,14 @@ export async function POST(req: Request) {
       `);
 
       for (const item of itemRows) {
+        console.log(`📝 Inserting OrderItem: productId=${item.productId}, name=${item.productName}`);
         insertItem.run(
           item.id, item.orderId, item.productId, item.productName, item.category, item.sku,
           item.quantity, item.basePrice, item.unitPrice, item.subtotal, item.unitCost, item.totalCost,
           item.itemProfit, item.itemMargin, item.variations, item.discountApplied, item.finalPrice,
           item.branchId, item.soldAt,
         );
+        console.log(`✅ OrderItem inserted: ${item.productName}`);
       }
     });
 
