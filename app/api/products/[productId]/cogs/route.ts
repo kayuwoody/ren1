@@ -6,7 +6,7 @@ import { handleApiError, notFoundError } from '@/lib/api/error-handler';
  * GET /api/products/[productId]/cogs
  * Calculate COGS for a product with optional quantity
  *
- * @param productId - WooCommerce product ID (number)
+ * @param productId - Local UUID or WooCommerce product ID
  * @param quantity - Quantity to calculate COGS for (default: 1)
  */
 export async function GET(
@@ -17,11 +17,10 @@ export async function GET(
     const { productId } = await params;
     const { searchParams } = new URL(req.url);
     const quantity = parseInt(searchParams.get('quantity') || '1');
-    const wcProductId = parseInt(productId);
 
-    if (isNaN(wcProductId)) {
+    if (!productId) {
       return NextResponse.json(
-        { error: 'Invalid product ID' },
+        { error: 'Product ID is required' },
         { status: 400 }
       );
     }
@@ -42,8 +41,8 @@ export async function GET(
       }
     }
 
-    // Calculate COGS using the recursive function (it handles product lookup by WC ID)
-    const cogsResult = calculateProductCOGS(wcProductId, quantity, bundleSelection);
+    // calculateProductCOGS accepts both local UUID and numeric WC ID
+    const cogsResult = calculateProductCOGS(productId, quantity, bundleSelection);
 
     if (cogsResult.totalCOGS === 0 && cogsResult.breakdown.length === 0) {
       // Product not found or has no recipe
