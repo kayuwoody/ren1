@@ -91,6 +91,9 @@ export async function POST(req: Request) {
 
       for (const item of items) {
         let bundleSelection: any;
+        let useComponentFallback = false;
+        let components: Array<{ productId: string; productName: string; quantity: number }> = [];
+
         if (item.variations) {
           try {
             const v = JSON.parse(item.variations);
@@ -102,31 +105,72 @@ export async function POST(req: Request) {
                   selectedMandatory: mandatoryJson ? JSON.parse(mandatoryJson) : {},
                   selectedOptional: optionalJson ? JSON.parse(optionalJson) : [],
                 };
+              } else if (v._bundle_components) {
+                // Old order: no selection keys, but _bundle_components has the
+                // actual selected products. Record each component individually.
+                try {
+                  components = typeof v._bundle_components === 'string'
+                    ? JSON.parse(v._bundle_components) : v._bundle_components;
+                  useComponentFallback = true;
+                  console.log(`   🔧 Bundle "${item.productName}" — reconstructing COGS from ${components.length} stored components`);
+                } catch {
+                  bundleSelection = { selectedMandatory: {}, selectedOptional: [] };
+                  missingSelections = true;
+                  console.log(`   ⚠️ Bundle "${item.productName}" — no selection data or components`);
+                }
               } else {
-                // Old order without selection data — pass empty selections.
-                // This records mandatory base items (e.g., Nasi Lemak Bungkus)
-                // but skips XOR items (drinks, danishes) since we don't know which was selected.
                 bundleSelection = { selectedMandatory: {}, selectedOptional: [] };
                 missingSelections = true;
-                console.log(`   ⚠️ Bundle "${item.productName}" missing selection data — recording base items only`);
+                console.log(`   ⚠️ Bundle "${item.productName}" — no selection data or components`);
               }
             }
           } catch {}
         }
 
-        const consumptions = await recordProductSale({
-          orderId: String(orderId),
-          wcProductId: String(item.productId),
-          productName: item.productName,
-          quantitySold: item.quantity,
-          orderItemId: String(item.id),
-          bundleSelection,
-          branchId,
-        });
+        if (useComponentFallback && components.length > 0) {
+          // Record consumption for each component product individually
+          for (const comp of components) {
+            const compConsumptions = await recordProductSale({
+              orderId: String(orderId),
+              wcProductId: String(comp.productId),
+              productName: comp.productName,
+              quantitySold: comp.quantity * item.quantity,
+              orderItemId: String(item.id),
+              branchId,
+            });
+            const compCOGS = compConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
+            totalCOGS += compCOGS;
+            totalConsumptions += compConsumptions.length;
+            console.log(`     → ${comp.productName}: ${compConsumptions.length} records, RM ${compCOGS.toFixed(2)}`);
+          }
+          // Also record the base product's own supplier cost / mandatory non-XOR items
+          const baseConsumptions = await recordProductSale({
+            orderId: String(orderId),
+            wcProductId: String(item.productId),
+            productName: item.productName,
+            quantitySold: item.quantity,
+            orderItemId: String(item.id),
+            bundleSelection: { selectedMandatory: {}, selectedOptional: [] },
+            branchId,
+          });
+          const baseCOGS = baseConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
+          totalCOGS += baseCOGS;
+          totalConsumptions += baseConsumptions.length;
+        } else {
+          const consumptions = await recordProductSale({
+            orderId: String(orderId),
+            wcProductId: String(item.productId),
+            productName: item.productName,
+            quantitySold: item.quantity,
+            orderItemId: String(item.id),
+            bundleSelection,
+            branchId,
+          });
 
-        const itemCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
-        totalCOGS += itemCOGS;
-        totalConsumptions += consumptions.length;
+          const itemCOGS = consumptions.reduce((sum, c) => sum + c.totalCost, 0);
+          totalCOGS += itemCOGS;
+          totalConsumptions += consumptions.length;
+        }
       }
 
       // Always update Order row from actual consumption total
