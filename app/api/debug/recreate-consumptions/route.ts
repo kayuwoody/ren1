@@ -128,7 +128,9 @@ export async function POST(req: Request) {
         }
 
         if (useComponentFallback && components.length > 0) {
-          // Record consumption for each component product individually
+          // Record consumption for each component product individually.
+          // Pass empty bundleSelection so nested XOR items (Hot/Iced) are skipped
+          // rather than both being consumed.
           for (const comp of components) {
             const compConsumptions = await recordProductSale({
               orderId: String(orderId),
@@ -136,6 +138,7 @@ export async function POST(req: Request) {
               productName: comp.productName,
               quantitySold: comp.quantity * item.quantity,
               orderItemId: String(item.id),
+              bundleSelection: { selectedMandatory: {}, selectedOptional: [] },
               branchId,
             });
             const compCOGS = compConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
@@ -143,19 +146,6 @@ export async function POST(req: Request) {
             totalConsumptions += compConsumptions.length;
             console.log(`     → ${comp.productName}: ${compConsumptions.length} records, RM ${compCOGS.toFixed(2)}`);
           }
-          // Also record the base product's own supplier cost / mandatory non-XOR items
-          const baseConsumptions = await recordProductSale({
-            orderId: String(orderId),
-            wcProductId: String(item.productId),
-            productName: item.productName,
-            quantitySold: item.quantity,
-            orderItemId: String(item.id),
-            bundleSelection: { selectedMandatory: {}, selectedOptional: [] },
-            branchId,
-          });
-          const baseCOGS = baseConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
-          totalCOGS += baseCOGS;
-          totalConsumptions += baseConsumptions.length;
         } else {
           const consumptions = await recordProductSale({
             orderId: String(orderId),
