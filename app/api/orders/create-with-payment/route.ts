@@ -58,10 +58,24 @@ export async function POST(req: Request) {
       const lineSubtotal = finalPrice * qty;
       subtotal += lineSubtotal;
 
+      const isBundle = getMeta(item.meta_data, '_is_bundle') === 'true';
+
+      let bundleSelectionForCOGS: { selectedMandatory: Record<string, string>; selectedOptional: string[] } | undefined;
+      if (isBundle) {
+        const mandatoryJson = getMeta(item.meta_data, '_bundle_mandatory');
+        const optionalJson = getMeta(item.meta_data, '_bundle_optional');
+        if (mandatoryJson || optionalJson) {
+          bundleSelectionForCOGS = {
+            selectedMandatory: mandatoryJson ? JSON.parse(mandatoryJson) : {},
+            selectedOptional: optionalJson ? JSON.parse(optionalJson) : [],
+          };
+        }
+      }
+
       let unitCost = 0;
       if (product) {
         try {
-          const cogs = calculateProductCOGS(item.product_id, 1);
+          const cogs = calculateProductCOGS(item.product_id, 1, bundleSelectionForCOGS);
           unitCost = cogs.totalCOGS || product.unitCost || 0;
         } catch {
           unitCost = product.unitCost || 0;
@@ -69,8 +83,6 @@ export async function POST(req: Request) {
       }
       const lineCost = unitCost * qty;
       totalCost += lineCost;
-
-      const isBundle = getMeta(item.meta_data, '_is_bundle') === 'true';
       const bundleDisplayName = getMeta(item.meta_data, '_bundle_display_name');
       const displayName = isBundle && bundleDisplayName ? bundleDisplayName : (product?.name || item.name || 'Unknown');
 
@@ -80,6 +92,8 @@ export async function POST(req: Request) {
         variationsObj._bundle_display_name = bundleDisplayName;
         variationsObj._bundle_base_product_name = getMeta(item.meta_data, '_bundle_base_product_name');
         variationsObj._bundle_components = getMeta(item.meta_data, '_bundle_components');
+        variationsObj._bundle_mandatory = getMeta(item.meta_data, '_bundle_mandatory');
+        variationsObj._bundle_optional = getMeta(item.meta_data, '_bundle_optional');
       }
       const discountReason = getMeta(item.meta_data, '_discount_reason');
       if (discountReason) variationsObj._discount_reason = discountReason;
