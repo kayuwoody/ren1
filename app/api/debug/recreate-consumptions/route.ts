@@ -21,16 +21,28 @@ export async function POST(req: Request) {
     let targetOrderIds: string[] = [];
 
     if (backfillAll) {
-      const ordersWithNoCOGS = db.prepare(`
-        SELECT o.id FROM "Order" o
-        WHERE o.status IN ('processing', 'completed', 'ready-for-pickup')
-        AND NOT EXISTS (
-          SELECT 1 FROM InventoryConsumption ic WHERE ic.orderId = o.id
-        )
-        ORDER BY o.createdAt DESC
-      `).all() as Array<{ id: string }>;
-      targetOrderIds = ordersWithNoCOGS.map(o => o.id);
-      console.log(`🔍 Found ${targetOrderIds.length} orders missing consumption records`);
+      let query: string;
+      if (force) {
+        // Force mode: re-run ALL orders (clears and recreates consumption records)
+        query = `
+          SELECT o.id FROM "Order" o
+          WHERE o.status IN ('processing', 'completed', 'ready-for-pickup')
+          ORDER BY o.createdAt DESC
+        `;
+      } else {
+        // Normal mode: only orders missing consumption records
+        query = `
+          SELECT o.id FROM "Order" o
+          WHERE o.status IN ('processing', 'completed', 'ready-for-pickup')
+          AND NOT EXISTS (
+            SELECT 1 FROM InventoryConsumption ic WHERE ic.orderId = o.id
+          )
+          ORDER BY o.createdAt DESC
+        `;
+      }
+      const rows = db.prepare(query).all() as Array<{ id: string }>;
+      targetOrderIds = rows.map(o => o.id);
+      console.log(`🔍 Found ${targetOrderIds.length} orders to ${force ? 'reprocess' : 'backfill'}`);
     } else if (Array.isArray(orderIds) && orderIds.length > 0) {
       targetOrderIds = orderIds;
     } else {
