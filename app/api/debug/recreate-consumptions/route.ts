@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/init';
 import { recordProductSale } from '@/lib/db/inventoryConsumptionService';
-import { getProduct } from '@/lib/db/productService';
 import { handleApiError } from '@/lib/api/error-handler';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
@@ -11,12 +10,13 @@ import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
  * Backfill COGS records for orders missing consumption data.
  * Pass { orderIds: [...] } to target specific orders,
  * or { backfillAll: true } to find and fix all orders with 0 COGS.
+ * Pass { force: true } to delete existing consumption records and re-run.
  */
 export async function POST(req: Request) {
   try {
     const branchId = getBranchIdFromRequest(req);
     const body = await req.json();
-    const { orderIds, backfillAll } = body;
+    const { orderIds, backfillAll, force } = body;
 
     let targetOrderIds: string[] = [];
 
@@ -52,6 +52,21 @@ export async function POST(req: Request) {
         continue;
       }
 
+      // Delete existing consumption records if force mode or if re-running specific orders
+      if (force || Array.isArray(orderIds)) {
+        const deleted = db.prepare('DELETE FROM InventoryConsumption WHERE orderId = ?').run(orderId);
+        if (deleted.changes > 0) {
+          console.log(`   🗑️ Deleted ${deleted.changes} existing consumption records`);
+        }
+      } else {
+        const existing = db.prepare('SELECT COUNT(*) as c FROM InventoryConsumption WHERE orderId = ?').get(orderId) as { c: number };
+        if (existing.c > 0) {
+          console.log(`   ⏭️ Order already has ${existing.c} consumption records (pass force:true to re-run)`);
+          results.push({ orderId, orderNumber: order.orderNumber, success: true, skipped: true, existingRecords: existing.c });
+          continue;
+        }
+      }
+
       const items = db.prepare('SELECT * FROM OrderItem WHERE orderId = ?').all(orderId) as any[];
       if (items.length === 0) {
         results.push({ orderId, success: false, error: 'No line items' });
@@ -60,10 +75,10 @@ export async function POST(req: Request) {
 
       let totalCOGS = 0;
       let totalConsumptions = 0;
+      let missingSelections = false;
 
       for (const item of items) {
         let bundleSelection: any;
-        let isBundleMissingSelections = false;
         if (item.variations) {
           try {
             const v = JSON.parse(item.variations);
@@ -76,24 +91,15 @@ export async function POST(req: Request) {
                   selectedOptional: optionalJson ? JSON.parse(optionalJson) : [],
                 };
               } else {
-                isBundleMissingSelections = true;
+                // Old order without selection data — pass empty selections.
+                // This records mandatory base items (e.g., Nasi Lemak Bungkus)
+                // but skips XOR items (drinks, danishes) since we don't know which was selected.
+                bundleSelection = { selectedMandatory: {}, selectedOptional: [] };
+                missingSelections = true;
+                console.log(`   ⚠️ Bundle "${item.productName}" missing selection data — recording base items only`);
               }
             }
           } catch {}
-        }
-
-        if (isBundleMissingSelections) {
-          // Old bundle order created before selection data was persisted.
-          // Use product.unitCost as best-effort COGS estimate.
-          const product = getProduct(String(item.productId));
-          const estimatedCOGS = (product?.unitCost || 0) * item.quantity;
-          if (estimatedCOGS > 0) {
-            totalCOGS += estimatedCOGS;
-            console.log(`   ⚠️ Bundle "${item.productName}" missing selection data — using unitCost estimate: RM ${estimatedCOGS.toFixed(2)}`);
-          } else {
-            console.log(`   ⚠️ Bundle "${item.productName}" missing selection data and no unitCost — skipping`);
-          }
-          continue;
         }
 
         const consumptions = await recordProductSale({
@@ -111,15 +117,33 @@ export async function POST(req: Request) {
         totalConsumptions += consumptions.length;
       }
 
-      // Update the Order row with correct COGS
-      if (totalCOGS > 0) {
-        const totalProfit = order.total - totalCOGS;
-        const margin = order.total > 0 ? (totalProfit / order.total) * 100 : 0;
-        db.prepare('UPDATE "Order" SET totalCost = ?, totalProfit = ?, overallMargin = ? WHERE id = ?')
-          .run(totalCOGS, totalProfit, margin, orderId);
+      // Always update Order row from actual consumption total
+      const totalProfit = order.total - totalCOGS;
+      const margin = order.total > 0 ? (totalProfit / order.total) * 100 : 0;
+      db.prepare('UPDATE "Order" SET totalCost = ?, totalProfit = ?, overallMargin = ? WHERE id = ?')
+        .run(totalCOGS, totalProfit, margin, orderId);
+
+      // Also update OrderItem costs
+      for (const item of items) {
+        const itemConsumptions = db.prepare(
+          'SELECT SUM(totalCost) as total FROM InventoryConsumption WHERE orderId = ? AND orderItemId = ?'
+        ).get(orderId, item.id) as { total: number | null };
+        const itemCOGS = itemConsumptions?.total || 0;
+        const itemProfit = item.subtotal - itemCOGS;
+        const itemMargin = item.subtotal > 0 ? (itemProfit / item.subtotal) * 100 : 0;
+        db.prepare('UPDATE OrderItem SET unitCost = ?, totalCost = ?, itemProfit = ?, itemMargin = ? WHERE id = ?')
+          .run(itemCOGS / (item.quantity || 1), itemCOGS, itemProfit, itemMargin, item.id);
       }
 
-      results.push({ orderId, orderNumber: order.orderNumber, success: true, consumptionsCreated: totalConsumptions, totalCOGS });
+      results.push({
+        orderId,
+        orderNumber: order.orderNumber,
+        success: true,
+        consumptionsCreated: totalConsumptions,
+        totalCOGS,
+        missingSelections,
+        note: missingSelections ? 'Bundle selection data missing — COGS only includes base items, not selected drinks/options' : undefined,
+      });
     }
 
     return NextResponse.json({ success: true, backfilled: results.length, results });
