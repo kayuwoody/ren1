@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/init';
 import { recordProductSale } from '@/lib/db/inventoryConsumptionService';
+import { getProduct } from '@/lib/db/productService';
 import { handleApiError } from '@/lib/api/error-handler';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
@@ -62,18 +63,37 @@ export async function POST(req: Request) {
 
       for (const item of items) {
         let bundleSelection: any;
+        let isBundleMissingSelections = false;
         if (item.variations) {
           try {
             const v = JSON.parse(item.variations);
             if (v._is_bundle === 'true') {
               const mandatoryJson = v._bundle_mandatory;
               const optionalJson = v._bundle_optional;
-              bundleSelection = {
-                selectedMandatory: mandatoryJson ? JSON.parse(mandatoryJson) : {},
-                selectedOptional: optionalJson ? JSON.parse(optionalJson) : [],
-              };
+              if (mandatoryJson || optionalJson) {
+                bundleSelection = {
+                  selectedMandatory: mandatoryJson ? JSON.parse(mandatoryJson) : {},
+                  selectedOptional: optionalJson ? JSON.parse(optionalJson) : [],
+                };
+              } else {
+                isBundleMissingSelections = true;
+              }
             }
           } catch {}
+        }
+
+        if (isBundleMissingSelections) {
+          // Old bundle order created before selection data was persisted.
+          // Use product.unitCost as best-effort COGS estimate.
+          const product = getProduct(String(item.productId));
+          const estimatedCOGS = (product?.unitCost || 0) * item.quantity;
+          if (estimatedCOGS > 0) {
+            totalCOGS += estimatedCOGS;
+            console.log(`   ⚠️ Bundle "${item.productName}" missing selection data — using unitCost estimate: RM ${estimatedCOGS.toFixed(2)}`);
+          } else {
+            console.log(`   ⚠️ Bundle "${item.productName}" missing selection data and no unitCost — skipping`);
+          }
+          continue;
         }
 
         const consumptions = await recordProductSale({
