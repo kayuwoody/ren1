@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Coffee Oasis — Integration Spec</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<template id="__bundler_thumbnail" data-bg-color="#f8f9fb">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <!-- sidebar -->
+    <rect x="0" y="0" width="200" height="800" fill="#fff" rx="0"/>
+    <rect x="20" y="24" width="120" height="14" rx="4" fill="#212529"/>
+    <rect x="20" y="46" width="80" height="8" rx="3" fill="#adb5bd"/>
+    <rect x="0" y="72" width="200" height="1" fill="#e9ecef"/>
+    <rect x="20" y="88" width="90" height="8" rx="3" fill="#6c757d"/>
+    <rect x="20" y="104" width="110" height="8" rx="3" fill="#0d6efd"/>
+    <rect x="20" y="120" width="95" height="8" rx="3" fill="#6c757d"/>
+    <rect x="20" y="136" width="105" height="8" rx="3" fill="#6c757d"/>
+    <!-- main -->
+    <rect x="240" y="40" width="280" height="28" rx="5" fill="#212529"/>
+    <rect x="240" y="76" width="180" height="12" rx="4" fill="#adb5bd"/>
+    <!-- code block -->
+    <rect x="240" y="120" width="700" height="140" rx="8" fill="#1e1e2e"/>
+    <rect x="260" y="140" width="200" height="8" rx="3" fill="#89b4fa"/>
+    <rect x="260" y="156" width="140" height="8" rx="3" fill="#a6e3a1"/>
+    <rect x="260" y="172" width="180" height="8" rx="3" fill="#cdd6f4"/>
+    <rect x="260" y="188" width="120" height="8" rx="3" fill="#fab387"/>
+    <rect x="260" y="204" width="160" height="8" rx="3" fill="#a6e3a1"/>
+    <rect x="260" y="220" width="100" height="8" rx="3" fill="#6c7086"/>
+    <!-- endpoint badge -->
+    <rect x="240" y="290" width="900" height="48" rx="8" fill="#fff" stroke="#e9ecef" stroke-width="1.5"/>
+    <rect x="256" y="306" width="48" height="18" rx="4" fill="#d1fae5"/>
+    <rect x="314" y="308" width="220" height="12" rx="3" fill="#212529"/>
+    <!-- more rows -->
+    <rect x="240" y="356" width="900" height="48" rx="8" fill="#fff" stroke="#e9ecef" stroke-width="1.5"/>
+    <rect x="256" y="372" width="36" height="18" rx="4" fill="#dbeafe"/>
+    <rect x="302" y="374" width="260" height="12" rx="3" fill="#212529"/>
+    <rect x="240" y="420" width="900" height="48" rx="8" fill="#fff" stroke="#e9ecef" stroke-width="1.5"/>
+    <rect x="256" y="436" width="52" height="18" rx="4" fill="#fef3c7"/>
+    <rect x="318" y="438" width="200" height="12" rx="3" fill="#212529"/>
+  </svg>
+</template>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; color: #212529; background: #f8f9fb; line-height: 1.6; }
+
+/* ── LAYOUT ── */
+.shell { display: flex; min-height: 100vh; }
+.sidebar { width: 240px; background: #fff; border-right: 1px solid #e9ecef; position: fixed; top: 0; bottom: 0; overflow-y: auto; padding: 24px 0 40px; flex-shrink: 0; }
+.main { margin-left: 240px; padding: 40px 56px 80px; max-width: 1000px; }
+
+/* sidebar */
+.sidebar-logo { padding: 0 20px 20px; border-bottom: 1px solid #e9ecef; margin-bottom: 16px; }
+.sidebar-logo h2 { font-size: 15px; font-weight: 700; }
+.sidebar-logo p { font-size: 11px; color: #6c757d; margin-top: 2px; }
+.sidebar-section { padding: 6px 20px 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #adb5bd; margin-top: 12px; }
+.sidebar a { display: block; padding: 6px 20px; font-size: 13px; color: #495057; text-decoration: none; border-left: 2px solid transparent; transition: all .12s; }
+.sidebar a:hover, .sidebar a.active { color: #0d6efd; border-left-color: #0d6efd; background: #f0f7ff; }
+
+/* ── TYPOGRAPHY ── */
+h1 { font-size: 28px; font-weight: 800; color: #212529; margin-bottom: 6px; }
+h2 { font-size: 20px; font-weight: 700; color: #212529; margin: 48px 0 12px; padding-top: 48px; border-top: 1px solid #e9ecef; }
+h2:first-of-type { margin-top: 32px; }
+h3 { font-size: 15px; font-weight: 700; color: #212529; margin: 28px 0 8px; }
+h4 { font-size: 13px; font-weight: 600; color: #495057; margin: 16px 0 6px; }
+p { margin-bottom: 12px; color: #495057; }
+ul { padding-left: 20px; margin-bottom: 12px; color: #495057; }
+li { margin-bottom: 4px; }
+a { color: #0d6efd; text-decoration: none; }
+
+.subtitle { font-size: 15px; color: #6c757d; margin-bottom: 24px; }
+
+/* ── CALLOUTS ── */
+.callout { border-radius: 8px; padding: 14px 16px; margin: 16px 0; font-size: 13px; display: flex; gap: 10px; align-items: flex-start; }
+.callout-icon { font-size: 16px; flex-shrink: 0; line-height: 1.4; }
+.callout.info { background: #f0f7ff; border: 1px solid #b8d4fe; color: #0a4ba5; }
+.callout.warn { background: #fffbeb; border: 1px solid #fde68a; color: #78350f; }
+.callout.success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #14532d; }
+
+/* ── CODE BLOCKS ── */
+pre { background: #1e1e2e; color: #cdd6f4; border-radius: 8px; padding: 16px 20px; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.7; margin: 12px 0 20px; }
+code { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: #f1f3f5; color: #c0392b; padding: 1px 5px; border-radius: 4px; }
+.hlk { color: #89b4fa; } /* key */
+.hls { color: #a6e3a1; } /* string */
+.hlc { color: #f38ba8; } /* const / method */
+.hln { color: #fab387; } /* number */
+.hlcmt { color: #6c7086; font-style: italic; } /* comment */
+.hlt { color: #cba6f7; } /* type */
+
+/* ── ENDPOINT BLOCK ── */
+.endpoint { border: 1px solid #e9ecef; border-radius: 8px; margin: 16px 0 24px; overflow: hidden; }
+.endpoint-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #fff; border-bottom: 1px solid #e9ecef; }
+.method { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 5px; }
+.method.post { background: #d1fae5; color: #065f46; }
+.method.get  { background: #dbeafe; color: #1e40af; }
+.method.patch { background: #fef3c7; color: #92400e; }
+.endpoint-path { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #212529; font-weight: 600; }
+.endpoint-desc { margin-left: auto; font-size: 12px; color: #6c757d; }
+.endpoint-body { padding: 14px 16px; background: #fafafa; }
+
+/* ── TABLE ── */
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0 20px; }
+th { text-align: left; padding: 8px 12px; background: #f1f3f5; font-weight: 600; border-bottom: 2px solid #dee2e6; color: #495057; }
+td { padding: 8px 12px; border-bottom: 1px solid #e9ecef; vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+.req { color: #dc3545; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.opt { color: #6c757d; font-size: 10px; }
+
+/* ── FLOW DIAGRAM ── */
+.flow { display: flex; align-items: center; gap: 0; flex-wrap: wrap; margin: 20px 0; }
+.flow-node { background: #fff; border: 1.5px solid #dee2e6; border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 600; text-align: center; min-width: 100px; }
+.flow-node.cloud { border-color: #0d6efd; background: #f0f7ff; color: #0d6efd; }
+.flow-node.pos   { border-color: #6f42c1; background: #f5f0ff; color: #6f42c1; }
+.flow-node.customer { border-color: #28a745; background: #f0fdf4; color: #28a745; }
+.flow-node.device { border-color: #fd7e14; background: #fff8f0; color: #c05c00; }
+.flow-arrow { padding: 0 8px; color: #adb5bd; font-size: 16px; }
+.flow-label { font-size: 10px; color: #6c757d; text-align: center; margin-top: 3px; }
+
+/* ── STATUS BADGES ── */
+.status-flow { display: flex; align-items: center; gap: 0; margin: 16px 0; flex-wrap: wrap; }
+.status-pill { padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.s-pending { background: #fff3cd; color: #856404; }
+.s-accepted { background: #cff4fc; color: #055160; }
+.s-ready { background: #d1e7dd; color: #0f5132; }
+.s-collected { background: #e9ecef; color: #495057; }
+.s-rejected { background: #f8d7da; color: #842029; }
+
+/* ── BADGE ── */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.badge-blue { background: #dbeafe; color: #1e40af; }
+.badge-green { background: #d1fae5; color: #065f46; }
+.badge-purple { background: #ede9fe; color: #5b21b6; }
+.badge-orange { background: #ffedd5; color: #9a3412; }
+
+/* print */
+@media print { .sidebar { display: none; } .main { margin-left: 0; } h2 { border-top: none; } }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h2>Coffee Oasis</h2>
+    <p>Integration Spec v0.1 · Apr 2026</p>
+  </div>
+  <div class="sidebar-section">Overview</div>
+  <a href="#architecture">Architecture</a>
+  <a href="#order-flow">Order flow</a>
+  <a href="#status-machine">Status machine</a>
+  <div class="sidebar-section">API Reference</div>
+  <a href="#post-orders">POST /orders</a>
+  <a href="#get-orders">GET /orders</a>
+  <a href="#patch-orders">PATCH /orders/:id</a>
+  <a href="#get-products">GET /products</a>
+  <a href="#patch-stock">PATCH /products/:id/stock</a>
+  <div class="sidebar-section">Realtime</div>
+  <a href="#realtime">WebSocket events</a>
+  <a href="#pos-events">POS → Cloud events</a>
+  <div class="sidebar-section">Devices</div>
+  <a href="#label-printer">Label printer</a>
+  <a href="#kds">KDS</a>
+  <a href="#notifications">Customer notifications</a>
+  <div class="sidebar-section">Infrastructure</div>
+  <a href="#infra">Recommended stack</a>
+  <a href="#stock-sync">Stock sync rules</a>
+  <a href="#auth">Auth & security</a>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+<h1>Online Ordering — Integration Spec</h1>
+<p class="subtitle">Technical reference for connecting the customer ordering app, the cloud API, and the in-store POS / devices.</p>
+
+<div style="display:flex;gap:8px;margin-bottom:32px;flex-wrap:wrap">
+  <span class="badge badge-blue">v0.1 Draft</span>
+  <span class="badge badge-orange">Node.js POS</span>
+  <span class="badge badge-green">Fiuu payments</span>
+  <span class="badge badge-purple">Vercel edge</span>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="architecture">Architecture</h2>
+
+<p>Three independent systems communicate through a shared cloud layer. The cloud is the single source of truth; the POS and customer app are both clients.</p>
+
+<div style="background:#fff;border:1px solid #e9ecef;border-radius:10px;padding:20px 24px;margin:16px 0">
+  <div style="font-size:12px;font-weight:700;color:#6c757d;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px">System map</div>
+  <div class="flow">
+    <div>
+      <div class="flow-node customer">Customer App<br/><span style="font-size:10px;font-weight:400">Mobile / Web</span></div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div>
+      <div class="flow-node cloud">Cloud API<br/><span style="font-size:10px;font-weight:400">Vercel + Supabase</span></div>
+    </div>
+    <div class="flow-arrow">⇄</div>
+    <div>
+      <div class="flow-node pos">POS App<br/><span style="font-size:10px;font-weight:400">Node.js · Windows PC</span></div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="flow-node device">KDS Screen</div>
+      <div class="flow-node device">Label Printer</div>
+    </div>
+  </div>
+  <div style="margin-top:20px;font-size:12px;color:#6c757d;line-height:1.7">
+    <strong>Customer app</strong> → POSTs a new order to cloud API after payment is confirmed.<br/>
+    <strong>Cloud API</strong> → persists order, broadcasts a realtime event to subscribed POS clients.<br/>
+    <strong>POS app</strong> → receives event, displays new order on the Online Orders screen, drives KDS and label printer.<br/>
+    <strong>POS app</strong> → PATCHes order status back to cloud as barista progresses it.<br/>
+    <strong>Cloud API</strong> → sends customer notification when status = <code>ready</code>.
+  </div>
+</div>
+
+<div class="callout info">
+  <span class="callout-icon">ℹ️</span>
+  <div><strong>Why Supabase?</strong> You already use Vercel. Supabase gives you Postgres (structured orders + products), Row-Level Security, and a built-in Realtime channel — all on the free tier for your current volume. Your POS Node app subscribes via <code>@supabase/supabase-js</code>. No separate WebSocket server to manage.</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="order-flow">Order flow</h2>
+
+<h3>Happy path (online order)</h3>
+<ol style="color:#495057;padding-left:22px;margin-bottom:16px">
+  <li>Customer selects items, customises, picks counter or curbside pickup.</li>
+  <li>Customer proceeds to checkout → payment collected via PSP (Fiuu / iPay88).</li>
+  <li>PSP webhook fires <code>payment.success</code> to your cloud API.</li>
+  <li>Cloud API creates order record with <code>status: "pending"</code>, broadcasts realtime event.</li>
+  <li>POS receives event → plays alert tone → shows card in "New · Pending" column.</li>
+  <li>Barista taps <strong>Accept & Print</strong> → POS PATCHes status to <code>accepted</code> → label prints + KDS updates.</li>
+  <li>Barista makes drink → taps <strong>Mark Ready</strong> → POS PATCHes status to <code>ready</code>.</li>
+  <li>Cloud API triggers customer notification (push / WhatsApp / SMS).</li>
+  <li>Customer collects → barista taps <strong>Collected</strong> → status → <code>collected</code>. Sale recorded.</li>
+</ol>
+
+<div class="callout warn">
+  <span class="callout-icon">⚠️</span>
+  <div><strong>Payment before order.</strong> Never create an order record until payment succeeds. Use your PSP's webhook + idempotency key to avoid duplicate orders on retry.</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="status-machine">Status machine</h2>
+
+<div style="background:#fff;border:1px solid #e9ecef;border-radius:10px;padding:20px 24px;margin:16px 0 24px">
+  <div class="status-flow">
+    <div class="status-pill s-pending">pending</div>
+    <span style="padding:0 10px;color:#adb5bd">→</span>
+    <div class="status-pill s-accepted">accepted</div>
+    <span style="padding:0 10px;color:#adb5bd">→</span>
+    <div class="status-pill s-ready">ready</div>
+    <span style="padding:0 10px;color:#adb5bd">→</span>
+    <div class="status-pill s-collected">collected</div>
+  </div>
+  <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
+    <div class="status-pill s-pending">pending</div>
+    <span style="color:#adb5bd">→</span>
+    <div class="status-pill s-rejected">rejected</div>
+    <span style="font-size:12px;color:#6c757d;margin-left:4px">— barista rejects; customer refunded via PSP</span>
+  </div>
+</div>
+
+<table>
+  <tr><th>Status</th><th>Set by</th><th>Triggers</th></tr>
+  <tr><td><code>pending</code></td><td>Cloud API (on payment.success)</td><td>Realtime event to POS, alert tone</td></tr>
+  <tr><td><code>accepted</code></td><td>POS (barista)</td><td>Label print job, KDS update</td></tr>
+  <tr><td><code>ready</code></td><td>POS (barista)</td><td>Customer push notification / WhatsApp</td></tr>
+  <tr><td><code>collected</code></td><td>POS (barista)</td><td>Sale recorded in POS daily totals</td></tr>
+  <tr><td><code>rejected</code></td><td>POS (barista)</td><td>PSP refund API call, customer notification</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="post-orders">POST /api/orders</h2>
+<p>Called by the customer app after PSP payment confirmation. Idempotent on <code>payment_ref</code>.</p>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method post">POST</span>
+    <span class="endpoint-path">/api/orders</span>
+    <span class="endpoint-desc">Create a new online order</span>
+  </div>
+  <div class="endpoint-body">
+
+<h4>Request body</h4>
+<pre><span class="hlc">{</span>
+  <span class="hlk">"payment_ref"</span>: <span class="hls">"FIUU-abc123"</span>,       <span class="hlcmt">// PSP transaction ID — idempotency key</span>
+  <span class="hlk">"outlet_id"</span>:   <span class="hls">"shell-seksyen-13"</span>,
+  <span class="hlk">"pickup_type"</span>: <span class="hls">"counter"</span>,              <span class="hlcmt">// "counter" | "curbside"</span>
+  <span class="hlk">"customer"</span>: <span class="hlc">{</span>
+    <span class="hlk">"name"</span>:  <span class="hls">"Amir Razif"</span>,
+    <span class="hlk">"phone"</span>: <span class="hls">"60123456789"</span>,           <span class="hlcmt">// E.164, for WhatsApp notification</span>
+    <span class="hlk">"fcm_token"</span>: <span class="hls">"..."</span>                <span class="hlcmt">// optional, for push notification</span>
+  <span class="hlc">}</span>,
+  <span class="hlk">"items"</span>: <span class="hlc">[</span>
+    <span class="hlc">{</span>
+      <span class="hlk">"product_id"</span>: <span class="hls">"flat-white"</span>,
+      <span class="hlk">"qty"</span>:        <span class="hln">1</span>,
+      <span class="hlk">"unit_price"</span>: <span class="hln">12.50</span>,          <span class="hlcmt">// price at time of order (immutable)</span>
+      <span class="hlk">"mods"</span>: <span class="hlc">{</span>
+        <span class="hlk">"size"</span>:  <span class="hls">"m"</span>,
+        <span class="hlk">"milk"</span>:  <span class="hls">"oat"</span>,
+        <span class="hlk">"sugar"</span>: <span class="hls">"less"</span>,
+        <span class="hlk">"ice"</span>:   <span class="hls">"std"</span>,
+        <span class="hlk">"notes"</span>: <span class="hls">"extra hot please"</span>
+      <span class="hlc">}</span>
+    <span class="hlc">}</span>
+  <span class="hlc">]</span>,
+  <span class="hlk">"total_paid"</span>: <span class="hln">12.50</span>,
+  <span class="hlk">"currency"</span>: <span class="hls">"MYR"</span>
+<span class="hlc">}</span></pre>
+
+<h4>Response — 201 Created</h4>
+<pre><span class="hlc">{</span>
+  <span class="hlk">"order_id"</span>:     <span class="hls">"A2186"</span>,
+  <span class="hlk">"status"</span>:       <span class="hls">"pending"</span>,
+  <span class="hlk">"eta_minutes"</span>:  <span class="hln">4</span>,
+  <span class="hlk">"created_at"</span>:   <span class="hls">"2026-04-19T10:32:00.000Z"</span>
+<span class="hlc">}</span></pre>
+
+<h4>Error codes</h4>
+<table>
+  <tr><th>Code</th><th>Meaning</th></tr>
+  <tr><td><code>409</code></td><td>Duplicate <code>payment_ref</code> — return existing order_id</td></tr>
+  <tr><td><code>422</code></td><td>Item is out of stock — should have been caught client-side</td></tr>
+  <tr><td><code>503</code></td><td>Online intake is paused (POS set <code>intake_paused: true</code>) — show "we're busy, try shortly" UI</td></tr>
+</table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="get-orders">GET /api/orders</h2>
+<p>Used by the POS to hydrate the queue on startup, and to recover from a dropped WebSocket connection.</p>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method get">GET</span>
+    <span class="endpoint-path">/api/orders?outlet=shell-seksyen-13&status=pending,accepted,ready</span>
+    <span class="endpoint-desc">Fetch active queue</span>
+  </div>
+  <div class="endpoint-body">
+<pre><span class="hlc">{</span>
+  <span class="hlk">"orders"</span>: <span class="hlc">[</span> <span class="hlcmt">/* array of order objects */</span> <span class="hlc">]</span>,
+  <span class="hlk">"intake_paused"</span>: <span class="hlt">false</span>,
+  <span class="hlk">"avg_wait_seconds"</span>: <span class="hln">200</span>
+<span class="hlc">}</span></pre>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="patch-orders">PATCH /api/orders/:id</h2>
+<p>POS calls this to advance order status. Each status transition has server-side guards (e.g. can't move from <code>pending</code> to <code>ready</code> directly).</p>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method patch">PATCH</span>
+    <span class="endpoint-path">/api/orders/:id</span>
+    <span class="endpoint-desc">Advance order status</span>
+  </div>
+  <div class="endpoint-body">
+<pre><span class="hlcmt">// Accept order</span>
+<span class="hlc">{ "status": "accepted" }</span>
+
+<span class="hlcmt">// Mark ready (triggers customer notification)</span>
+<span class="hlc">{ "status": "ready" }</span>
+
+<span class="hlcmt">// Mark collected</span>
+<span class="hlc">{ "status": "collected" }</span>
+
+<span class="hlcmt">// Reject with reason</span>
+<span class="hlc">{ "status": "rejected", "reject_reason": "out_of_stock" }</span>
+
+<span class="hlcmt">// Pause intake (toggle)</span>
+<span class="hlc">{ "intake_paused": true, "outlet_id": "shell-seksyen-13" }</span></pre>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="get-products">GET /api/products</h2>
+<p>Customer app fetches this on load to render the menu. POS pushes updates here when products change.</p>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method get">GET</span>
+    <span class="endpoint-path">/api/products?outlet=shell-seksyen-13</span>
+    <span class="endpoint-desc">Fetch live menu + stock state</span>
+  </div>
+  <div class="endpoint-body">
+<pre><span class="hlc">{</span>
+  <span class="hlk">"products"</span>: <span class="hlc">[</span>
+    <span class="hlc">{</span>
+      <span class="hlk">"id"</span>:          <span class="hls">"flat-white"</span>,
+      <span class="hlk">"name"</span>:        <span class="hls">"Flat White"</span>,
+      <span class="hlk">"category"</span>:   <span class="hls">"coffee"</span>,
+      <span class="hlk">"price"</span>:       <span class="hln">10.50</span>,
+      <span class="hlk">"available"</span>:  <span class="hlt">true</span>,         <span class="hlcmt">// false = greyed out "Sold out" in customer app</span>
+      <span class="hlk">"stock_count"</span>: <span class="hln">null</span>,         <span class="hlcmt">// null = unlimited (drinks); integer for pastries</span>
+      <span class="hlk">"image_url"</span>:  <span class="hls">"https://..."</span>  <span class="hlcmt">// optional; null = show stylised cup illustration</span>
+    <span class="hlc">}</span>
+  <span class="hlc">]</span>
+<span class="hlc">}</span></pre>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="patch-stock">PATCH /api/products/:id/stock</h2>
+<p>POS calls this when a barista marks an item as sold out, or when the periodic stock-push fires.</p>
+
+<div class="endpoint">
+  <div class="endpoint-head">
+    <span class="method patch">PATCH</span>
+    <span class="endpoint-path">/api/products/:id/stock</span>
+    <span class="endpoint-desc">Update availability</span>
+  </div>
+  <div class="endpoint-body">
+<pre><span class="hlcmt">// Manual sold-out toggle</span>
+<span class="hlc">{ "available": false }</span>
+
+<span class="hlcmt">// Stock count update (pastries, packaged items)</span>
+<span class="hlc">{ "stock_count": 3 }</span>
+
+<span class="hlcmt">// Decrement on sale (called after order.accepted)</span>
+<span class="hlc">{ "decrement": 1 }</span></pre>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="realtime">WebSocket / Realtime events</h2>
+<p>The POS subscribes to a Supabase Realtime channel on startup. Events flow cloud → POS.</p>
+
+<div class="callout success">
+  <span class="callout-icon">✓</span>
+  <div>In Supabase, enable Realtime on the <code>orders</code> table. Filter by <code>outlet_id = 'shell-seksyen-13'</code> so multi-outlet expansion works for free later.</div>
+</div>
+
+<h4>POS subscription (Node.js)</h4>
+<pre><span class="hlk">const</span> { createClient } = require(<span class="hls">'@supabase/supabase-js'</span>)
+<span class="hlk">const</span> supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+supabase
+  .channel(<span class="hls">'orders-queue'</span>)
+  .on(<span class="hls">'postgres_changes'</span>, {
+    event:  <span class="hls">'*'</span>,
+    schema: <span class="hls">'public'</span>,
+    table:  <span class="hls">'orders'</span>,
+    filter: <span class="hls">`outlet_id=eq.shell-seksyen-13`</span>
+  }, (payload) => {
+    <span class="hlk">const</span> order = payload.new
+    <span class="hlk">if</span> (payload.eventType === <span class="hls">'INSERT'</span>) handleNewOrder(order)
+    <span class="hlk">if</span> (payload.eventType === <span class="hls">'UPDATE'</span>) handleOrderUpdate(order)
+  })
+  .subscribe()</pre>
+
+<h4>Events the POS should handle</h4>
+<table>
+  <tr><th>Event</th><th>Payload</th><th>POS action</th></tr>
+  <tr><td><code>order.created</code></td><td>Full order object</td><td>Add card to Pending column, play alert tone</td></tr>
+  <tr><td><code>order.status_changed</code></td><td><code>{ order_id, status }</code></td><td>Move card between columns</td></tr>
+  <tr><td><code>product.availability_changed</code></td><td><code>{ product_id, available }</code></td><td>Update stock badge in POS menu view</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="pos-events">POS → Cloud events</h2>
+<p>The POS sends these on user action (status changes, stock updates, intake pause).</p>
+
+<pre><span class="hlcmt">// When barista accepts an order</span>
+<span class="hlk">await</span> supabase
+  .from(<span class="hls">'orders'</span>)
+  .update({ status: <span class="hls">'accepted'</span>, accepted_at: <span class="hls">'now()'</span> })
+  .eq(<span class="hls">'id'</span>, orderId)
+
+<span class="hlcmt">// When barista marks ready</span>
+<span class="hlk">await</span> supabase
+  .from(<span class="hls">'orders'</span>)
+  .update({ status: <span class="hls">'ready'</span>, ready_at: <span class="hls">'now()'</span> })
+  .eq(<span class="hls">'id'</span>, orderId)
+<span class="hlcmt">// → Supabase database webhook fires → cloud function sends customer WhatsApp/push</span></pre>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="label-printer">Label printer (Bluetooth)</h2>
+<p>The POS already controls the Bluetooth label printer. Wire it into the <code>handleNewOrder</code> callback after barista accepts.</p>
+
+<pre><span class="hlk">function</span> <span class="hlc">printLabel</span>(order) {
+  <span class="hlk">const</span> lines = [
+    <span class="hls">`COFFEE OASIS #<span class="hlc">${order.id}</span>`</span>,
+    <span class="hls">`<span class="hlc">${order.customer.name}</span> · <span class="hlc">${order.pickup_type.toUpperCase()}</span>`</span>,
+    <span class="hls">`<span class="hlc">${formatTime(order.created_at)}</span>`</span>,
+    <span class="hls">'---'</span>,
+    ...order.items.map(i =>
+      <span class="hls">`<span class="hlc">${i.qty}</span>x <span class="hlc">${i.product_name}</span><span class="hlc">${i.mods?.size === 'm' ? ' [L]' : ''}</span>`</span>
+    ),
+    i.mods?.notes ? <span class="hls">`NOTE: <span class="hlc">${i.mods.notes}</span>`</span> : <span class="hls">''</span>,
+    <span class="hls">'---'</span>,
+    <span class="hls">`TOTAL: RM <span class="hlc">${order.total_paid.toFixed(2)}</span> PAID`</span>,
+  ]
+  printer.print(lines.join(<span class="hls">'\n'</span>))   <span class="hlcmt">// use your existing printer driver</span>
+}</pre>
+
+<div class="callout info">
+  <span class="callout-icon">ℹ️</span>
+  <div>Print labels on <strong>Accept</strong>, not on order creation. This prevents printing for orders that get rejected. Add a "Reprint" button that re-calls <code>printLabel(order)</code> with the existing order object.</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="kds">Kitchen Display System</h2>
+<p>The KDS is a separate screen driven by the POS. On Accept, open a WebSocket or push directly to the KDS frontend.</p>
+
+<pre><span class="hlcmt">// Simple approach: KDS page subscribes to same Supabase channel</span>
+<span class="hlcmt">// filtered to status = 'accepted' | 'ready', sorted by accepted_at ASC</span>
+<span class="hlcmt">// No separate server needed.</span>
+
+<span class="hlk">const</span> kdsOrders = <span class="hlk">await</span> supabase
+  .from(<span class="hls">'orders'</span>)
+  .select(<span class="hls">'*'</span>)
+  .eq(<span class="hls">'outlet_id'</span>, <span class="hls">'shell-seksyen-13'</span>)
+  .in(<span class="hls">'status'</span>, [<span class="hls">'accepted'</span>, <span class="hls">'ready'</span>])
+  .order(<span class="hls">'accepted_at'</span>, { ascending: <span class="hlt">true</span> })</pre>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="notifications">Customer notifications</h2>
+<p>Triggered server-side when order status becomes <code>ready</code>. Recommended: WhatsApp via Twilio or 360Dialog (both have Malaysian carrier support and good deliverability vs SMS).</p>
+
+<pre><span class="hlcmt">// Supabase database webhook → Vercel edge function</span>
+<span class="hlcmt">// fires when orders.status changes to 'ready'</span>
+
+<span class="hlk">export default async function</span> <span class="hlc">handler</span>(req) {
+  <span class="hlk">const</span> { record } = <span class="hlk">await</span> req.json()
+  <span class="hlk">if</span> (record.status !== <span class="hls">'ready'</span>) <span class="hlk">return</span> Response.json({ ok: <span class="hlt">true</span> })
+
+  <span class="hlk">await</span> twilio.messages.create({
+    from:  <span class="hls">'whatsapp:+60XXXXXXXXX'</span>,
+    to:    <span class="hls">`whatsapp:<span class="hlc">${record.customer_phone}</span>`</span>,
+    body:  <span class="hls">`☕ Your Coffee Oasis order #<span class="hlc">${record.id}</span> is ready! `</span> +
+           <span class="hls">`Head to the counter at Shell Seksyen 13.`</span>
+  })
+  <span class="hlk">return</span> Response.json({ ok: <span class="hlt">true</span> })
+}</pre>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="infra">Recommended stack</h2>
+
+<table>
+  <tr><th>Layer</th><th>Service</th><th>Why</th></tr>
+  <tr><td>Database</td><td>Postgres-backed DB (Supabase / Neon / Railway — architect's choice)</td><td>Choose based on architect preference; Supabase adds built-in Realtime + RLS; Neon/Railway are leaner</td></tr>
+  <tr><td>API / Edge functions</td><td>Vercel (existing)</td><td>Already in use; edge functions for webhook handlers</td></tr>
+  <tr><td>Payments</td><td>Fiuu (formerly Razer Merchant Services)</td><td>Local Malaysian PSP, supports FPX, credit cards, Touch 'n Go, GrabPay, Boost — already selected</td></tr>
+  <tr><td>Customer notifications</td><td>Twilio WhatsApp or 360Dialog</td><td>WhatsApp has 98% open rate in MY; better than SMS or push for a first-order</td></tr>
+  <tr><td>POS realtime client</td><td><code>@supabase/supabase-js</code></td><td>Drop-in Node package; reconnects automatically on network blip</td></tr>
+  <tr><td>Auth</td><td>Supabase Auth</td><td>JWT-based; use service_role key on POS (trusted machine), anon key on customer app</td></tr>
+</table>
+
+<div class="callout warn">
+  <span class="callout-icon">⚠️</span>
+  <div><strong>Don't put your service_role key in the customer app.</strong> The customer app should only use the anon key + RLS policies. The POS (trusted, local machine) can use the service key for admin writes.</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="stock-sync">Stock sync rules</h2>
+
+<ul>
+  <li><strong>Drinks</strong> — no stock count. Mark unavailable manually (POS toggle) when you run out of a key ingredient. Auto-resume next day.</li>
+  <li><strong>Pastries / packaged items</strong> — integer stock count in DB. Decrement on <code>order.accepted</code>. At count = 0 → <code>available: false</code> auto-set by Supabase trigger.</li>
+  <li><strong>Threshold</strong> — set <code>available: false</code> client-side at count ≤ 2 as a buffer for walk-in conflicts. Server enforces at 0.</li>
+  <li><strong>Conflict handling</strong> — if an online order slips through for a just-sold-out item, the barista rejects it with reason <code>out_of_stock</code> → auto-refund fires via PSP API → customer gets WhatsApp notification.</li>
+  <li><strong>POS sync frequency</strong> — POS pushes stock counts to cloud every <strong>60 seconds</strong> passively, and immediately on any manual stock edit.</li>
+</ul>
+
+<!-- ══════════════════════════════════════════ -->
+<h2 id="auth">Auth & security</h2>
+
+<ul>
+  <li>Customer app: Supabase anon key + RLS. Customers can INSERT orders; can only SELECT their own orders (by session token). Cannot read other customers' orders.</li>
+  <li>POS: service_role key stored as environment variable on Windows machine. Rotate quarterly.</li>
+  <li>PSP webhook: verify signature header before processing. Reject anything without a valid HMAC.</li>
+  <li>Rate limit <code>POST /api/orders</code> to 5 req/min per IP at the Vercel edge to prevent abuse.</li>
+  <li>Idempotency: <code>payment_ref</code> must be unique per order. DB unique constraint + 409 on duplicate.</li>
+</ul>
+
+<div style="margin-top:48px;padding:20px 24px;background:#f8f9fb;border:1px solid #e9ecef;border-radius:8px;font-size:12px;color:#6c757d">
+  <strong>Coffee Oasis · Integration Spec v0.1</strong> · April 2026 · Draft — for internal use and developer handoff.
+  Prepared by design/product; confirm pricing, PSP selection, and notification provider with the team before implementation.
+</div>
+
+</main>
+</div>
+
+<script>
+// Highlight active sidebar link on scroll
+const headings = document.querySelectorAll('h2[id], h3[id]');
+const links = document.querySelectorAll('.sidebar a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  headings.forEach(h => {
+    if (window.scrollY >= h.offsetTop - 80) current = h.id;
+  });
+  links.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+}, { passive: true });
+</script>
+</body>
+</html>
