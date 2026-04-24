@@ -1,37 +1,22 @@
 {
-  "name": "pos-monorepo",
+  "name": "coffee-oasis-online-api",
   "version": "1.0.0",
+  "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start -H 0.0.0.0",
+    "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
-    "@mmote/niimbluelib": "0.0.1-alpha.29",
-    "@vercel/blob": "^0.25.0",
-    "@woocommerce/woocommerce-rest-api": "^1.0.1",
-    "axios": "^1.6.8",
-    "basic-ftp": "^5.0.5",
-    "better-sqlite3": "^9.4.3",
-    "lucide-react": "^0.511.0",
+    "@supabase/supabase-js": "^2.104.1",
     "next": "^14.2.0",
-    "pdf-lib": "^1.17.1",
     "react": "^18.2.0",
-    "react-circular-progressbar": "^2.1.0",
-    "react-dom": "^18.2.0",
-    "react-qr-code": "^2.0.0",
-    "supports-color": "^10.0.0",
-    "uuid": "^11.1.0"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.9",
-    "@types/node": "22.15.29",
-    "@types/pdfkit": "^0.13.5",
-    "@types/react": "19.1.6",
-    "autoprefixer": "^10.4.14",
-    "postcss": "^8.4.21",
-    "tailwindcss": "^3.4.1",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
     "typescript": "^5.3.3"
   }
 }

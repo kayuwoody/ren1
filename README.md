@@ -1,291 +1,59 @@
-# ☕ Coffee Oasis POS System
+# coffee-oasis-online-api
 
-**Production v1.0** - Professional Point of Sale system for Coffee Oasis grab-and-go coffee shop
+Standalone Next.js API for Coffee Oasis online ordering. No POS UI, no SQLite — purely cloud routes backed by Supabase.
 
-[![Status](https://img.shields.io/badge/status-production-success)](https://coffee-oasis.com.my)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](./CHANGELOG.md)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
-[![License](https://img.shields.io/badge/license-Private-red)]()
+## What this is
 
----
+This is the backend for the customer-facing online ordering app. It lives separately from the main POS repo (ren1) which runs locally on Windows with SQLite.
 
-## 🚀 Quick Start
+## Setup
 
-```bash
-# Install dependencies
-npm install
+1. Create a new Vercel project pointed at this repo
+2. Run `supabase/schema.sql` in your Supabase SQL editor
+3. Add env vars to Vercel (see `.env.local.example`):
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `FIUU_MERCHANT_ID`
+   - `FIUU_VERIFY_KEY`
+   - `FIUU_SECRET_KEY`
+4. In Fiuu portal, register `/api/webhooks/fiuu` as your Notification URL
+5. In Supabase dashboard, enable Realtime on the `online_orders` table:
+   `ALTER PUBLICATION supabase_realtime ADD TABLE online_orders;`
 
-# Development
-npm run dev
+## Endpoints
 
-# Production
-npm run build
-npm run start
-```
+| Method | Path | Caller | Purpose |
+|--------|------|--------|---------|
+| POST | `/api/orders` | Customer app | Create order after Fiuu payment |
+| POST | `/api/webhooks/fiuu` | Fiuu IPN | Verify & store payment confirmation |
+| GET | `/api/online/orders` | POS | Fetch active order queue |
+| PATCH | `/api/online/orders/:id` | POS | Advance order status |
+| GET | `/api/online/products` | Customer app | Fetch live menu |
+| PATCH | `/api/online/products/:id/stock` | POS | Sync stock/availability |
 
-Visit `http://localhost:3000` and login with admin credentials.
+## Order flow
 
----
+1. Customer pays via Fiuu
+2. Fiuu calls `POST /api/webhooks/fiuu` — payment ref stored in `fiuu_payments`
+3. Customer app calls `POST /api/orders` with `payment_ref` — order created
+4. Supabase Realtime broadcasts insert to POS
+5. POS barista accepts → `PATCH /api/online/orders/:id` with `status: accepted`
+6. Barista marks ready → customer gets notified
+7. Customer collects → `status: collected`
 
-## 📋 Features
-
-### Core POS
-- ✅ **Multi-screen system** - POS, Customer Display, Kitchen Display
-- ✅ **WooCommerce integration** - Real-time product and order sync
-- ✅ **Advanced discounts** - 10%, 15%, 20%, 25%, 50%, 🦄Free (100% Unicorns)
-- ✅ **Hold orders** - Manage multiple concurrent customers
-- ✅ **Bundle products** - Support for combos with add-ons
-
-### Kitchen Management
-- ✅ **Kitchen display** - Auto-fit grid optimized for tablets
-- ✅ **Order timers** - Color-coded priority system
-- ✅ **Real-time updates** - Orders appear instantly after payment
-- ✅ **Mark ready** - One-click order completion
-
-### Inventory & COGS
-- ✅ **Recipe builder** - Define product recipes with materials
-- ✅ **Automatic COGS** - Cost tracking per product
-- ✅ **Stock management** - Deduct inventory on sales
-- ✅ **Material database** - Track raw materials and packaging
-
-### Receipts
-- ✅ **Static HTML receipts** - Hosted on Hostinger
-- ✅ **FTP auto-upload** - Receipts generated after payment
-- ✅ **Mascot branding** - Coffee Oasis logo on all receipts
-- ✅ **Discount tracking** - Full pricing breakdown
-
-### Admin Dashboard
-- ✅ **Daily stats** - Revenue, orders, pending items
-- ✅ **Sales reports** - Date range filtering with COGS analysis
-- ✅ **Order management** - View and update all orders
-- ✅ **Product sync** - Force refresh from WooCommerce
-
----
-
-## 📚 Documentation
-
-- **[PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md)** - Complete system documentation
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Production deployment guide
-- **[CHANGELOG.md](./CHANGELOG.md)** - Version history and changes
-- **[PAYMENT_SETUP.md](./PAYMENT_SETUP.md)** - Payment gateway configuration
-- **[RECEIPT_HTACCESS_INSTRUCTIONS.md](./RECEIPT_HTACCESS_INSTRUCTIONS.md)** - Receipt hosting setup
-
----
-
-## 🛠️ Tech Stack
-
-- **Framework:** Next.js 14 (App Router)
-- **Language:** TypeScript
-- **Database:** SQLite (better-sqlite3)
-- **Styling:** Tailwind CSS
-- **E-commerce:** WooCommerce REST API
-- **File Upload:** FTP (node-ftp)
-- **Icons:** Lucide React
-
----
-
-## 📦 Project Structure
+## Status machine
 
 ```
-ren1/
-├── app/                      # Next.js app router
-│   ├── admin/               # Admin dashboard
-│   ├── checkout/            # Checkout page
-│   ├── kitchen/             # Kitchen display
-│   ├── customer-display/    # Customer-facing display
-│   └── api/                 # API routes
-├── components/              # React components
-├── context/                 # React context providers
-├── lib/                     # Utilities and services
-│   ├── db/                 # Database services
-│   ├── api/                # API helpers
-│   └── receiptGenerator.ts # Receipt HTML generation
-├── prisma/                  # SQLite database
-│   └── dev.db              # Local database (gitignored)
-├── public/                  # Static assets
-│   └── mascot.jpg          # Coffee Oasis logo
-├── scripts/                 # Utility scripts
-└── .env.local              # Environment variables (gitignored)
+pending → accepted → ready → collected
+pending → rejected
+accepted → rejected
 ```
 
----
+## For the next Claude Code session (bubu1 repo)
 
-## ⚙️ Configuration
+This code should be copied into the `bubu1` GitHub repo and deployed as a new Vercel project. The POS repo (`ren1`) does NOT need these files — it runs locally and connects to Supabase only for realtime order subscriptions (future work).
 
-### Environment Variables
-
-Create `.env.local` with:
-
-```env
-# WooCommerce API
-NEXT_PUBLIC_WC_API_URL=https://coffee-oasis.com.my
-WC_CONSUMER_KEY=ck_xxxxxxxxxxxxx
-WC_CONSUMER_SECRET=cs_xxxxxxxxxxxxx
-
-# FTP Receipt Upload
-FTP_HOST=ftp.coffee-oasis.com.my
-FTP_USER=your-username
-FTP_PASSWORD=your-password
-FTP_RECEIPT_PATH=/public_html/receipts
-```
-
-### Database
-
-Database auto-creates at `./prisma/dev.db` on first run.
-
-**Backup:**
-```bash
-cp prisma/dev.db prisma/backup-$(date +%Y%m%d).db
-```
-
-**Reset:**
-```bash
-rm prisma/dev.db && npm run start
-```
-
----
-
-## 🖥️ Multi-Screen Setup
-
-### 1. Start POS Server
-```bash
-npm run build
-npm run start
-# Server on 0.0.0.0:3000
-```
-
-### 2. Find Server IP
-```bash
-# Linux/Mac
-ip addr show | grep inet
-
-# Windows
-ipconfig
-```
-
-### 3. Connect Displays
-- **POS:** `http://192.168.1.100:3000/admin`
-- **Customer:** `http://192.168.1.100:3000/customer-display`
-- **Kitchen:** `http://192.168.1.100:3000/kitchen`
-
----
-
-## 🔧 Development
-
-### Run Dev Server
-```bash
-npm run dev
-```
-
-### Build for Production
-```bash
-npm run build
-npm run start
-```
-
-### Database Scripts
-```bash
-# View database stats
-node scripts/verify-db-status.js
-
-# Clean consumption records
-node scripts/cleanup-consumption-only.js
-```
-
----
-
-## 📊 Production Status
-
-**Version:** 1.0.0
-**Status:** ✅ Production
-**Last Deploy:** November 13, 2025
-
-### Production Checklist
-- [x] Environment configured
-- [x] Database initialized
-- [x] Mascot uploaded to Hostinger
-- [x] FTP receipts working
-- [x] WooCommerce sync active
-- [x] All discounts functional
-- [x] Kitchen display optimized
-- [x] Build warnings resolved
-
----
-
-## 🐛 Troubleshooting
-
-### Orders Not Showing
-
-**Issue:** New orders not appearing in admin/kitchen
-
-**Solution:**
-```bash
-# Clear build cache and rebuild
-rm -rf .next
-npm run build
-npm run start
-```
-
-### Receipt Upload Fails
-
-**Issue:** FTP connection errors
-
-**Solution:**
-- Verify FTP credentials in `.env.local`
-- Check Hostinger `/public_html/receipts/` folder exists
-- Test FTP connection manually
-
-### Database Errors
-
-**Issue:** "Cannot open database because directory does not exist"
-
-**Solution:**
-```bash
-# Create directory (auto-creates on next start)
-mkdir -p prisma
-touch prisma/.gitkeep
-```
-
----
-
-## 📝 Changelog
-
-See [CHANGELOG.md](./CHANGELOG.md) for version history.
-
-**Latest (v1.0.0):**
-- Added 15% discount option
-- Fixed build cache issues
-- Removed receipt auto-open
-- Optimized kitchen display layout
-- Production database cleanup
-
----
-
-## 🔒 Security
-
-- ✅ Environment variables gitignored
-- ✅ Database gitignored
-- ✅ Admin authentication via sessionStorage
-- ✅ HTTPS for WooCommerce API
-- ✅ FTP credentials encrypted in env
-- ✅ Regular database backups
-
----
-
-## 📞 Support
-
-**Website:** https://coffee-oasis.com.my
-**Email:** support@coffee-oasis.com.my
-**GitHub:** https://github.com/kayuwoody/ren1
-
----
-
-## 📄 License
-
-Private - All Rights Reserved
-
-Copyright © 2025 Coffee Oasis
-
----
-
-**Built with ❤️ for Coffee Oasis**
+Next steps:
+- Wire up customer notifications (WhatsApp via Twilio/360Dialog) when status → `ready`
+- Build the POS online orders screen that subscribes to Supabase Realtime
+- Integrate with the customer app frontend (designs already done)
