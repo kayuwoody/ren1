@@ -75,10 +75,13 @@ async function _recordProductSaleInternal(
   }
 
   const chain = parentChain ? `${parentChain} → ${productName}` : productName;
-  console.log(`${indent}📦 Processing${depth > 0 ? ' (linked)' : ''}: WC ID ${wcProductId}, "${productName}", Qty: ${quantitySold}`);
+  console.log(`${indent}📦 Processing${depth > 0 ? ' (linked)' : ''}: ID ${wcProductId}, "${productName}", Qty: ${quantitySold}`);
 
-  // Find product by WooCommerce ID
-  const product = getProductByWcId(Number(wcProductId));
+  // Find product by local ID first, then WooCommerce ID
+  let product = getProduct(String(wcProductId));
+  if (!product) {
+    product = getProductByWcId(Number(wcProductId));
+  }
 
   if (!product) {
     console.warn(`${indent}⚠️  Product with WC ID ${wcProductId} not found in local database`);
@@ -214,7 +217,7 @@ async function _recordProductSaleInternal(
       console.log(`${indent}   🔗 Linked: ${recipeItem.linkedProductName} (${quantityConsumed}x)`);
 
       const linkedProduct = getProduct(recipeItem.linkedProductId);
-      if (linkedProduct && linkedProduct.wcId) {
+      if (linkedProduct) {
         const consumptionId = uuidv4();
         const linkedProductConsumption: InventoryConsumption = {
           id: consumptionId, orderId, orderItemId, productId, productName,
@@ -244,7 +247,7 @@ async function _recordProductSaleInternal(
         deductLocalProductStock(linkedProduct.id, quantityConsumed, linkedProduct.name, branchId, orderId);
 
         const linkedConsumptions = await _recordProductSaleInternal(
-          orderId, linkedProduct.wcId, linkedProduct.name,
+          orderId, linkedProduct.wcId || linkedProduct.id, linkedProduct.name,
           quantityConsumed, orderItemId, bundleSelection,
           depth + 1, chain, branchId
         );
@@ -444,10 +447,13 @@ export function calculateProductCOGS(
     productChain: string;
   }>;
 } {
-  const product = getProductByWcId(Number(wcProductId));
+  let product = getProduct(String(wcProductId));
+  if (!product) {
+    product = getProductByWcId(Number(wcProductId));
+  }
 
   if (!product) {
-    console.warn(`⚠️  Product with WC ID ${wcProductId} not found - COGS calculation skipped`);
+    console.warn(`⚠️  Product ${wcProductId} not found - COGS calculation skipped`);
     return { totalCOGS: 0, breakdown: [] };
   }
 
@@ -492,7 +498,7 @@ export function calculateProductCOGS(
         });
       } else if (item.itemType === 'product' && item.linkedProductId) {
         const linkedProduct = getProduct(item.linkedProductId);
-        if (linkedProduct && linkedProduct.wcId) {
+        if (linkedProduct) {
           breakdown.push({
             itemType: 'product', itemId: item.linkedProductId,
             itemName: item.linkedProductName || linkedProduct.name,
@@ -502,7 +508,7 @@ export function calculateProductCOGS(
           });
 
           const linkedCOGS = calculateProductCOGS(
-            linkedProduct.wcId, item.quantity * quantity,
+            linkedProduct.wcId || linkedProduct.id, item.quantity * quantity,
             bundleSelection, depth + 1, chain
           );
           breakdown.push(...linkedCOGS.breakdown);

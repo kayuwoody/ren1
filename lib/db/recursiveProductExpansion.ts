@@ -394,12 +394,16 @@ export function getSelectedComponents(
     const linkedHasXORGroups = linkedRecipe.some(r => r.selectionGroup);
     const linkedHasProducts = linkedRecipe.some(r => r.itemType === 'product');
 
-    // NEW: Check if it has VISIBLE sub-products (not hidden/private like packaging)
-    // If all linked products are hidden/private, treat this as a leaf product
+    // Check if it has VISIBLE sub-products worth expanding into.
+    // A sub-product is "visible" if it's not hidden/private AND has its own linked products
+    // (not just materials). Products with only materials (like packaging) are leaf items
+    // that shouldn't trigger expansion of their parent.
     const linkedHasVisibleProducts = linkedRecipe.some(r => {
       if (r.itemType !== 'product' || !r.linkedProductId) return false;
       const subProduct = getProduct(r.linkedProductId);
-      return subProduct && subProduct.category !== 'hidden' && subProduct.category !== 'private';
+      if (!subProduct || subProduct.category === 'hidden' || subProduct.category === 'private') return false;
+      const subRecipe = getProductRecipe(r.linkedProductId);
+      return subRecipe.some(sr => sr.itemType === 'product');
     });
 
     console.log(`  🔍 Checking linked product "${linkedProd.name}" (depth=${depth}):`, {

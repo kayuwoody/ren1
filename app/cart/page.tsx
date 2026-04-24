@@ -25,7 +25,7 @@ export default function CartPage() {
         <>
           {/* Cart summary with remove buttons */}
           <ul className="mb-4 space-y-2">
-            {cartItems.map((item) => (
+            {cartItems.map((item, index) => (
               <li key={item.productId} className="flex justify-between items-center border-b pb-2">
                 <div className="flex-1">
                   <p className="font-medium">{item.name}</p>
@@ -36,7 +36,7 @@ export default function CartPage() {
                     RM {(item.retailPrice * item.quantity).toFixed(2)}
                   </span>
                   <button
-                    onClick={() => removeFromCart(item.productId)}
+                    onClick={() => removeFromCart(index)}
                     className="text-red-600 hover:text-red-800 text-sm font-medium"
                   >
                     Remove

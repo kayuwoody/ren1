@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export interface CartItem {
-  productId: number;
+  productId: number | string;
   name: string;               // Display name (e.g., "Hot Latte" for bundles)
   retailPrice: number;        // Original catalog price
   discountPercent?: number;   // Discount as percentage (0-100)

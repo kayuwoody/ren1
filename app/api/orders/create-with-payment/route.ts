@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getBranchIdFromRequest } from "@/lib/api/branchHelper";
 import { db } from "@/lib/db/init";
 import { v4 as uuidv4 } from "uuid";
-import { getProductByWcId } from "@/lib/db/productService";
-import { calculateProductCOGS } from "@/lib/db/inventoryConsumptionService";
+import { getProduct, getProductByWcId } from "@/lib/db/productService";
+import { calculateProductCOGS, recordProductSale } from "@/lib/db/inventoryConsumptionService";
 
 /**
  * POST /api/orders/create-with-payment
@@ -43,7 +43,10 @@ export async function POST(req: Request) {
     const itemRows: any[] = [];
 
     for (const item of line_items) {
-      const product = getProductByWcId(item.product_id);
+      let product = getProduct(String(item.product_id));
+      if (!product) {
+        product = getProductByWcId(item.product_id);
+      }
       const qty = item.quantity || 1;
 
       const getMeta = (metaArr: any[] | undefined, key: string) =>
@@ -55,10 +58,24 @@ export async function POST(req: Request) {
       const lineSubtotal = finalPrice * qty;
       subtotal += lineSubtotal;
 
+      const isBundle = getMeta(item.meta_data, '_is_bundle') === 'true';
+
+      let bundleSelectionForCOGS: { selectedMandatory: Record<string, string>; selectedOptional: string[] } | undefined;
+      if (isBundle) {
+        const mandatoryJson = getMeta(item.meta_data, '_bundle_mandatory');
+        const optionalJson = getMeta(item.meta_data, '_bundle_optional');
+        if (mandatoryJson || optionalJson) {
+          bundleSelectionForCOGS = {
+            selectedMandatory: mandatoryJson ? JSON.parse(mandatoryJson) : {},
+            selectedOptional: optionalJson ? JSON.parse(optionalJson) : [],
+          };
+        }
+      }
+
       let unitCost = 0;
       if (product) {
         try {
-          const cogs = calculateProductCOGS(item.product_id, 1);
+          const cogs = calculateProductCOGS(item.product_id, 1, bundleSelectionForCOGS);
           unitCost = cogs.totalCOGS || product.unitCost || 0;
         } catch {
           unitCost = product.unitCost || 0;
@@ -66,8 +83,6 @@ export async function POST(req: Request) {
       }
       const lineCost = unitCost * qty;
       totalCost += lineCost;
-
-      const isBundle = getMeta(item.meta_data, '_is_bundle') === 'true';
       const bundleDisplayName = getMeta(item.meta_data, '_bundle_display_name');
       const displayName = isBundle && bundleDisplayName ? bundleDisplayName : (product?.name || item.name || 'Unknown');
 
@@ -77,6 +92,8 @@ export async function POST(req: Request) {
         variationsObj._bundle_display_name = bundleDisplayName;
         variationsObj._bundle_base_product_name = getMeta(item.meta_data, '_bundle_base_product_name');
         variationsObj._bundle_components = getMeta(item.meta_data, '_bundle_components');
+        variationsObj._bundle_mandatory = getMeta(item.meta_data, '_bundle_mandatory');
+        variationsObj._bundle_optional = getMeta(item.meta_data, '_bundle_optional');
       }
       const discountReason = getMeta(item.meta_data, '_discount_reason');
       if (discountReason) variationsObj._discount_reason = discountReason;
@@ -110,6 +127,7 @@ export async function POST(req: Request) {
     const overallMargin = subtotal > 0 ? (totalProfit / subtotal) * 100 : 0;
 
     const insertAll = db.transaction(() => {
+      console.log(`📝 Inserting Order: ${orderId}, branch: ${branchId}`);
       db.prepare(`
         INSERT INTO "Order" (id, orderNumber, status, customerName, customerPhone,
                              subtotal, tax, total, totalCost, totalProfit, overallMargin,
@@ -124,6 +142,7 @@ export async function POST(req: Request) {
         branchId, userId || null, guestId || null,
         now, now,
       );
+      console.log(`✅ Order row inserted`);
 
       const insertItem = db.prepare(`
         INSERT INTO OrderItem (id, orderId, productId, productName, category, sku,
@@ -134,12 +153,14 @@ export async function POST(req: Request) {
       `);
 
       for (const item of itemRows) {
+        console.log(`📝 Inserting OrderItem: productId=${item.productId}, name=${item.productName}`);
         insertItem.run(
           item.id, item.orderId, item.productId, item.productName, item.category, item.sku,
           item.quantity, item.basePrice, item.unitPrice, item.subtotal, item.unitCost, item.totalCost,
           item.itemProfit, item.itemMargin, item.variations, item.discountApplied, item.finalPrice,
           item.branchId, item.soldAt,
         );
+        console.log(`✅ OrderItem inserted: ${item.productName}`);
       }
     });
 
@@ -168,6 +189,37 @@ export async function POST(req: Request) {
     };
 
     console.log(`✅ Order created: #${orderNumber} (${orderId})`);
+
+    // Record inventory consumption (COGS) for each line item
+    try {
+      for (const item of itemRows) {
+        let bundleSelection: any;
+        if (item.variations) {
+          try {
+            const v = JSON.parse(item.variations);
+            if (v._is_bundle === 'true') {
+              bundleSelection = {
+                selectedMandatory: v._bundle_mandatory ? JSON.parse(v._bundle_mandatory) : {},
+                selectedOptional: v._bundle_optional ? JSON.parse(v._bundle_optional) : [],
+              };
+            }
+          } catch {}
+        }
+
+        await recordProductSale({
+          orderId,
+          wcProductId: item.productId,
+          productName: item.productName,
+          quantitySold: item.quantity,
+          orderItemId: item.id,
+          bundleSelection,
+          branchId,
+        });
+      }
+      console.log(`📦 Inventory consumption recorded for order #${orderNumber}`);
+    } catch (consumptionErr) {
+      console.error('⚠️ Error recording consumption (order still created):', consumptionErr);
+    }
 
     return NextResponse.json({
       success: true,

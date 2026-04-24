@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/init';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
-import { getProductByWcId } from '@/lib/db/productService';
+import { getProduct, getProductByWcId } from '@/lib/db/productService';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function PATCH(
@@ -41,7 +41,7 @@ export async function PATCH(
       `);
 
       for (const item of line_items) {
-        const product = getProductByWcId(item.product_id);
+        const product = getProduct(String(item.product_id)) || getProductByWcId(item.product_id);
         const qty = item.quantity || 1;
         const price = parseFloat(item.price || product?.basePrice || '0');
         const lineTotal = price * qty;

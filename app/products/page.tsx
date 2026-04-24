@@ -6,7 +6,8 @@ import Link from "next/link";
 import ProductSelectionModal from "@/components/ProductSelectionModal";
 
 interface Product {
-  id: number;
+  id: string;
+  wcId?: number;
   name: string;
   price: string;
   images: { src: string }[];
