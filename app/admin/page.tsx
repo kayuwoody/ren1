@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3 } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
 
@@ -279,6 +279,17 @@ export default function AdminDashboard() {
           <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-3 px-2">Operations</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Link
+                href="/admin/online-orders"
+                className="bg-gradient-to-br from-orange-400 to-orange-500 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Globe className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Online Orders</h2>
+                </div>
+                <p className="text-orange-50">Accept, prepare, and manage online orders</p>
+              </Link>
+
               <Link
                 href="/admin/orders"
                 className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
