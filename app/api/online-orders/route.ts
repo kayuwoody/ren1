@@ -12,7 +12,7 @@ export async function GET() {
         customer_name, customer_phone,
         total_paid, currency, reject_reason,
         accepted_at, ready_at, created_at, updated_at,
-        online_order_items ( id, product_name, qty, unit_price, mods )
+        online_order_items ( id, product_id, product_name, qty, unit_price, mods )
       `)
       .eq('outlet_id', 'main')
       .in('status', ['pending', 'accepted', 'ready'])
