@@ -599,3 +599,12 @@ export function initDatabase() {
 
 // Run initialization when module is first imported
 initDatabase();
+
+// Fire-and-forget catalog sync on startup
+import('../catalogSync').then(({ syncAllProducts, syncAllRecipes }) => {
+  syncAllProducts()
+    .then(r => console.log(`Startup catalog sync: ${r.synced}/${r.total} products`))
+    .then(() => syncAllRecipes())
+    .then(r => console.log(`Startup catalog sync: ${r!.synced}/${r!.total} recipes`))
+    .catch(err => console.warn('Startup catalog sync failed (will retry on next restart):', err.message));
+});

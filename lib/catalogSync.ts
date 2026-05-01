@@ -1,67 +1,6 @@
 import { supabase } from './supabase';
 import { db } from './db/init';
 
-interface SyncQueueItem {
-  id: string;
-  table_name: string;
-  record_id: string;
-  operation: 'upsert' | 'delete';
-  payload: string;
-  created_at: string;
-  attempts: number;
-}
-
-function ensureSyncQueueTable() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS _sync_queue (
-      id TEXT PRIMARY KEY,
-      table_name TEXT NOT NULL,
-      record_id TEXT NOT NULL,
-      operation TEXT NOT NULL,
-      payload TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      attempts INTEGER NOT NULL DEFAULT 0
-    )
-  `);
-}
-
-function enqueue(tableName: string, recordId: string, operation: 'upsert' | 'delete', payload: object) {
-  ensureSyncQueueTable();
-  const id = `sync-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  db.prepare(`
-    INSERT INTO _sync_queue (id, table_name, record_id, operation, payload)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(id, tableName, recordId, operation, JSON.stringify(payload));
-}
-
-async function processQueue() {
-  ensureSyncQueueTable();
-  const items = db.prepare(`
-    SELECT * FROM _sync_queue WHERE attempts < 5 ORDER BY created_at ASC LIMIT 20
-  `).all() as SyncQueueItem[];
-
-  for (const item of items) {
-    try {
-      const payload = JSON.parse(item.payload);
-
-      if (item.operation === 'upsert') {
-        const { error } = await supabase.from(item.table_name).upsert(payload, { onConflict: 'id' });
-        if (error) throw error;
-      } else if (item.operation === 'delete') {
-        const { error } = await supabase.from(item.table_name).delete().eq('id', item.record_id);
-        if (error) throw error;
-      }
-
-      db.prepare('DELETE FROM _sync_queue WHERE id = ?').run(item.id);
-    } catch (err) {
-      console.error(`Sync failed for ${item.table_name}/${item.record_id}:`, err);
-      db.prepare('UPDATE _sync_queue SET attempts = attempts + 1 WHERE id = ?').run(item.id);
-    }
-  }
-
-  return items.length;
-}
-
 export async function syncProduct(productId: string) {
   const product = db.prepare('SELECT * FROM Product WHERE id = ?').get(productId) as any;
   if (!product) return;
@@ -78,20 +17,16 @@ export async function syncProduct(productId: string) {
     updated_at: new Date().toISOString(),
   };
 
-  try {
-    const { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' });
-    if (error) throw error;
-  } catch {
-    enqueue('products', product.id, 'upsert', payload);
+  const { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' });
+  if (error) {
+    console.warn(`Catalog sync failed for product ${productId}:`, error.message);
   }
 }
 
 export async function syncProductDelete(productId: string) {
-  try {
-    const { error } = await supabase.from('products').delete().eq('id', productId);
-    if (error) throw error;
-  } catch {
-    enqueue('products', productId, 'delete', {});
+  const { error } = await supabase.from('products').delete().eq('id', productId);
+  if (error) {
+    console.warn(`Catalog sync delete failed for product ${productId}:`, error.message);
   }
 }
 
@@ -104,29 +39,35 @@ export async function syncRecipe(productId: string) {
     ORDER BY pr.sortOrder ASC
   `).all(productId) as any[];
 
-  try {
-    await supabase.from('product_recipe_items').delete().eq('product_id', productId);
+  const { error: delError } = await supabase
+    .from('product_recipe_items')
+    .delete()
+    .eq('product_id', productId);
 
-    if (items.length > 0) {
-      const rows = items.map(item => ({
-        id: item.id,
-        product_id: item.productId,
-        item_type: item.itemType,
-        linked_product_id: item.linkedProductId,
-        linked_product_name: item.linkedProductName || null,
-        quantity: item.quantity,
-        unit: item.unit,
-        is_optional: item.isOptional === 1,
-        selection_group: item.selectionGroup,
-        price_adjustment: item.priceAdjustment,
-        sort_order: item.sortOrder,
-      }));
+  if (delError) {
+    console.warn(`Catalog sync: failed to clear recipe for ${productId}:`, delError.message);
+    return;
+  }
 
-      const { error } = await supabase.from('product_recipe_items').insert(rows);
-      if (error) throw error;
+  if (items.length > 0) {
+    const rows = items.map(item => ({
+      id: item.id,
+      product_id: item.productId,
+      item_type: item.itemType,
+      linked_product_id: item.linkedProductId,
+      linked_product_name: item.linkedProductName || null,
+      quantity: item.quantity,
+      unit: item.unit,
+      is_optional: item.isOptional === 1,
+      selection_group: item.selectionGroup,
+      price_adjustment: item.priceAdjustment,
+      sort_order: item.sortOrder,
+    }));
+
+    const { error } = await supabase.from('product_recipe_items').insert(rows);
+    if (error) {
+      console.warn(`Catalog sync: failed to insert recipe for ${productId}:`, error.message);
     }
-  } catch {
-    enqueue('product_recipe_items', productId, 'upsert', { product_id: productId, _full_sync: true });
   }
 }
 
@@ -147,7 +88,6 @@ export async function syncAllProducts() {
     updated_at: new Date().toISOString(),
   }));
 
-  // Upsert in batches of 50
   for (let i = 0; i < rows.length; i += 50) {
     const batch = rows.slice(i, i + 50);
     try {
@@ -178,20 +118,4 @@ export async function syncAllRecipes() {
   }
 
   return { synced, failed, total: products.length };
-}
-
-export async function flushSyncQueue() {
-  let totalProcessed = 0;
-  let batch = await processQueue();
-  while (batch > 0) {
-    totalProcessed += batch;
-    batch = await processQueue();
-  }
-  return totalProcessed;
-}
-
-export function getSyncQueueCount(): number {
-  ensureSyncQueueTable();
-  const row = db.prepare('SELECT COUNT(*) as c FROM _sync_queue WHERE attempts < 5').get() as { c: number };
-  return row.c;
 }

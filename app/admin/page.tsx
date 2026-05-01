@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
 
@@ -54,6 +54,8 @@ export default function AdminDashboard() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [catalogSyncing, setCatalogSyncing] = useState(false);
+  const [catalogSyncResult, setCatalogSyncResult] = useState<string | null>(null);
 
   useEffect(() => {
     // Check if already authenticated
@@ -124,6 +126,25 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       console.error('Failed to fetch daily stats:', err);
+    }
+  };
+
+  const handleCatalogSync = async () => {
+    setCatalogSyncing(true);
+    setCatalogSyncResult(null);
+    try {
+      const res = await fetch('/api/admin/catalog-sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setCatalogSyncResult(`Synced ${data.products.synced} products, ${data.recipes.synced} recipes`);
+      } else {
+        setCatalogSyncResult(`Sync failed: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      setCatalogSyncResult('Sync failed: network error');
+    } finally {
+      setCatalogSyncing(false);
+      setTimeout(() => setCatalogSyncResult(null), 5000);
     }
   };
 
@@ -418,6 +439,20 @@ export default function AdminDashboard() {
           <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-3 px-2">System & Customer</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <button
+                onClick={handleCatalogSync}
+                disabled={catalogSyncing}
+                className="bg-gradient-to-br from-cyan-500 to-cyan-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105 text-left disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <RefreshCw className={`w-6 h-6 text-white ${catalogSyncing ? 'animate-spin' : ''}`} />
+                  <h2 className="text-xl font-semibold">{catalogSyncing ? 'Syncing...' : 'Catalog Sync'}</h2>
+                </div>
+                <p className="text-cyan-50">
+                  {catalogSyncResult || 'Push products & recipes to online menu'}
+                </p>
+              </button>
+
               <Link
                 href="/admin/branches"
                 className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition"
