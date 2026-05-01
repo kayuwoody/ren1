@@ -4,54 +4,276 @@ This document describes how the POS backend (ren1) and customer-facing app (bubu
 
 ---
 
-## What the POS Does (for the customer app to handle)
+## Architecture Overview
 
-### Order Status Updates
+```
+Customer app (bubu1.vercel.app)              POS app (ren1 / this repo)
+───────────────────────────────              ────────────────────────────
+Customer browses menu from Supabase          Staff manage products in local SQLite
+  → reads `products` + `product_recipe_items`  → auto-syncs to Supabase on every change
+  → shows combos, selection groups, prices     → also syncs on POS startup
+Customer places order & pays via Fiuu        Staff see orders on Kanban board
+  → callback writes to Supabase                ← Supabase Realtime subscription
+  → online_orders + online_order_items         Staff accept / reject / ready / collect
+  → customer order page subscribes       ←──── Status changes written to Supabase
+     via Supabase Realtime                     Customer sees change instantly
+```
 
-The POS writes status changes directly to `online_orders` via Supabase. The customer app should subscribe via Realtime to reflect these instantly.
+No API calls between the two apps. Both talk directly to the same Supabase project.
+
+---
+
+## 1. Product Catalog (Menu)
+
+### Source of Truth
+
+POS SQLite is the source of truth for all product data. Products auto-sync to Supabase in two ways:
+
+1. **Auto-sync hooks** — Every product create/update/delete and every recipe change fires a fire-and-forget sync to Supabase
+2. **Startup sync** — On POS boot, all products and recipes are pushed to Supabase to catch anything missed
+
+Staff can also trigger a full sync manually from the admin dashboard.
+
+### Supabase Tables
+
+#### `products`
+```sql
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,                    -- UUID from POS (e.g. "a1b2c3d4-...")
+  name TEXT NOT NULL,
+  sku TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'uncategorized',
+  base_price NUMERIC NOT NULL DEFAULT 0,  -- retail price in RM
+  image_url TEXT,
+  combo_price_override NUMERIC,           -- if set, overrides calculated combo price
+  available_online BOOLEAN DEFAULT true,  -- staff can toggle off to hide from customer menu
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+#### `product_recipe_items`
+```sql
+CREATE TABLE IF NOT EXISTS product_recipe_items (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  item_type TEXT NOT NULL DEFAULT 'material',  -- 'material' or 'product'
+  linked_product_id TEXT REFERENCES products(id),
+  linked_product_name TEXT,
+  quantity NUMERIC NOT NULL DEFAULT 1,
+  unit TEXT NOT NULL DEFAULT 'unit',
+  is_optional BOOLEAN DEFAULT false,
+  selection_group TEXT,                    -- XOR group name (e.g. "Choose Drink")
+  price_adjustment NUMERIC DEFAULT 0,     -- e.g. +2.00 for iced upgrade
+  sort_order INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_product ON product_recipe_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_linked ON product_recipe_items(linked_product_id);
+```
+
+### How to Fetch the Menu
+
+```typescript
+const { data: products } = await supabase
+  .from('products')
+  .select('*')
+  .eq('available_online', true)
+  .order('category', { ascending: true })
+  .order('name', { ascending: true });
+```
+
+### Combos & Bundles
+
+A product is a combo if it has `product_recipe_items` with `item_type = 'product'`.
+
+```typescript
+const { data: recipeItems } = await supabase
+  .from('product_recipe_items')
+  .select(`
+    id, item_type, linked_product_id, linked_product_name,
+    quantity, unit, is_optional, selection_group, price_adjustment, sort_order
+  `)
+  .eq('product_id', productId)
+  .order('sort_order', { ascending: true });
+
+const isCombo = recipeItems?.some(item => item.item_type === 'product');
+```
+
+### XOR Selection Groups
+
+Items with the same `selection_group` value are mutually exclusive choices. The customer must pick exactly one from each group.
+
+**Example for "Nasi Lemak Combo":**
+
+| selection_group | linked_product_name | price_adjustment |
+|---|---|---|
+| Choose Drink | Flat White | 0 |
+| Choose Drink | Americano | 0 |
+| Choose Drink | Iced Latte | 2.00 |
+| null | Nasi Lemak Bungkus | 0 |
+
+- `selection_group = null` and `is_optional = false` → always included
+- `is_optional = true` → optional add-on (customer can toggle on/off)
+
+### Nested XOR (e.g. Hot/Iced for each drink)
+
+If a linked product itself has recipe items with selection groups, fetch those too for nested selection:
+
+```typescript
+for (const item of recipeItems.filter(i => i.linked_product_id)) {
+  const { data: nestedItems } = await supabase
+    .from('product_recipe_items')
+    .select('*')
+    .eq('product_id', item.linked_product_id)
+    .not('selection_group', 'is', null)
+    .order('sort_order');
+  // If nestedItems exist, show nested selection UI
+}
+```
+
+### Price Calculation for Combos
+
+```
+finalPrice = (product.combo_price_override ?? product.base_price)
+           + SUM(selected items' price_adjustment)
+```
+
+### Product Categories
+
+Categories come directly from POS product data. Common values: `coffee`, `non-coffee`, `food`, `combo`, `uncategorized`. The customer app should group/filter by these.
+
+### Product Images
+
+`image_url` is synced from POS. May be null for products without images. The customer app should show a placeholder for missing images.
+
+---
+
+## 2. Online Ordering
+
+### Order Lifecycle
+
+Customer app creates orders; POS manages them through status transitions.
 
 **Status flow:**
 ```
-pending → accepted     Staff accepted the order, preparation starts
-pending → rejected     Staff rejected the order (with optional reason)
-accepted → ready       Order is prepared, waiting for pickup
+pending → accepted     Staff accepted, preparation starts
+pending → rejected     Staff rejected (with optional reason)
+accepted → ready       Order prepared, waiting for pickup
 accepted → rejected    Staff rejected after initially accepting
 ready → collected      Customer picked up the order
 ```
 
-**Terminal states:** `collected`, `rejected` — no further changes.
+Terminal states: `collected`, `rejected` — no further transitions.
 
-**Fields updated per transition:**
+### Schema
 
-| New Status | Fields Written |
-|---|---|
-| `accepted` | `status`, `accepted_at` |
-| `rejected` | `status`, `rejected_at`, `reject_reason` (nullable TEXT) |
-| `ready` | `status`, `ready_at` |
-| `collected` | `status`, `collected_at` |
-
-### Rejected Orders — Customer App Must Handle
-
-When staff reject an order, the POS sets:
+#### `online_orders`
 ```sql
-status = 'rejected'
-rejected_at = NOW()
-reject_reason = 'Out of oat milk'  -- or NULL if no reason given
+id                TEXT PRIMARY KEY          -- e.g. "A1006" (sequential, prefixed)
+payment_ref       TEXT UNIQUE               -- Fiuu tranID
+outlet_id         TEXT DEFAULT 'main'
+status            TEXT                      -- pending/accepted/ready/collected/rejected
+pickup_type       TEXT                      -- 'counter' | 'curbside'
+customer_name     TEXT
+customer_phone    TEXT
+customer_fcm_token TEXT                     -- for push notifications (future)
+total_paid        NUMERIC
+currency          TEXT DEFAULT 'MYR'
+reject_reason     TEXT
+accepted_at       TIMESTAMPTZ
+ready_at          TIMESTAMPTZ
+collected_at      TIMESTAMPTZ
+rejected_at       TIMESTAMPTZ
+created_at        TIMESTAMPTZ
+updated_at        TIMESTAMPTZ
 ```
 
-**Customer app should:**
-1. Subscribe to `UPDATE` events on `online_orders` filtered by the order ID
-2. When `status` becomes `rejected`:
-   - Show a clear "Order Rejected" state (not just "pending" forever)
-   - Display `reject_reason` if present (e.g., "Reason: Out of oat milk")
-   - If `reject_reason` is null, show generic message (e.g., "Your order could not be fulfilled")
-   - Consider showing a "Contact store" option or phone number
-   - **Refund handling:** Rejected orders were already paid via Fiuu. Refund policy/process is manual for now — the customer app should display a note like "Please contact the store for refund arrangements" or similar
+#### `online_order_items`
+```sql
+id            UUID PRIMARY KEY
+order_id      TEXT REFERENCES online_orders(id) ON DELETE CASCADE
+product_id    TEXT                              -- UUID from `products` table
+product_name  TEXT
+qty           INTEGER
+unit_price    NUMERIC
+mods          JSONB
+```
 
-### Realtime Subscription Pattern (Customer Order Page)
+#### `outlet_settings`
+```sql
+outlet_id     TEXT PRIMARY KEY   -- 'main'
+intake_paused BOOLEAN            -- when true, customer app blocks new orders
+updated_at    TIMESTAMPTZ
+```
+
+### Creating Orders (Customer App)
+
+When creating `online_order_items`, use the product's UUID from the `products` table as `product_id`:
 
 ```typescript
-// On the customer's /order/[id] page:
+{
+  product_id: product.id,      // UUID from products table (e.g. "a1b2c3d4-...")
+  product_name: product.name,
+  qty: quantity,
+  unit_price: finalPrice,
+  mods: {
+    size: "Large",
+    milk: "Oat",
+    notes: "Extra hot please"
+  }
+}
+```
+
+For combos, include selected components so the kitchen knows what to make:
+
+```typescript
+{
+  product_id: comboProduct.id,
+  product_name: "Nasi Lemak Combo",
+  qty: 1,
+  unit_price: 9.40,
+  mods: {
+    combo_selections: {
+      "Choose Drink": { id: "flat-white-uuid", name: "Flat White" },
+      "Temperature": { id: "hot-uuid", name: "Hot" }
+    },
+    notes: "Extra sambal"
+  }
+}
+```
+
+### Mods Format
+
+The POS displays item mods from `online_order_items.mods`. Expected JSONB format:
+
+```json
+{
+  "size": "Large",
+  "milk": "Oat",
+  "sugar": "Less",
+  "ice": "No ice",
+  "notes": "Extra hot please"
+}
+```
+
+- `notes` is shown separately (italicized)
+- All other keys are joined with " · " for display (e.g., "Large · Oat · Less Sugar · No ice")
+- Key names are flexible — POS iterates all keys except `notes` and `combo_selections`
+- Values should be human-readable strings
+
+### Order ID Format
+
+The POS displays `online_orders.id` as the order number (e.g., "A1006"). IDs should be easy to call out verbally in the shop.
+
+---
+
+## 3. Realtime Subscriptions
+
+### Customer App: Order Status Updates
+
+Subscribe to status changes on a specific order:
+
+```typescript
 const channel = supabase
   .channel(`order-${orderId}`)
   .on(
@@ -65,133 +287,195 @@ const channel = supabase
     (payload) => {
       const updated = payload.new;
       // updated.status — 'pending' | 'accepted' | 'ready' | 'collected' | 'rejected'
-      // updated.reject_reason — string | null (only meaningful when rejected)
+      // updated.reject_reason — string | null
       // updated.accepted_at, ready_at, collected_at, rejected_at — timestamps
     }
   )
   .subscribe();
 ```
 
-### Intake Paused
+### Required Realtime Setup
 
-The POS can pause online ordering by setting:
+These tables need Realtime enabled in Supabase:
+
 ```sql
-UPDATE outlet_settings SET intake_paused = true WHERE outlet_id = 'main'
+ALTER PUBLICATION supabase_realtime ADD TABLE online_orders;
+ALTER PUBLICATION supabase_realtime ADD TABLE products;  -- optional, for live menu updates
 ```
-
-**Customer app should:**
-1. Check `outlet_settings.intake_paused` before allowing checkout
-2. If `true`, block new orders and show "Online ordering is temporarily unavailable"
-3. Optionally subscribe to Realtime on `outlet_settings` to unblock automatically when staff resumes
-
-### Stock Decrements on Accept
-
-When POS accepts an order, it calls:
-```sql
-SELECT decrement_stock(p_product_id, 'main', qty)
-```
-
-This decrements `online_products.stock_count`. If stock reaches 0, the product should show as sold out in the customer app menu.
-
-**Customer app should:**
-- Read `online_products.stock_count` and `available` when rendering the menu
-- Products with `stock_count = 0` should show "Sold Out"
-- Products with `available = false` should be hidden or greyed out
-- `stock_count = NULL` means unlimited stock
 
 ---
 
-## What the POS Needs From the Customer App
+## 4. Customer App Responsibilities
 
-### 1. Confirm `decrement_stock` RPC Exists
+### Handle Rejected Orders
 
-The POS calls this Supabase RPC function when accepting orders:
+When `status` becomes `rejected`:
+1. Show a clear "Order Rejected" state (not "pending" forever)
+2. Display `reject_reason` if present (e.g., "Reason: Out of oat milk")
+3. If `reject_reason` is null, show generic message (e.g., "Your order could not be fulfilled")
+4. Show a "Contact store" option or phone number
+5. Refund: currently manual — show "Please contact the store for refund arrangements"
+
+### Check Intake Status Before Checkout
+
 ```typescript
-await supabase.rpc('decrement_stock', {
-  p_product_id: item.product_id,
-  p_outlet_id: 'main',
-  p_qty: item.qty,
-});
-```
+const { data } = await supabase
+  .from('outlet_settings')
+  .select('intake_paused')
+  .eq('outlet_id', 'main')
+  .single();
 
-**Expected function signature:**
-```sql
-CREATE OR REPLACE FUNCTION decrement_stock(
-  p_product_id TEXT,
-  p_outlet_id TEXT,
-  p_qty INTEGER
-) RETURNS void AS $$
-BEGIN
-  UPDATE online_products
-  SET stock_count = GREATEST(stock_count - p_qty, 0)
-  WHERE id = p_product_id AND outlet_id = p_outlet_id AND stock_count IS NOT NULL;
-END;
-$$ LANGUAGE plpgsql;
-```
-
-If this doesn't exist yet, it needs to be created in Supabase.
-
-### 2. Confirm Realtime Is Enabled
-
-The POS subscribes to Realtime on `online_orders`. This requires:
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE online_orders;
-```
-
-If not already done, the POS Realtime subscription will silently fail (falls back to 15s polling, so it still works — just not instant).
-
-### 3. Confirm Schema Match
-
-The POS reads and writes these exact column names. If the customer app schema differs, one side needs to adapt:
-
-**`online_orders`** — POS reads: `id`, `status`, `pickup_type`, `outlet_id`, `customer_name`, `customer_phone`, `total_paid`, `currency`, `reject_reason`, `accepted_at`, `ready_at`, `created_at`, `updated_at`. POS writes: `status`, `accepted_at`, `ready_at`, `collected_at`, `rejected_at`, `reject_reason`.
-
-**`online_order_items`** — POS reads: `id`, `product_name`, `qty`, `unit_price`, `mods` (JSONB).
-
-**`outlet_settings`** — POS reads/writes: `outlet_id`, `intake_paused`.
-
-### 4. Mods Format
-
-The POS displays item mods from `online_order_items.mods`. Expected JSONB format:
-```json
-{
-  "size": "Large",
-  "milk": "Oat",
-  "sugar": "Less",
-  "ice": "No ice",
-  "notes": "Extra hot please"
+if (data?.intake_paused) {
+  // Block new orders, show "Online ordering is temporarily unavailable"
 }
 ```
 
-The `notes` field is shown separately (italicized). All other keys are joined with " · " for display (e.g., "Large · Oat · Less Sugar · No ice").
+Optionally subscribe to Realtime on `outlet_settings` to unblock automatically when staff resumes.
 
-Key names are flexible — the POS just iterates all keys except `notes`. But values should be human-readable strings.
+### Use Real Product UUIDs
 
-### 5. Order ID Format
+The customer app must read products from the `products` table (not mock/hardcoded data). Product UUIDs from this table must be used as `product_id` in `online_order_items` — this is what connects online orders to POS inventory for stock tracking and kitchen display.
 
-The POS displays `online_orders.id` directly as the order number (e.g., "A1006"). The customer app should generate these IDs in a format that's easy to call out verbally in the shop.
+### Handle Product Availability
 
----
-
-## Future Considerations
-
-### Push Notifications
-`online_orders.customer_fcm_token` exists but isn't used yet. When ready:
-- Customer app stores FCM token on the order row after checkout
-- POS could trigger a push notification on status change (would need a Cloud Function or edge function, since POS can't call FCM directly from the browser)
-
-### Refund Flow
-Currently manual. A future implementation could:
-- Add a `refund_status` column to `online_orders`
-- POS triggers refund via Fiuu API when rejecting
-- Customer app shows refund status
+- Products with `available_online = false` should be hidden or greyed out
+- The `available_online` flag is managed by POS staff via the online orders admin panel
 
 ---
 
-## Summary of Customer App TODO
+## 5. Migration Notes
 
-1. **Handle `rejected` status** on the order page — show reason if available, refund contact info
-2. **Check `outlet_settings.intake_paused`** before checkout — block if paused
-3. **Respect `stock_count`** in menu — show sold out when 0
-4. **Confirm/create `decrement_stock`** RPC function in Supabase
-5. **Confirm Realtime** is enabled on `online_orders` table
+### Legacy `online_products` Table (being phased out)
+
+The POS previously used a separate `online_products` table with hardcoded mock product IDs (`flat`, `latte`, `danish`, etc.) for sold-out toggles and stock counts. This is being replaced by the `products` table which has real POS UUIDs and the `available_online` flag.
+
+**Customer app should:**
+- Read menu from `products` table (not `online_products`)
+- Use `products.id` (UUID) as the product identifier everywhere
+- Use `products.available_online` for availability (replaces `online_products.available`)
+- Ignore `online_products` — it will be removed
+
+### Stock Management (Future)
+
+Currently, stock for online orders is tracked via `online_products.stock_count` and a `decrement_stock` RPC. This will migrate to use the POS's branch stock system. For now:
+- `products` table doesn't have a `stock_count` column
+- Sold-out state is managed via `available_online` toggle (staff manually marks items as sold out)
+- Future: automatic sold-out when branch stock reaches 0
+
+---
+
+## 6. Summary Checklist for Customer App
+
+### Must Have
+- [ ] Read menu from `products` table (not mock data)
+- [ ] Use product UUIDs from `products.id` in order items
+- [ ] Handle all order statuses: pending, accepted, ready, collected, rejected
+- [ ] Display `reject_reason` when order is rejected
+- [ ] Check `outlet_settings.intake_paused` before allowing checkout
+- [ ] Respect `available_online` flag — hide/grey out unavailable products
+- [ ] Subscribe to `online_orders` Realtime for live order status updates
+
+### Should Have
+- [ ] Support combo/bundle products with XOR selection groups
+- [ ] Handle nested selection groups (e.g., Hot/Iced for each drink option)
+- [ ] Calculate combo prices using `combo_price_override` + `price_adjustment`
+- [ ] Include `combo_selections` in mods for combo orders
+- [ ] Show placeholder for products without `image_url`
+- [ ] Subscribe to `outlet_settings` Realtime for auto-unblock when intake resumes
+
+### Nice to Have
+- [ ] Subscribe to `products` Realtime for live menu updates (new items, price changes)
+- [ ] Cache product list locally, sync-check for updates on app open
+- [ ] Show estimated wait time (can query recent orders)
+
+---
+
+## 7. Supabase Setup SQL
+
+Run this in the Supabase SQL Editor if the tables don't exist yet:
+
+```sql
+-- Products table (synced from POS)
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  sku TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'uncategorized',
+  base_price NUMERIC NOT NULL DEFAULT 0,
+  image_url TEXT,
+  combo_price_override NUMERIC,
+  available_online BOOLEAN DEFAULT true,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Recipe items (combo structure)
+CREATE TABLE IF NOT EXISTS product_recipe_items (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  item_type TEXT NOT NULL DEFAULT 'material',
+  linked_product_id TEXT REFERENCES products(id),
+  linked_product_name TEXT,
+  quantity NUMERIC NOT NULL DEFAULT 1,
+  unit TEXT NOT NULL DEFAULT 'unit',
+  is_optional BOOLEAN DEFAULT false,
+  selection_group TEXT,
+  price_adjustment NUMERIC DEFAULT 0,
+  sort_order INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_product ON product_recipe_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_linked ON product_recipe_items(linked_product_id);
+
+-- Online orders
+CREATE TABLE IF NOT EXISTS online_orders (
+  id TEXT PRIMARY KEY,
+  payment_ref TEXT UNIQUE,
+  outlet_id TEXT DEFAULT 'main',
+  status TEXT NOT NULL DEFAULT 'pending',
+  pickup_type TEXT,
+  customer_name TEXT,
+  customer_phone TEXT,
+  customer_fcm_token TEXT,
+  total_paid NUMERIC,
+  currency TEXT DEFAULT 'MYR',
+  reject_reason TEXT,
+  accepted_at TIMESTAMPTZ,
+  ready_at TIMESTAMPTZ,
+  collected_at TIMESTAMPTZ,
+  rejected_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Online order items
+CREATE TABLE IF NOT EXISTS online_order_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id TEXT NOT NULL REFERENCES online_orders(id) ON DELETE CASCADE,
+  product_id TEXT,
+  product_name TEXT,
+  qty INTEGER NOT NULL DEFAULT 1,
+  unit_price NUMERIC NOT NULL DEFAULT 0,
+  mods JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON online_order_items(order_id);
+
+-- Outlet settings
+CREATE TABLE IF NOT EXISTS outlet_settings (
+  outlet_id TEXT PRIMARY KEY,
+  intake_paused BOOLEAN DEFAULT false,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Enable Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE online_orders;
+ALTER PUBLICATION supabase_realtime ADD TABLE products;
+```
+
+After creating tables, trigger initial product sync from POS:
+```bash
+curl -X POST http://localhost:3000/api/admin/catalog-sync
+```
+
+Or use the "Catalog Sync" button on the POS admin dashboard.
