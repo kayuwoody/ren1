@@ -2,6 +2,7 @@ import { db, initDatabase } from './init';
 import { getMaterial } from './materialService';
 import { getProduct } from './productService';
 import { v4 as uuidv4 } from 'uuid';
+import { syncRecipe } from '../catalogSync';
 
 // Ensure database is initialized
 initDatabase();
@@ -93,7 +94,9 @@ export function addRecipeItem(item: {
   // Update product total cost
   updateProductTotalCost(item.productId);
 
-  return getRecipeItem(id)!;
+  const saved = getRecipeItem(id)!;
+  syncRecipe(item.productId).catch(() => {});
+  return saved;
 }
 
 /**
@@ -245,8 +248,8 @@ export function deleteRecipeItem(id: string): boolean {
   const result = stmt.run(id);
 
   if (result.changes > 0) {
-    // Update product total cost
     updateProductTotalCost(item.productId);
+    syncRecipe(item.productId).catch(() => {});
   }
 
   return result.changes > 0;
@@ -302,6 +305,7 @@ export function setProductRecipe(
     recipeItems.push(recipeItem);
   });
 
+  syncRecipe(productId).catch(() => {});
   return recipeItems;
 }
 

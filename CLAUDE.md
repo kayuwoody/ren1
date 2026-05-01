@@ -127,6 +127,24 @@ Kanban board for managing orders placed via the customer-facing web app (bubu1.v
 
 **Features:** Audio alerts for new orders, pause/resume intake toggle, reject with optional reason, auto-stock decrement on accept, 15s polling fallback alongside Realtime.
 
+### Catalog Sync (`lib/catalogSync.ts`)
+
+Product catalog auto-syncs from local SQLite to Supabase so the customer-facing app reads real products with correct UUIDs.
+
+**Architecture:** POS SQLite is the source of truth. On every product or recipe create/update/delete, data syncs to Supabase `products` and `product_recipe_items` tables. If internet is down, changes queue in `_sync_queue` table and retry automatically.
+
+**Flow:** Staff edits product in POS admin → SQLite writes → async Supabase upsert (fire-and-forget) → customer app reads from Supabase.
+
+**Key functions:**
+- `syncProduct(id)` — Upserts a single product to Supabase
+- `syncRecipe(productId)` — Replaces all recipe items for a product in Supabase
+- `syncAllProducts()` / `syncAllRecipes()` — Full catalog push
+- `flushSyncQueue()` — Processes pending offline syncs
+
+**API:** `POST /api/admin/catalog-sync` triggers a full sync. `GET` returns pending queue count.
+
+**Supabase tables:** See `CATALOG_SCHEMA.md` for the SQL schema and customer app integration guide.
+
 ## Active Pages
 
 ### Staff-facing
@@ -187,8 +205,9 @@ app/kitchen/page.tsx            — Kitchen display
 context/cartContext.tsx          — Cart state, discount/surcharge logic
 context/branchContext.tsx        — Branch selection, X-Branch-Id header
 lib/db/init.ts                  — Database schema and connection
-lib/db/productService.ts        — Product CRUD
-lib/db/recipeService.ts         — Recipe management
+lib/db/productService.ts        — Product CRUD (auto-syncs to Supabase)
+lib/db/recipeService.ts         — Recipe management (auto-syncs to Supabase)
+lib/catalogSync.ts              — SQLite→Supabase catalog sync + offline queue
 lib/db/recursiveProductExpansion.ts — Bundle flattening and price calculation
 lib/db/inventoryConsumptionService.ts — COGS recording and calculation
 lib/db/branchStockService.ts    — Stock management (source of truth)

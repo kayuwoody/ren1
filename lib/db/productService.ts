@@ -1,6 +1,7 @@
 import { db } from './init';
 import { v4 as uuidv4 } from 'uuid';
 import { initBranchStockForItem } from './branchStockService';
+import { syncProduct, syncProductDelete } from '../catalogSync';
 
 export interface Product {
   id: string;
@@ -145,7 +146,9 @@ export function upsertProduct(
     }
   }
 
-  return getProduct(id)!;
+  const saved = getProduct(id)!;
+  syncProduct(id).catch(() => {});
+  return saved;
 }
 
 /**
@@ -162,6 +165,9 @@ export function updateProductCost(id: string, unitCost: number): void {
 export function deleteProduct(id: string): boolean {
   const stmt = db.prepare('DELETE FROM Product WHERE id = ?');
   const result = stmt.run(id);
+  if (result.changes > 0) {
+    syncProductDelete(id).catch(() => {});
+  }
   return result.changes > 0;
 }
 
