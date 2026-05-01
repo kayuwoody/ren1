@@ -5,6 +5,7 @@ import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import {
   Clock, User, Car, MapPin, Volume2, VolumeX,
   Check, X, ChefHat, Package, AlertTriangle, Pause, Play,
+  Store, Coffee, UtensilsCrossed, Layers,
 } from 'lucide-react';
 
 interface OrderItem {
@@ -30,6 +31,15 @@ interface OnlineOrder {
   created_at: string;
   updated_at: string;
   online_order_items: OrderItem[];
+}
+
+interface MenuProduct {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  available: boolean;
+  stock_count: number | null;
 }
 
 function timeAgo(dateStr: string): string {
@@ -90,6 +100,9 @@ export default function OnlineOrdersPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
   const [now, setNow] = useState(Date.now());
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuProducts, setMenuProducts] = useState<MenuProduct[]>([]);
+  const [togglingProducts, setTogglingProducts] = useState<Set<string>>(new Set());
   const knownOrderIds = useRef<Set<string>>(new Set());
   const initialLoadDone = useRef(false);
 
@@ -140,10 +153,42 @@ export default function OnlineOrdersPage() {
     } catch {}
   }, []);
 
+  const fetchMenuProducts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/online-orders/products');
+      if (res.ok) {
+        const data = await res.json();
+        setMenuProducts(data.products ?? []);
+      }
+    } catch {}
+  }, []);
+
+  const toggleProductAvailability = async (productId: string, available: boolean) => {
+    setTogglingProducts(prev => new Set(prev).add(productId));
+    try {
+      const res = await fetch('/api/online-orders/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, available }),
+      });
+      if (res.ok) {
+        setMenuProducts(prev =>
+          prev.map(p => p.id === productId ? { ...p, available, stock_count: available ? null : p.stock_count } : p)
+        );
+      }
+    } catch {}
+    setTogglingProducts(prev => {
+      const next = new Set(prev);
+      next.delete(productId);
+      return next;
+    });
+  };
+
   useEffect(() => {
     fetchOrders();
     fetchIntakeStatus();
     fetchAvgWait();
+    fetchMenuProducts();
 
     const pollInterval = setInterval(fetchOrders, 15000);
     const tickInterval = setInterval(() => setNow(Date.now()), 30000);
@@ -168,6 +213,10 @@ export default function OnlineOrdersPage() {
       supabaseBrowser.removeChannel(channel);
     };
   }, [fetchOrders, fetchIntakeStatus, fetchAvgWait]);
+
+  useEffect(() => {
+    if (showMenu) fetchMenuProducts();
+  }, [showMenu, fetchMenuProducts]);
 
   const updateStatus = async (orderId: string, newStatus: string, reason?: string) => {
     setUpdatingOrders(prev => new Set(prev).add(orderId));
@@ -260,6 +309,17 @@ export default function OnlineOrdersPage() {
               <span>Avg wait: {formatWait(avgWait)}</span>
             </div>
           )}
+
+          <button
+            onClick={() => setShowMenu(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition border"
+            style={{ color: '#3A2414', borderColor: '#E5DDD0' }}
+          >
+            <Store className="w-4 h-4" /> Menu
+            {menuProducts.some(p => !p.available) && (
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#C62828' }} />
+            )}
+          </button>
 
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
@@ -436,6 +496,70 @@ export default function OnlineOrdersPage() {
           )}
         />
       </div>
+
+      {showMenu && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={() => setShowMenu(false)}
+          />
+          <div className="fixed right-0 top-0 bottom-0 w-96 bg-white shadow-2xl z-50 flex flex-col">
+            <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: '#E5DDD0' }}>
+              <h2 className="text-lg font-bold" style={{ color: '#3A2414', fontFamily: "'Baloo 2', sans-serif" }}>
+                Menu Availability
+              </h2>
+              <button onClick={() => setShowMenu(false)} className="p-1 rounded-lg hover:bg-gray-100">
+                <X className="w-5 h-5" style={{ color: '#546E7A' }} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {(['coffee', 'non-coffee', 'food', 'combo'] as const).map(cat => {
+                const items = menuProducts.filter(p => p.category === cat);
+                if (items.length === 0) return null;
+                const icon = cat === 'coffee' ? <Coffee className="w-4 h-4" />
+                  : cat === 'food' ? <UtensilsCrossed className="w-4 h-4" />
+                  : cat === 'combo' ? <Layers className="w-4 h-4" />
+                  : <Coffee className="w-4 h-4" />;
+                const label = cat === 'non-coffee' ? 'Non-Coffee' : cat.charAt(0).toUpperCase() + cat.slice(1);
+                return (
+                  <div key={cat}>
+                    <div className="px-5 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                      style={{ color: '#546E7A', backgroundColor: '#FFF6E8' }}>
+                      {icon} {label}
+                    </div>
+                    {items.map(product => (
+                      <div
+                        key={product.id}
+                        className="px-5 py-3 flex items-center justify-between border-b"
+                        style={{ borderColor: '#F0EBE4' }}
+                      >
+                        <div>
+                          <div className="text-sm font-medium" style={{ color: '#3A2414' }}>{product.name}</div>
+                          <div className="text-xs" style={{ color: '#546E7A' }}>RM {product.price.toFixed(2)}</div>
+                        </div>
+                        <button
+                          disabled={togglingProducts.has(product.id)}
+                          onClick={() => toggleProductAvailability(product.id, !product.available)}
+                          className="relative w-12 h-7 rounded-full transition-colors disabled:opacity-50"
+                          style={{ backgroundColor: product.available ? '#2E7D32' : '#ccc' }}
+                        >
+                          <span
+                            className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform"
+                            style={{ left: product.available ? '22px' : '2px' }}
+                          />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-5 py-3 border-t text-xs text-center" style={{ color: '#546E7A', borderColor: '#E5DDD0' }}>
+              Toggling off marks item as sold out in the customer menu
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
