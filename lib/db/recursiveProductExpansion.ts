@@ -14,6 +14,7 @@ export interface FlattenedXORGroup {
     id: string;                 // Product ID
     name: string;
     basePrice: number;          // Product's base/sales price
+    priceAdjustment: number;    // Extra charge on top of combo override
   }>;
 }
 
@@ -24,6 +25,7 @@ export interface FlattenedOptionalItem {
   id: string;
   name: string;
   basePrice: number;          // Product's base/sales price
+  priceAdjustment: number;    // Extra charge on top of combo override
   parentProductId?: string;
   parentProductName?: string;
 }
@@ -127,6 +129,7 @@ export function flattenAllChoices(
             id: item.linkedProductId!,
             name: item.linkedProductName || linkedProd?.name || 'Unknown',
             basePrice: linkedProd?.basePrice || 0,
+            priceAdjustment: item.priceAdjustment || 0,
           };
         }),
     });
@@ -142,6 +145,7 @@ export function flattenAllChoices(
         id: item.linkedProductId,
         name: item.linkedProductName || linkedProd?.name || 'Unknown',
         basePrice: linkedProd?.basePrice || 0,
+        priceAdjustment: item.priceAdjustment || 0,
         parentProductId: depth === 0 ? undefined : product.id,
         parentProductName: depth === 0 ? undefined : product.name,
       });
@@ -206,8 +210,10 @@ export function calculatePriceWithSelections(
   if (!product) return 0;
 
   // Check for combo price override (only at root level)
+  // Override = fixed base + sum of selected items' priceAdjustment
   if (depth === 0 && product.comboPriceOverride !== undefined && product.comboPriceOverride !== null) {
-    return product.comboPriceOverride * quantity;
+    const adjustments = sumPriceAdjustments(productId, selections);
+    return (product.comboPriceOverride + adjustments) * quantity;
   }
 
   const recipe = getProductRecipe(productId);
@@ -269,6 +275,40 @@ export function calculatePriceWithSelections(
   });
 
   return totalPrice;
+}
+
+/**
+ * Sum priceAdjustment values for all selected recipe items (root and nested).
+ * Used when comboPriceOverride is set to add upgrade surcharges on top of the fixed combo price.
+ */
+function sumPriceAdjustments(
+  productId: string,
+  selections: UnifiedBundleSelection,
+  depth: number = 0
+): number {
+  const recipe = getProductRecipe(productId);
+  let total = 0;
+
+  recipe.forEach(item => {
+    if (item.isOptional) {
+      if (!selections.selectedOptional.includes(item.linkedProductId || '')) return;
+    }
+
+    if (item.selectionGroup) {
+      const uniqueKey = depth === 0 ? `root:${item.selectionGroup}` : `${productId}:${item.selectionGroup}`;
+      const selectedId = selections.selectedMandatory[uniqueKey];
+      if (selectedId !== item.linkedProductId) return;
+    }
+
+    total += item.priceAdjustment || 0;
+
+    // Recurse into linked products for nested adjustments
+    if (item.itemType === 'product' && item.linkedProductId) {
+      total += sumPriceAdjustments(item.linkedProductId, selections, depth + 1);
+    }
+  });
+
+  return total;
 }
 
 /**

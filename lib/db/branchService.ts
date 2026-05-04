@@ -1,5 +1,6 @@
 import { db } from './init';
 import { v4 as uuidv4 } from 'uuid';
+import { syncBranch } from '../catalogSync';
 
 export interface Branch {
   id: string;
@@ -55,7 +56,9 @@ export function createBranch(data: {
     INSERT INTO Branch (id, name, code, address, phone, isDefault, isActive, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)
   `).run(id, data.name, data.code.toUpperCase(), data.address || null, data.phone || null, now, now);
-  return getBranch(id)!;
+  const saved = getBranch(id)!;
+  syncBranch(id).catch(() => {});
+  return saved;
 }
 
 export function updateBranch(id: string, data: Partial<Pick<Branch, 'name' | 'code' | 'address' | 'phone' | 'isActive'>>): Branch | null {
@@ -74,6 +77,7 @@ export function updateBranch(id: string, data: Partial<Pick<Branch, 'name' | 'co
 
   values.push(id);
   db.prepare(`UPDATE Branch SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  syncBranch(id).catch(() => {});
   return getBranch(id);
 }
 

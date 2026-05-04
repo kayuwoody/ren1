@@ -601,10 +601,12 @@ export function initDatabase() {
 initDatabase();
 
 // Fire-and-forget catalog sync on startup
-import('../catalogSync').then(({ syncAllProducts, syncAllRecipes }) => {
+import('../catalogSync').then(({ syncAllProducts, syncAllRecipes, syncAllBranches }) => {
   syncAllProducts()
     .then(r => console.log(`Startup catalog sync: ${r.synced}/${r.total} products`))
     .then(() => syncAllRecipes())
     .then(r => console.log(`Startup catalog sync: ${r!.synced}/${r!.total} recipes`))
+    .then(() => syncAllBranches())
+    .then(r => console.log(`Startup catalog sync: ${r!.synced}/${r!.total} branches`))
     .catch(err => console.warn('Startup catalog sync failed (will retry on next restart):', err.message));
 });

@@ -119,3 +119,50 @@ export async function syncAllRecipes() {
 
   return { synced, failed, total: products.length };
 }
+
+export async function syncBranch(branchId: string) {
+  const branch = db.prepare('SELECT * FROM Branch WHERE id = ?').get(branchId) as any;
+  if (!branch) return;
+
+  const payload = {
+    id: branch.id,
+    name: branch.name,
+    code: branch.code,
+    address: branch.address || null,
+    phone: branch.phone || null,
+    is_active: branch.isActive === 1,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase.from('branches').upsert(payload, { onConflict: 'id' });
+  if (error) {
+    console.warn(`Branch sync failed for ${branchId}:`, error.message);
+  }
+}
+
+export async function syncAllBranches() {
+  const branches = db.prepare('SELECT * FROM Branch WHERE isActive = 1').all() as any[];
+  let synced = 0;
+  let failed = 0;
+
+  const rows = branches.map(b => ({
+    id: b.id,
+    name: b.name,
+    code: b.code,
+    address: b.address || null,
+    phone: b.phone || null,
+    is_active: b.isActive === 1,
+    updated_at: new Date().toISOString(),
+  }));
+
+  try {
+    const { error } = await supabase.from('branches').upsert(rows, { onConflict: 'id' });
+    if (error) throw error;
+    synced = rows.length;
+  } catch (err) {
+    console.error('Branch sync failed:', err);
+    failed = rows.length;
+  }
+
+  return { synced, failed, total: branches.length };
+}

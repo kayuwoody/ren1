@@ -136,7 +136,7 @@ export default function AdminDashboard() {
       const res = await fetch('/api/admin/catalog-sync', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        setCatalogSyncResult(`Synced ${data.products.synced} products, ${data.recipes.synced} recipes`);
+        setCatalogSyncResult(`Synced ${data.products.synced} products, ${data.recipes.synced} recipes, ${data.branches.synced} branches`);
       } else {
         setCatalogSyncResult(`Sync failed: ${data.error || 'Unknown error'}`);
       }

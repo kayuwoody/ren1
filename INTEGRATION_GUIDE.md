@@ -133,10 +133,21 @@ for (const item of recipeItems.filter(i => i.linked_product_id)) {
 
 ### Price Calculation for Combos
 
+When a product has `combo_price_override` set:
 ```
-finalPrice = (product.combo_price_override ?? product.base_price)
-           + SUM(selected items' price_adjustment)
+finalPrice = combo_price_override + SUM(selected items' price_adjustment)
 ```
+
+When no override is set:
+```
+finalPrice = SUM(selected components' base_price)
+```
+
+**Example:** Coffee + Danish combo (override RM13)
+- Americano (default drink): `price_adjustment = 0` → total RM13.00
+- Oat Milk Latte (upgrade): `price_adjustment = 1.50` → total RM14.50
+
+The `price_adjustment` field is set per-recipe-item, so the same product can have different adjustments in different combos.
 
 ### Product Categories
 
@@ -148,7 +159,49 @@ Categories come directly from POS product data. Common values: `coffee`, `non-co
 
 ---
 
-## 2. Online Ordering
+## 2. Branch / Outlet Info
+
+Branch data is synced from POS to Supabase alongside products. The customer app should read from the `branches` table instead of hardcoding store info.
+
+### Supabase Table
+
+#### `branches`
+```sql
+CREATE TABLE IF NOT EXISTS branches (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  code TEXT NOT NULL,
+  address TEXT,
+  phone TEXT,
+  is_active BOOLEAN DEFAULT true,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### How to Use
+
+```typescript
+const { data: branches } = await supabase
+  .from('branches')
+  .select('*')
+  .eq('is_active', true);
+
+// For single-branch setup, just use the first result
+const branch = branches?.[0];
+// branch.name = "Main Branch"
+// branch.address = "Shell Seksyen 13, PJ"
+// branch.phone = "+60..."
+```
+
+### Sync Behavior
+
+- Auto-syncs on branch create/update in POS
+- Syncs on POS startup alongside products/recipes
+- Included in manual "Catalog Sync" from admin dashboard
+
+---
+
+## 3. Online Ordering
 
 ### Order Lifecycle
 
@@ -267,7 +320,7 @@ The POS displays `online_orders.id` as the order number (e.g., "A1006"). IDs sho
 
 ---
 
-## 3. Realtime Subscriptions
+## 4. Realtime Subscriptions
 
 ### Customer App: Order Status Updates
 
@@ -305,7 +358,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE products;  -- optional, for live m
 
 ---
 
-## 4. Customer App Responsibilities
+## 5. Customer App Responsibilities
 
 ### Handle Rejected Orders
 
@@ -343,7 +396,7 @@ The customer app must read products from the `products` table (not mock/hardcode
 
 ---
 
-## 5. Migration Notes
+## 6. Migration Notes
 
 ### Legacy `online_products` Table (being phased out)
 
@@ -364,11 +417,12 @@ Currently, stock for online orders is tracked via `online_products.stock_count` 
 
 ---
 
-## 6. Summary Checklist for Customer App
+## 7. Summary Checklist for Customer App
 
 ### Must Have
 - [ ] Read menu from `products` table (not mock data)
 - [ ] Use product UUIDs from `products.id` in order items
+- [ ] Read branch info from `branches` table (not hardcoded)
 - [ ] Handle all order statuses: pending, accepted, ready, collected, rejected
 - [ ] Display `reject_reason` when order is rejected
 - [ ] Check `outlet_settings.intake_paused` before allowing checkout
@@ -378,7 +432,8 @@ Currently, stock for online orders is tracked via `online_products.stock_count` 
 ### Should Have
 - [ ] Support combo/bundle products with XOR selection groups
 - [ ] Handle nested selection groups (e.g., Hot/Iced for each drink option)
-- [ ] Calculate combo prices using `combo_price_override` + `price_adjustment`
+- [ ] Calculate combo prices: `combo_price_override + SUM(price_adjustment)` for selected items
+- [ ] Show "Included" vs "+RM X.XX" for combo options based on `price_adjustment`
 - [ ] Include `combo_selections` in mods for combo orders
 - [ ] Show placeholder for products without `image_url`
 - [ ] Subscribe to `outlet_settings` Realtime for auto-unblock when intake resumes
@@ -390,7 +445,7 @@ Currently, stock for online orders is tracked via `online_products.stock_count` 
 
 ---
 
-## 7. Supabase Setup SQL
+## 8. Supabase Setup SQL
 
 Run this in the Supabase SQL Editor if the tables don't exist yet:
 
@@ -425,6 +480,17 @@ CREATE TABLE IF NOT EXISTS product_recipe_items (
 
 CREATE INDEX IF NOT EXISTS idx_recipe_product ON product_recipe_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_recipe_linked ON product_recipe_items(linked_product_id);
+
+-- Branches (synced from POS)
+CREATE TABLE IF NOT EXISTS branches (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  code TEXT NOT NULL,
+  address TEXT,
+  phone TEXT,
+  is_active BOOLEAN DEFAULT true,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 
 -- Online orders
 CREATE TABLE IF NOT EXISTS online_orders (
