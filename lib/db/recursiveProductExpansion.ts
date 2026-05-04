@@ -171,14 +171,17 @@ export function flattenAllChoices(
   });
 
   // Also recurse into XOR group items (they might have nested choices too)
+  // e.g. Americano (in "Drink" group) has its own "Temp" group with Hot/Iced
+  // parentProductId = the XOR item's linkedProductId (Americano), NOT the combo
+  // so the frontend knows: "show Temp group only when Americano is selected"
   Object.values(groupedBySelection).flat().forEach(item => {
     if (item.itemType === 'product' && item.linkedProductId) {
       const nested = flattenAllChoices(
         item.linkedProductId,
         depth + 1,
         parentPath ? `${parentPath} > ${product.name}` : product.name,
-        product.id,
-        product.name
+        item.linkedProductId,
+        item.linkedProductName || getProduct(item.linkedProductId)?.name
       );
 
       xorGroups.push(...nested.xorGroups);
