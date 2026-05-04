@@ -1,9 +1,21 @@
 import { supabase } from './supabase';
 import { db } from './db/init';
 
+function buildSelectionConfig(productId: string) {
+  // Dynamic require to avoid circular dependency (catalogSync → recursiveProductExpansion → productService → catalogSync)
+  const { flattenAllChoices } = require('./db/recursiveProductExpansion');
+  const { xorGroups, optionalItems } = flattenAllChoices(productId);
+
+  if (xorGroups.length === 0 && optionalItems.length === 0) return null;
+
+  return { xorGroups, optionalItems };
+}
+
 export async function syncProduct(productId: string) {
   const product = db.prepare('SELECT * FROM Product WHERE id = ?').get(productId) as any;
   if (!product) return;
+
+  const selectionConfig = buildSelectionConfig(productId);
 
   const payload = {
     id: product.id,
@@ -13,6 +25,7 @@ export async function syncProduct(productId: string) {
     base_price: product.basePrice,
     image_url: product.imageUrl,
     combo_price_override: product.comboPriceOverride,
+    selection_config: selectionConfig,
     available_online: true,
     updated_at: new Date().toISOString(),
   };
@@ -69,6 +82,17 @@ export async function syncRecipe(productId: string) {
       console.warn(`Catalog sync: failed to insert recipe for ${productId}:`, error.message);
     }
   }
+
+  // Re-sync the product's selection_config (flattened choices depend on recipe)
+  const selectionConfig = buildSelectionConfig(productId);
+  const { error: configErr } = await supabase
+    .from('products')
+    .update({ selection_config: selectionConfig, updated_at: new Date().toISOString() })
+    .eq('id', productId);
+
+  if (configErr) {
+    console.warn(`Catalog sync: failed to update selection_config for ${productId}:`, configErr.message);
+  }
 }
 
 export async function syncAllProducts() {
@@ -76,6 +100,7 @@ export async function syncAllProducts() {
   let synced = 0;
   let failed = 0;
 
+  const now = new Date().toISOString();
   const rows = products.map(p => ({
     id: p.id,
     name: p.name,
@@ -84,8 +109,9 @@ export async function syncAllProducts() {
     base_price: p.basePrice,
     image_url: p.imageUrl,
     combo_price_override: p.comboPriceOverride,
+    selection_config: buildSelectionConfig(p.id),
     available_online: true,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
   }));
 
   for (let i = 0; i < rows.length; i += 50) {

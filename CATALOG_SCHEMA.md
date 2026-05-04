@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS products (
   base_price NUMERIC NOT NULL DEFAULT 0,  -- retail price in RM
   image_url TEXT,
   combo_price_override NUMERIC,           -- if set, overrides calculated combo price
+  selection_config JSONB,                 -- pre-flattened XOR groups + optional items for combos
   available_online BOOLEAN DEFAULT true,  -- staff can toggle off to hide from customer menu
   updated_at TIMESTAMPTZ DEFAULT now()
 );

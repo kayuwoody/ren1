@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS products (
   base_price NUMERIC NOT NULL DEFAULT 0,  -- retail price in RM
   image_url TEXT,
   combo_price_override NUMERIC,           -- if set, overrides calculated combo price
+  selection_config JSONB,                 -- pre-flattened XOR groups + optional items (see below)
   available_online BOOLEAN DEFAULT true,  -- staff can toggle off to hide from customer menu
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -82,72 +83,109 @@ const { data: products } = await supabase
   .order('name', { ascending: true });
 ```
 
-### Combos & Bundles
+### Combos, Bundles & Selection Config
 
-A product is a combo if it has `product_recipe_items` with `item_type = 'product'`.
+A product is a combo/bundle if it has a non-null `selection_config` field. This JSONB column contains a **pre-flattened** view of all selection groups and optional items, including nested choices — no recursive queries needed.
+
+#### Checking if a product needs a selection modal
 
 ```typescript
-const { data: recipeItems } = await supabase
-  .from('product_recipe_items')
-  .select(`
-    id, item_type, linked_product_id, linked_product_name,
-    quantity, unit, is_optional, selection_group, price_adjustment, sort_order
-  `)
-  .eq('product_id', productId)
-  .order('sort_order', { ascending: true });
-
-const isCombo = recipeItems?.some(item => item.item_type === 'product');
+const needsModal = product.selection_config != null;
 ```
 
-### XOR Selection Groups
-
-Items with the same `selection_group` value are mutually exclusive choices. The customer must pick exactly one from each group.
-
-**Example for "Nasi Lemak Combo":**
-
-| selection_group | linked_product_name | price_adjustment |
-|---|---|---|
-| Choose Drink | Flat White | 0 |
-| Choose Drink | Americano | 0 |
-| Choose Drink | Iced Latte | 2.00 |
-| null | Nasi Lemak Bungkus | 0 |
-
-- `selection_group = null` and `is_optional = false` → always included
-- `is_optional = true` → optional add-on (customer can toggle on/off)
-
-### Nested XOR (e.g. Hot/Iced for each drink)
-
-If a linked product itself has recipe items with selection groups, fetch those too for nested selection:
+#### `selection_config` Structure
 
 ```typescript
-for (const item of recipeItems.filter(i => i.linked_product_id)) {
-  const { data: nestedItems } = await supabase
-    .from('product_recipe_items')
-    .select('*')
-    .eq('product_id', item.linked_product_id)
-    .not('selection_group', 'is', null)
-    .order('sort_order');
-  // If nestedItems exist, show nested selection UI
+interface SelectionConfig {
+  xorGroups: Array<{
+    uniqueKey: string;          // e.g. "root:Drink" or "americano-uuid:Temp"
+    displayName: string;        // e.g. "Choose Drink" or "Dark Mane Americano Temp"
+    parentProductId?: string;   // set for nested groups (links to parent item's ID)
+    parentProductName?: string;
+    groupName: string;          // original group name
+    items: Array<{
+      id: string;               // product UUID
+      name: string;
+      basePrice: number;
+      priceAdjustment: number;  // extra charge on top of combo override
+    }>;
+  }>;
+  optionalItems: Array<{
+    id: string;                 // product UUID
+    name: string;
+    basePrice: number;
+    priceAdjustment: number;
+    parentProductId?: string;
+    parentProductName?: string;
+  }>;
 }
 ```
 
-### Price Calculation for Combos
+#### Example: "Coffee & Danish Combo"
 
-When a product has `combo_price_override` set:
+```json
+{
+  "xorGroups": [
+    {
+      "uniqueKey": "root:Drink",
+      "displayName": "Drink",
+      "groupName": "Drink",
+      "items": [
+        { "id": "aaa", "name": "Dark Mane Americano", "basePrice": 8.50, "priceAdjustment": 0 },
+        { "id": "bbb", "name": "Velvety Cloud Latte", "basePrice": 11.00, "priceAdjustment": 1.50 }
+      ]
+    },
+    {
+      "uniqueKey": "aaa:Temp",
+      "displayName": "Dark Mane Americano Temp",
+      "parentProductId": "aaa",
+      "parentProductName": "Dark Mane Americano",
+      "groupName": "Temp",
+      "items": [
+        { "id": "ccc", "name": "Hot", "basePrice": 0, "priceAdjustment": 0 },
+        { "id": "ddd", "name": "Iced", "basePrice": 0, "priceAdjustment": 0 }
+      ]
+    },
+    {
+      "uniqueKey": "root:Danish",
+      "displayName": "Danish",
+      "groupName": "Danish",
+      "items": [
+        { "id": "eee", "name": "Blueberry Danish", "basePrice": 6.50, "priceAdjustment": 0 },
+        { "id": "fff", "name": "Apple Salted Caramel Danish", "basePrice": 6.50, "priceAdjustment": 0 }
+      ]
+    }
+  ],
+  "optionalItems": []
+}
+```
+
+#### Rendering the Modal
+
+1. **Top-level groups** (`uniqueKey` starts with `root:`) — render as radio button groups
+2. **Nested groups** (have `parentProductId`) — render indented below the parent item, only visible when that parent is selected
+3. **Optional items** — render as checkboxes (customer can toggle on/off)
+
+#### Price Calculation
+
+When `combo_price_override` is set:
 ```
 finalPrice = combo_price_override + SUM(selected items' price_adjustment)
 ```
 
-When no override is set:
+When no override:
 ```
 finalPrice = SUM(selected components' base_price)
 ```
 
-**Example:** Coffee + Danish combo (override RM13)
-- Americano (default drink): `price_adjustment = 0` → total RM13.00
-- Oat Milk Latte (upgrade): `price_adjustment = 1.50` → total RM14.50
+**Display logic for each item:**
+- If combo override is set and `priceAdjustment > 0`: show "+RM 1.50"
+- If combo override is set and `priceAdjustment = 0`: show "Included"
+- If no combo override: show "RM 8.50" (base price)
 
-The `price_adjustment` field is set per-recipe-item, so the same product can have different adjustments in different combos.
+**Example:** Coffee & Danish combo (override RM9.90)
+- Dark Mane Americano: `priceAdjustment = 0` → "Included", total RM9.90
+- Velvety Cloud Latte: `priceAdjustment = 1.50` → "+RM 1.50", total RM11.40
 
 ### Product Categories
 
@@ -430,8 +468,8 @@ Currently, stock for online orders is tracked via `online_products.stock_count` 
 - [ ] Subscribe to `online_orders` Realtime for live order status updates
 
 ### Should Have
-- [ ] Support combo/bundle products with XOR selection groups
-- [ ] Handle nested selection groups (e.g., Hot/Iced for each drink option)
+- [ ] Render `selection_config` modal for combo products (XOR radio buttons + optional checkboxes)
+- [ ] Handle nested groups (show indented under parent item, only when parent is selected)
 - [ ] Calculate combo prices: `combo_price_override + SUM(price_adjustment)` for selected items
 - [ ] Show "Included" vs "+RM X.XX" for combo options based on `price_adjustment`
 - [ ] Include `combo_selections` in mods for combo orders
@@ -459,6 +497,7 @@ CREATE TABLE IF NOT EXISTS products (
   base_price NUMERIC NOT NULL DEFAULT 0,
   image_url TEXT,
   combo_price_override NUMERIC,
+  selection_config JSONB,
   available_online BOOLEAN DEFAULT true,
   updated_at TIMESTAMPTZ DEFAULT now()
 );
