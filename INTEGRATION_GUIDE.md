@@ -123,6 +123,8 @@ interface SelectionConfig {
 
 #### Example: "Coffee & Danish Combo"
 
+This combo has 6 drink options (some are coffee with Hot/Iced choices, some are tea with no temperature choice), 5 danish options, and 1 optional milk upgrade. The `selection_config` is pre-flattened — every XOR group from every nesting level appears in a single flat array.
+
 ```json
 {
   "xorGroups": [
@@ -131,19 +133,45 @@ interface SelectionConfig {
       "displayName": "Drink",
       "groupName": "Drink",
       "items": [
-        { "id": "aaa", "name": "Dark Mane Americano", "basePrice": 8.50, "priceAdjustment": 0 },
-        { "id": "bbb", "name": "Velvety Cloud Latte", "basePrice": 11.00, "priceAdjustment": 1.50 }
+        { "id": "product-337", "name": "Dark Mane Americano", "basePrice": 8.50, "priceAdjustment": 0 },
+        { "id": "product-336", "name": "Velvety Cloud Latte", "basePrice": 11.00, "priceAdjustment": 1.60 },
+        { "id": "product-292", "name": "Cappu-corniccino", "basePrice": 10.50, "priceAdjustment": 1.50 },
+        { "id": "product-335", "name": "Choco Horn Mocha", "basePrice": 12.00, "priceAdjustment": 2.50 },
+        { "id": "product-250", "name": "Iced Peach Tea", "basePrice": 7.00, "priceAdjustment": 0 },
+        { "id": "product-252", "name": "Iced Apple Tea", "basePrice": 7.50, "priceAdjustment": 0 }
       ]
     },
     {
-      "uniqueKey": "aaa:Temp",
+      "uniqueKey": "product-337:Temp",
       "displayName": "Dark Mane Americano Temp",
-      "parentProductId": "aaa",
+      "parentProductId": "product-337",
       "parentProductName": "Dark Mane Americano",
       "groupName": "Temp",
       "items": [
-        { "id": "ccc", "name": "Hot", "basePrice": 0, "priceAdjustment": 0 },
-        { "id": "ddd", "name": "Iced", "basePrice": 0, "priceAdjustment": 0 }
+        { "id": "hot-americano-uuid", "name": "Hot", "basePrice": 0, "priceAdjustment": 0 },
+        { "id": "iced-americano-uuid", "name": "Iced", "basePrice": 0, "priceAdjustment": 0 }
+      ]
+    },
+    {
+      "uniqueKey": "product-336:Temp",
+      "displayName": "Velvety Cloud Latte Temp",
+      "parentProductId": "product-336",
+      "parentProductName": "Velvety Cloud Latte",
+      "groupName": "Temp",
+      "items": [
+        { "id": "hot-latte-uuid", "name": "Hot", "basePrice": 0, "priceAdjustment": 0 },
+        { "id": "iced-latte-uuid", "name": "Iced", "basePrice": 0, "priceAdjustment": 0 }
+      ]
+    },
+    {
+      "uniqueKey": "product-292:Temp",
+      "displayName": "Cappu-corniccino Temp",
+      "parentProductId": "product-292",
+      "parentProductName": "Cappu-corniccino",
+      "groupName": "Temp",
+      "items": [
+        { "id": "hot-cappu-uuid", "name": "Hot", "basePrice": 0, "priceAdjustment": 0 },
+        { "id": "iced-cappu-uuid", "name": "Iced", "basePrice": 0, "priceAdjustment": 0 }
       ]
     },
     {
@@ -151,41 +179,155 @@ interface SelectionConfig {
       "displayName": "Danish",
       "groupName": "Danish",
       "items": [
-        { "id": "eee", "name": "Blueberry Danish", "basePrice": 6.50, "priceAdjustment": 0 },
-        { "id": "fff", "name": "Apple Salted Caramel Danish", "basePrice": 6.50, "priceAdjustment": 0 }
+        { "id": "product-303", "name": "Blueberry Danish", "basePrice": 6.50, "priceAdjustment": 0 },
+        { "id": "product-302", "name": "Apple Salted Caramel Danish", "basePrice": 6.50, "priceAdjustment": 0 },
+        { "id": "product-301", "name": "Burnt Cheese Danish", "basePrice": 6.50, "priceAdjustment": 0 },
+        { "id": "product-284", "name": "Golden Glow Butterscotch Muffin", "basePrice": 7.00, "priceAdjustment": 0.50 },
+        { "id": "product-285", "name": "Sinful Chocolate", "basePrice": 7.00, "priceAdjustment": 0.50 }
       ]
     }
   ],
-  "optionalItems": []
+  "optionalItems": [
+    {
+      "id": "milk-upgrade",
+      "name": "Milk drink",
+      "basePrice": 5.00,
+      "priceAdjustment": 1.50
+    }
+  ]
 }
 ```
 
+**Key points:**
+- `"root:Drink"` and `"root:Danish"` are top-level groups (no `parentProductId`)
+- `"product-337:Temp"` is a nested group — it only applies when Dark Mane Americano is selected in the Drink group
+- `"product-336:Temp"` is a separate nested group for Velvety Cloud Latte — each drink has its own temperature group
+- Iced Peach Tea and Iced Apple Tea have no nested Temp group (they're always iced) — no entry with their ID as `parentProductId`
+- Not every drink has a temperature group. Only show a Temp group if one exists for the selected drink
+
 #### Rendering the Modal
 
-1. **Top-level groups** (`uniqueKey` starts with `root:`) — render as radio button groups
-2. **Nested groups** (have `parentProductId`) — render indented below the parent item, only visible when that parent is selected
-3. **Optional items** — render as checkboxes (customer can toggle on/off)
+**Step 1: Separate top-level and nested groups**
+
+```typescript
+const topLevelGroups = selectionConfig.xorGroups.filter(g => !g.parentProductId);
+const nestedGroups = selectionConfig.xorGroups.filter(g => !!g.parentProductId);
+```
+
+**Step 2: Track selections**
+
+```typescript
+// Key = group's uniqueKey, Value = selected item's id
+const [selections, setSelections] = useState<Record<string, string>>({});
+```
+
+**Step 3: Render top-level groups as radio buttons**
+
+```tsx
+{topLevelGroups.map(group => (
+  <div key={group.uniqueKey}>
+    <h3>{group.groupName} <span>Required</span></h3>
+    {group.items.map(item => (
+      <div key={item.id}>
+        <RadioButton
+          selected={selections[group.uniqueKey] === item.id}
+          onChange={() => setSelections(prev => ({ ...prev, [group.uniqueKey]: item.id }))}
+        />
+        <span>{item.name}</span>
+        {/* Price display — see Price Calculation below */}
+        <PriceTag item={item} hasComboOverride={!!product.combo_price_override} />
+
+        {/* Step 4: Render nested groups inline, directly under the selected parent */}
+        {selections[group.uniqueKey] === item.id &&
+          nestedGroups
+            .filter(ng => ng.parentProductId === item.id)
+            .map(nestedGroup => (
+              <div key={nestedGroup.uniqueKey} style={{ marginLeft: 16 }}>
+                <h4>{nestedGroup.groupName}</h4>
+                {nestedGroup.items.map(nestedItem => (
+                  <RadioButton
+                    key={nestedItem.id}
+                    selected={selections[nestedGroup.uniqueKey] === nestedItem.id}
+                    onChange={() => setSelections(prev => ({
+                      ...prev,
+                      [nestedGroup.uniqueKey]: nestedItem.id
+                    }))}
+                    label={nestedItem.name}
+                  />
+                ))}
+              </div>
+            ))
+        }
+      </div>
+    ))}
+  </div>
+))}
+```
+
+**Step 5: Render optional items as checkboxes**
+
+```tsx
+{selectionConfig.optionalItems.map(item => (
+  <Checkbox
+    key={item.id}
+    checked={selectedOptionals.has(item.id)}
+    onChange={() => toggleOptional(item.id)}
+    label={item.name}
+  />
+))}
+```
+
+**Important rendering rules:**
+- A nested group is **only visible** when its `parentProductId` matches the currently selected item in the parent group
+- When the user switches their drink selection, **hide** the old drink's nested groups and **show** the new one's (if any)
+- Clear nested selections when the parent selection changes (e.g., switching from Americano to Latte should reset the Temp selection)
+- Not all items have nested groups — Iced Peach Tea has no temperature choice. Only render nested groups if `nestedGroups.filter(ng => ng.parentProductId === selectedItemId)` returns results
+- The `uniqueKey` field (e.g., `"product-337:Temp"`) should be used as the key in your selections state — it's globally unique across all nesting levels
 
 #### Price Calculation
 
-When `combo_price_override` is set:
-```
-finalPrice = combo_price_override + SUM(selected items' price_adjustment)
+When `combo_price_override` is set (most combos):
+```typescript
+// Sum priceAdjustment from ALL selected items (top-level AND nested)
+let adjustments = 0;
+
+// Add adjustments from top-level selections
+topLevelGroups.forEach(group => {
+  const selectedId = selections[group.uniqueKey];
+  const selectedItem = group.items.find(i => i.id === selectedId);
+  if (selectedItem) adjustments += selectedItem.priceAdjustment;
+});
+
+// Add adjustments from nested selections (e.g., Iced might cost extra)
+nestedGroups.forEach(group => {
+  const selectedId = selections[group.uniqueKey];
+  const selectedItem = group.items.find(i => i.id === selectedId);
+  if (selectedItem) adjustments += selectedItem.priceAdjustment;
+});
+
+// Add adjustments from optional items
+selectionConfig.optionalItems.forEach(item => {
+  if (selectedOptionals.has(item.id)) adjustments += item.priceAdjustment;
+});
+
+const finalPrice = product.combo_price_override + adjustments;
 ```
 
-When no override:
+When no override (non-combo products with selections):
 ```
 finalPrice = SUM(selected components' base_price)
 ```
 
-**Display logic for each item:**
-- If combo override is set and `priceAdjustment > 0`: show "+RM 1.50"
+**Display logic for each item in the modal:**
+- If combo override is set and `priceAdjustment > 0`: show "+RM X.XX"
 - If combo override is set and `priceAdjustment = 0`: show "Included"
-- If no combo override: show "RM 8.50" (base price)
+- If no combo override: show "RM X.XX" (base price)
 
 **Example:** Coffee & Danish combo (override RM9.90)
-- Dark Mane Americano: `priceAdjustment = 0` → "Included", total RM9.90
-- Velvety Cloud Latte: `priceAdjustment = 1.50` → "+RM 1.50", total RM11.40
+- Dark Mane Americano: `priceAdjustment = 0` → "Included", total stays RM9.90
+- Velvety Cloud Latte: `priceAdjustment = 1.60` → "+RM 1.60", total becomes RM11.50
+- Cappu-corniccino: `priceAdjustment = 1.50` → "+RM 1.50", total becomes RM11.40
+- Milk drink (optional): `priceAdjustment = 1.50` → "+RM 1.50", adds on top of drink selection
 
 ### Product Categories
 
@@ -315,19 +457,23 @@ When creating `online_order_items`, use the product's UUID from the `products` t
 }
 ```
 
-For combos, include selected components so the kitchen knows what to make:
+For combos, include the selected components in `combo_selections` so the kitchen knows what to make. Use the group's `uniqueKey` as the key:
 
 ```typescript
 {
   product_id: comboProduct.id,
-  product_name: "Nasi Lemak Combo",
+  product_name: "Coffee & Danish Combo",
   qty: 1,
-  unit_price: 9.40,
+  unit_price: 11.50,  // 9.90 + 1.60 (Latte upgrade)
   mods: {
     combo_selections: {
-      "Choose Drink": { id: "flat-white-uuid", name: "Flat White" },
-      "Temperature": { id: "hot-uuid", name: "Hot" }
+      "root:Drink": { id: "product-336", name: "Velvety Cloud Latte" },
+      "product-336:Temp": { id: "iced-latte-uuid", name: "Iced" },
+      "root:Danish": { id: "product-303", name: "Blueberry Danish" }
     },
+    selected_optionals: [
+      { id: "milk-upgrade", name: "Milk drink" }
+    ],
     notes: "Extra sambal"
   }
 }
@@ -469,10 +615,13 @@ Currently, stock for online orders is tracked via `online_products.stock_count` 
 
 ### Should Have
 - [ ] Render `selection_config` modal for combo products (XOR radio buttons + optional checkboxes)
-- [ ] Handle nested groups (show indented under parent item, only when parent is selected)
-- [ ] Calculate combo prices: `combo_price_override + SUM(price_adjustment)` for selected items
+- [ ] Separate groups into top-level (`!parentProductId`) and nested (`parentProductId` is set)
+- [ ] Show nested groups (e.g., Hot/Iced) only when their `parentProductId` matches the selected item in the parent group
+- [ ] Clear nested selections when the parent selection changes
+- [ ] Handle items with no nested groups (e.g., Iced Peach Tea has no Temp group — don't show one)
+- [ ] Calculate combo prices: `combo_price_override + SUM(price_adjustment)` across ALL selected items (top-level + nested + optional)
 - [ ] Show "Included" vs "+RM X.XX" for combo options based on `price_adjustment`
-- [ ] Include `combo_selections` in mods for combo orders
+- [ ] Include `combo_selections` (keyed by `uniqueKey`) and `selected_optionals` in mods for combo orders
 - [ ] Show placeholder for products without `image_url`
 - [ ] Subscribe to `outlet_settings` Realtime for auto-unblock when intake resumes
 
