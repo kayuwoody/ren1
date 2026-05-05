@@ -11,6 +11,15 @@ function buildSelectionConfig(productId: string) {
   return { xorGroups, optionalItems };
 }
 
+function getProductStockQuantity(productId: string): number {
+  const row = db.prepare(`
+    SELECT COALESCE(SUM(stockQuantity), 0) as total
+    FROM BranchStock
+    WHERE itemType = 'product' AND itemId = ?
+  `).get(productId) as { total: number };
+  return row.total;
+}
+
 export async function syncProduct(productId: string) {
   const product = db.prepare('SELECT * FROM Product WHERE id = ?').get(productId) as any;
   if (!product) return;
@@ -26,6 +35,7 @@ export async function syncProduct(productId: string) {
     image_url: product.imageUrl,
     combo_price_override: product.comboPriceOverride,
     selection_config: selectionConfig,
+    stock_quantity: product.manageStock ? getProductStockQuantity(productId) : null,
     available_online: true,
     updated_at: new Date().toISOString(),
   };
@@ -110,6 +120,7 @@ export async function syncAllProducts() {
     image_url: p.imageUrl,
     combo_price_override: p.comboPriceOverride,
     selection_config: buildSelectionConfig(p.id),
+    stock_quantity: p.manageStock ? getProductStockQuantity(p.id) : null,
     available_online: true,
     updated_at: now,
   }));
@@ -140,6 +151,47 @@ export async function syncAllRecipes() {
       synced++;
     } catch {
       failed++;
+    }
+  }
+
+  return { synced, failed, total: products.length };
+}
+
+export async function syncProductStock(productId: string) {
+  const product = db.prepare('SELECT id, manageStock FROM Product WHERE id = ?').get(productId) as any;
+  if (!product || !product.manageStock) return;
+
+  const stockQuantity = getProductStockQuantity(productId);
+  const { error } = await supabase
+    .from('products')
+    .update({ stock_quantity: stockQuantity, updated_at: new Date().toISOString() })
+    .eq('id', productId);
+
+  if (error) {
+    console.warn(`Stock sync failed for product ${productId}:`, error.message);
+  }
+}
+
+export async function syncAllStock() {
+  const products = db.prepare('SELECT id FROM Product WHERE manageStock = 1').all() as any[];
+  let synced = 0;
+  let failed = 0;
+
+  for (let i = 0; i < products.length; i += 50) {
+    const batch = products.slice(i, i + 50);
+    const rows = batch.map(p => ({
+      id: p.id,
+      stock_quantity: getProductStockQuantity(p.id),
+      updated_at: new Date().toISOString(),
+    }));
+
+    try {
+      const { error } = await supabase.from('products').upsert(rows, { onConflict: 'id' });
+      if (error) throw error;
+      synced += batch.length;
+    } catch (err) {
+      console.error('Batch stock sync failed:', err);
+      failed += batch.length;
     }
   }
 

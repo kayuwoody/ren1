@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS products (
   image_url TEXT,
   combo_price_override NUMERIC,           -- if set, overrides calculated combo price
   selection_config JSONB,                 -- pre-flattened XOR groups + optional items for combos
+  stock_quantity NUMERIC,                 -- current stock (null = untracked, 0 = out of stock)
   available_online BOOLEAN DEFAULT true,  -- staff can toggle off to hide from customer menu
   updated_at TIMESTAMPTZ DEFAULT now()
 );

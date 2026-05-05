@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS products (
   image_url TEXT,
   combo_price_override NUMERIC,           -- if set, overrides calculated combo price
   selection_config JSONB,                 -- pre-flattened XOR groups + optional items (see below)
+  stock_quantity NUMERIC,                 -- current stock level (null = untracked, 0 = out of stock)
   available_online BOOLEAN DEFAULT true,  -- staff can toggle off to hide from customer menu
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -578,26 +579,50 @@ The customer app must read products from the `products` table (not mock/hardcode
 - Products with `available_online = false` should be hidden or greyed out
 - The `available_online` flag is managed by POS staff via the online orders admin panel
 
+### Stock Levels
+
+The `products.stock_quantity` column is synced from the POS in real-time. POS is the source of truth for stock.
+
+**How `stock_quantity` works:**
+- `null` — stock is **not tracked** for this product (most items). Treat as always available.
+- `0` — product is **out of stock**. Show as sold out / greyed out.
+- `> 0` — product is in stock. Optionally show "X left" for low quantities.
+
+**Sync behavior:**
+- Every sale, stock check, or purchase order in the POS immediately syncs the updated stock to Supabase
+- Full stock sync runs on POS startup and on manual catalog sync
+- Stock is summed across all branches (currently single-branch)
+
+```typescript
+// Example: filter or annotate products by stock
+products.forEach(product => {
+  if (product.available_online === false) {
+    // Hidden by staff
+  } else if (product.stock_quantity !== null && product.stock_quantity <= 0) {
+    // Out of stock — show as sold out
+  } else {
+    // Available (stock_quantity is null = untracked, or > 0)
+  }
+});
+```
+
+**Do NOT decrement stock from the customer app.** The POS handles stock deduction when it accepts the online order. The customer app should only read `stock_quantity` for display purposes.
+
 ---
 
 ## 6. Migration Notes
 
 ### Legacy `online_products` Table (being phased out)
 
-The POS previously used a separate `online_products` table with hardcoded mock product IDs (`flat`, `latte`, `danish`, etc.) for sold-out toggles and stock counts. This is being replaced by the `products` table which has real POS UUIDs and the `available_online` flag.
+The POS previously used a separate `online_products` table with hardcoded mock product IDs (`flat`, `latte`, `danish`, etc.) for sold-out toggles and stock counts. This is fully replaced by the `products` table which has real POS UUIDs, the `available_online` flag, and `stock_quantity`.
 
 **Customer app should:**
 - Read menu from `products` table (not `online_products`)
 - Use `products.id` (UUID) as the product identifier everywhere
 - Use `products.available_online` for availability (replaces `online_products.available`)
+- Use `products.stock_quantity` for stock levels (replaces `online_products.stock_count`)
+- Do NOT use the `decrement_stock` RPC — POS handles stock deduction on order accept
 - Ignore `online_products` — it will be removed
-
-### Stock Management (Future)
-
-Currently, stock for online orders is tracked via `online_products.stock_count` and a `decrement_stock` RPC. This will migrate to use the POS's branch stock system. For now:
-- `products` table doesn't have a `stock_count` column
-- Sold-out state is managed via `available_online` toggle (staff manually marks items as sold out)
-- Future: automatic sold-out when branch stock reaches 0
 
 ---
 
@@ -611,6 +636,9 @@ Currently, stock for online orders is tracked via `online_products.stock_count` 
 - [ ] Display `reject_reason` when order is rejected
 - [ ] Check `outlet_settings.intake_paused` before allowing checkout
 - [ ] Respect `available_online` flag — hide/grey out unavailable products
+- [ ] Show products as sold out when `stock_quantity` is not null and `<= 0`
+- [ ] Treat `stock_quantity = null` as untracked (always available)
+- [ ] Never decrement stock from the customer app (POS handles it on order accept)
 - [ ] Subscribe to `online_orders` Realtime for live order status updates
 
 ### Should Have
@@ -647,6 +675,7 @@ CREATE TABLE IF NOT EXISTS products (
   image_url TEXT,
   combo_price_override NUMERIC,
   selection_config JSONB,
+  stock_quantity NUMERIC,
   available_online BOOLEAN DEFAULT true,
   updated_at TIMESTAMPTZ DEFAULT now()
 );
