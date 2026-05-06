@@ -11,17 +11,6 @@ function buildSelectionConfig(productId: string) {
   return { xorGroups, optionalItems };
 }
 
-const HIDDEN_CATEGORIES = ['hidden', 'private'];
-
-function isProductAvailableOnline(product: any): boolean {
-  if (HIDDEN_CATEGORIES.includes(product.category)) return false;
-  if (product.manageStock) {
-    const stock = getProductStockQuantity(product.id);
-    if (stock <= 0) return false;
-  }
-  return true;
-}
-
 function getProductStockQuantity(productId: string): number {
   const row = db.prepare(`
     SELECT COALESCE(SUM(stockQuantity), 0) as total
@@ -47,7 +36,7 @@ export async function syncProduct(productId: string) {
     combo_price_override: product.comboPriceOverride,
     selection_config: selectionConfig,
     stock_quantity: product.manageStock ? getProductStockQuantity(productId) : null,
-    available_online: isProductAvailableOnline(product),
+    available_online: !!product.availableOnline,
     updated_at: new Date().toISOString(),
   };
 
@@ -132,7 +121,7 @@ export async function syncAllProducts() {
     combo_price_override: p.comboPriceOverride,
     selection_config: buildSelectionConfig(p.id),
     stock_quantity: p.manageStock ? getProductStockQuantity(p.id) : null,
-    available_online: isProductAvailableOnline(p),
+    available_online: !!p.availableOnline,
     updated_at: now,
   }));
 
@@ -169,17 +158,13 @@ export async function syncAllRecipes() {
 }
 
 export async function syncProductStock(productId: string) {
-  const product = db.prepare('SELECT * FROM Product WHERE id = ?').get(productId) as any;
+  const product = db.prepare('SELECT id, manageStock FROM Product WHERE id = ?').get(productId) as any;
   if (!product || !product.manageStock) return;
 
   const stockQuantity = getProductStockQuantity(productId);
   const { error } = await supabase
     .from('products')
-    .update({
-      stock_quantity: stockQuantity,
-      available_online: isProductAvailableOnline(product),
-      updated_at: new Date().toISOString(),
-    })
+    .update({ stock_quantity: stockQuantity, updated_at: new Date().toISOString() })
     .eq('id', productId);
 
   if (error) {

@@ -291,6 +291,20 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Migration: Add availableOnline column to Product table if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const hasAvailableOnline = tableInfo.some((col: any) => col.name === 'availableOnline');
+
+    if (tableInfo.length > 0 && !hasAvailableOnline) {
+      console.log('🔄 Adding availableOnline column to Product table...');
+      db.exec(`ALTER TABLE Product ADD COLUMN availableOnline INTEGER NOT NULL DEFAULT 1`);
+      console.log('✅ availableOnline column added');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
   // Customer table (local identity — replaces WooCommerce customers)
   db.exec(`
     CREATE TABLE IF NOT EXISTS Customer (

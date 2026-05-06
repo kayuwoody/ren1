@@ -14,6 +14,7 @@ export interface Product {
   unitCost: number;
   stockQuantity: number;
   manageStock: boolean;
+  availableOnline: boolean;
   comboPriceOverride?: number;
   supplier?: string;
   quantityPerCarton?: number;
@@ -96,7 +97,8 @@ export function upsertProduct(
     const stmt = db.prepare(`
       UPDATE Product
       SET wcId = ?, name = ?, sku = ?, category = ?, basePrice = ?,
-          supplierCost = ?, unitCost = ?, manageStock = ?, supplier = ?, quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
+          supplierCost = ?, unitCost = ?, manageStock = ?, availableOnline = ?,
+          supplier = ?, quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
       WHERE id = ?
     `);
 
@@ -109,6 +111,7 @@ export function upsertProduct(
       product.supplierCost,
       product.unitCost,
       product.manageStock ? 1 : 0,
+      product.availableOnline ? 1 : 0,
       product.supplier || null,
       product.quantityPerCarton || null,
       product.imageUrl || null,
@@ -119,8 +122,8 @@ export function upsertProduct(
     // Insert new product — stockQuantity defaults to 0 (real stock lives in BranchStock)
     const stmt = db.prepare(`
       INSERT INTO Product (id, wcId, name, sku, category, basePrice, supplierCost, unitCost,
-                          stockQuantity, manageStock, supplier, quantityPerCarton, imageUrl, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+                          stockQuantity, manageStock, availableOnline, supplier, quantityPerCarton, imageUrl, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -133,6 +136,7 @@ export function upsertProduct(
       product.supplierCost,
       product.unitCost,
       product.manageStock ? 1 : 0,
+      product.availableOnline ? 1 : 0,
       product.supplier || null,
       product.quantityPerCarton || null,
       product.imageUrl || null,
@@ -215,6 +219,7 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     unitCost, // Preserve existing unitCost from recipes
     stockQuantity, // Preserve existing stock (BranchStock is source of truth)
     manageStock: wcProduct.manage_stock ?? false, // Store whether WooCommerce tracks inventory
+    availableOnline: existing?.availableOnline ?? true,
     supplier, // Preserve existing supplier (local field)
     quantityPerCarton, // Preserve existing carton quantity (local field)
     imageUrl: wcProduct.images?.[0]?.src,
