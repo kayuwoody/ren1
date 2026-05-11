@@ -15,6 +15,7 @@ export interface FlattenedXORGroup {
     name: string;
     basePrice: number;          // Product's base/sales price
     priceAdjustment: number;    // Extra charge on top of combo override
+    isCoffee: boolean;          // Whether this item is a coffee (for milk/sugar options)
   }>;
 }
 
@@ -26,6 +27,7 @@ export interface FlattenedOptionalItem {
   name: string;
   basePrice: number;          // Product's base/sales price
   priceAdjustment: number;    // Extra charge on top of combo override
+  isCoffee: boolean;          // Whether this item is a coffee (for milk/sugar options)
   parentProductId?: string;
   parentProductName?: string;
 }
@@ -130,6 +132,7 @@ export function flattenAllChoices(
             name: item.linkedProductName || linkedProd?.name || 'Unknown',
             basePrice: linkedProd?.basePrice || 0,
             priceAdjustment: item.priceAdjustment || 0,
+            isCoffee: linkedProd?.category === 'coffee',
           };
         }),
     });
@@ -146,6 +149,7 @@ export function flattenAllChoices(
         name: item.linkedProductName || linkedProd?.name || 'Unknown',
         basePrice: linkedProd?.basePrice || 0,
         priceAdjustment: item.priceAdjustment || 0,
+        isCoffee: linkedProd?.category === 'coffee',
         parentProductId: depth === 0 ? undefined : product.id,
         parentProductName: depth === 0 ? undefined : product.name,
       });

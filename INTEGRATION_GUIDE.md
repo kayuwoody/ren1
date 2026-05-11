@@ -109,6 +109,7 @@ interface SelectionConfig {
       name: string;
       basePrice: number;
       priceAdjustment: number;  // extra charge on top of combo override
+      isCoffee: boolean;        // true if product category is 'coffee' — show milk/sugar options
     }>;
   }>;
   optionalItems: Array<{
@@ -116,6 +117,7 @@ interface SelectionConfig {
     name: string;
     basePrice: number;
     priceAdjustment: number;
+    isCoffee: boolean;          // true if product category is 'coffee' — show milk/sugar options
     parentProductId?: string;
     parentProductName?: string;
   }>;
@@ -134,12 +136,12 @@ This combo has 6 drink options (some are coffee with Hot/Iced choices, some are 
       "displayName": "Drink",
       "groupName": "Drink",
       "items": [
-        { "id": "product-337", "name": "Dark Mane Americano", "basePrice": 8.50, "priceAdjustment": 0 },
-        { "id": "product-336", "name": "Velvety Cloud Latte", "basePrice": 11.00, "priceAdjustment": 1.60 },
-        { "id": "product-292", "name": "Cappu-corniccino", "basePrice": 10.50, "priceAdjustment": 1.50 },
-        { "id": "product-335", "name": "Choco Horn Mocha", "basePrice": 12.00, "priceAdjustment": 2.50 },
-        { "id": "product-250", "name": "Iced Peach Tea", "basePrice": 7.00, "priceAdjustment": 0 },
-        { "id": "product-252", "name": "Iced Apple Tea", "basePrice": 7.50, "priceAdjustment": 0 }
+        { "id": "product-337", "name": "Dark Mane Americano", "basePrice": 8.50, "priceAdjustment": 0, "isCoffee": true },
+        { "id": "product-336", "name": "Velvety Cloud Latte", "basePrice": 11.00, "priceAdjustment": 1.60, "isCoffee": true },
+        { "id": "product-292", "name": "Cappu-corniccino", "basePrice": 10.50, "priceAdjustment": 1.50, "isCoffee": true },
+        { "id": "product-335", "name": "Choco Horn Mocha", "basePrice": 12.00, "priceAdjustment": 2.50, "isCoffee": true },
+        { "id": "product-250", "name": "Iced Peach Tea", "basePrice": 7.00, "priceAdjustment": 0, "isCoffee": false },
+        { "id": "product-252", "name": "Iced Apple Tea", "basePrice": 7.50, "priceAdjustment": 0, "isCoffee": false }
       ]
     },
     {
@@ -149,8 +151,8 @@ This combo has 6 drink options (some are coffee with Hot/Iced choices, some are 
       "parentProductName": "Dark Mane Americano",
       "groupName": "Temp",
       "items": [
-        { "id": "hot-americano-uuid", "name": "Hot", "basePrice": 0, "priceAdjustment": 0 },
-        { "id": "iced-americano-uuid", "name": "Iced", "basePrice": 0, "priceAdjustment": 0 }
+        { "id": "hot-americano-uuid", "name": "Hot", "basePrice": 0, "priceAdjustment": 0, "isCoffee": false },
+        { "id": "iced-americano-uuid", "name": "Iced", "basePrice": 0, "priceAdjustment": 0, "isCoffee": false }
       ]
     },
     {
@@ -160,8 +162,8 @@ This combo has 6 drink options (some are coffee with Hot/Iced choices, some are 
       "parentProductName": "Velvety Cloud Latte",
       "groupName": "Temp",
       "items": [
-        { "id": "hot-latte-uuid", "name": "Hot", "basePrice": 0, "priceAdjustment": 0 },
-        { "id": "iced-latte-uuid", "name": "Iced", "basePrice": 0, "priceAdjustment": 0 }
+        { "id": "hot-latte-uuid", "name": "Hot", "basePrice": 0, "priceAdjustment": 0, "isCoffee": false },
+        { "id": "iced-latte-uuid", "name": "Iced", "basePrice": 0, "priceAdjustment": 0, "isCoffee": false }
       ]
     },
     {
@@ -171,8 +173,8 @@ This combo has 6 drink options (some are coffee with Hot/Iced choices, some are 
       "parentProductName": "Cappu-corniccino",
       "groupName": "Temp",
       "items": [
-        { "id": "hot-cappu-uuid", "name": "Hot", "basePrice": 0, "priceAdjustment": 0 },
-        { "id": "iced-cappu-uuid", "name": "Iced", "basePrice": 0, "priceAdjustment": 0 }
+        { "id": "hot-cappu-uuid", "name": "Hot", "basePrice": 0, "priceAdjustment": 0, "isCoffee": false },
+        { "id": "iced-cappu-uuid", "name": "Iced", "basePrice": 0, "priceAdjustment": 0, "isCoffee": false }
       ]
     },
     {
@@ -180,11 +182,11 @@ This combo has 6 drink options (some are coffee with Hot/Iced choices, some are 
       "displayName": "Danish",
       "groupName": "Danish",
       "items": [
-        { "id": "product-303", "name": "Blueberry Danish", "basePrice": 6.50, "priceAdjustment": 0 },
-        { "id": "product-302", "name": "Apple Salted Caramel Danish", "basePrice": 6.50, "priceAdjustment": 0 },
-        { "id": "product-301", "name": "Burnt Cheese Danish", "basePrice": 6.50, "priceAdjustment": 0 },
-        { "id": "product-284", "name": "Golden Glow Butterscotch Muffin", "basePrice": 7.00, "priceAdjustment": 0.50 },
-        { "id": "product-285", "name": "Sinful Chocolate", "basePrice": 7.00, "priceAdjustment": 0.50 }
+        { "id": "product-303", "name": "Blueberry Danish", "basePrice": 6.50, "priceAdjustment": 0, "isCoffee": false },
+        { "id": "product-302", "name": "Apple Salted Caramel Danish", "basePrice": 6.50, "priceAdjustment": 0, "isCoffee": false },
+        { "id": "product-301", "name": "Burnt Cheese Danish", "basePrice": 6.50, "priceAdjustment": 0, "isCoffee": false },
+        { "id": "product-284", "name": "Golden Glow Butterscotch Muffin", "basePrice": 7.00, "priceAdjustment": 0.50, "isCoffee": false },
+        { "id": "product-285", "name": "Sinful Chocolate", "basePrice": 7.00, "priceAdjustment": 0.50, "isCoffee": false }
       ]
     }
   ],
@@ -193,7 +195,8 @@ This combo has 6 drink options (some are coffee with Hot/Iced choices, some are 
       "id": "milk-upgrade",
       "name": "Milk drink",
       "basePrice": 5.00,
-      "priceAdjustment": 1.50
+      "priceAdjustment": 1.50,
+      "isCoffee": false
     }
   ]
 }
@@ -205,6 +208,9 @@ This combo has 6 drink options (some are coffee with Hot/Iced choices, some are 
 - `"product-336:Temp"` is a separate nested group for Velvety Cloud Latte — each drink has its own temperature group
 - Iced Peach Tea and Iced Apple Tea have no nested Temp group (they're always iced) — no entry with their ID as `parentProductId`
 - Not every drink has a temperature group. Only show a Temp group if one exists for the selected drink
+- Items with `isCoffee: true` are coffee products — show milk/sugar customization options when selected
+- Items with `isCoffee: false` (teas, danishes, etc.) should not show coffee-specific options
+- The `isCoffee` flag is derived from the product's category in the POS database
 
 #### Rendering the Modal
 
