@@ -2,321 +2,393 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Star, TrendingUp, Gift, Search, Award } from 'lucide-react';
+import { ArrowLeft, Star, QrCode, Settings, Users, Gift, ChevronRight } from 'lucide-react';
 
-interface Customer {
-  id: number;
-  email: string;
-  first_name: string;
-  last_name: string;
-  billing?: {
-    phone?: string;
-  };
+interface LoyaltyConfig {
+  points_per_scan: number;
+  points_threshold: number;
+  voucher_type: 'fixed' | 'percent';
+  voucher_discount_value: number;
+  voucher_validity_days: number;
+  voucher_min_order: number;
+  is_active: boolean;
 }
 
-interface PointsTransaction {
+interface Member {
   id: string;
-  type: 'earned' | 'redeemed';
-  amount: number;
-  reason: string;
-  orderId?: string;
-  timestamp: string;
+  phone: string;
+  name: string | null;
+  points_balance: number;
+  total_points_earned: number;
+  created_at: string;
 }
 
-interface LoyaltyPoints {
-  balance: number;
-  history: PointsTransaction[];
+interface ScanResult {
+  member: Member;
+  points_added: number;
+  voucher_issued: any;
+  points_until_voucher: number;
 }
 
-export default function AdminLoyaltyPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [points, setPoints] = useState<LoyaltyPoints | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [awardAmount, setAwardAmount] = useState('');
-  const [awardReason, setAwardReason] = useState('');
+export default function LoyaltyPage() {
+  const [tab, setTab] = useState<'scan' | 'members' | 'config'>('scan');
+  const [config, setConfig] = useState<LoyaltyConfig | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [scanPhone, setScanPhone] = useState('');
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [configForm, setConfigForm] = useState<LoyaltyConfig | null>(null);
 
   useEffect(() => {
-    fetchCustomers();
+    fetchConfig();
   }, []);
 
   useEffect(() => {
-    if (customerSearch) {
-      const filtered = customers.filter(c =>
-        c.email.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.first_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.last_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.billing?.phone?.includes(customerSearch)
-      );
-      setFilteredCustomers(filtered);
-    } else {
-      setFilteredCustomers(customers);
+    if (tab === 'members') fetchMembers();
+  }, [tab, memberSearch]);
+
+  async function fetchConfig() {
+    const res = await fetch('/api/loyalty/config');
+    if (res.ok) {
+      const data = await res.json();
+      setConfig(data);
+      setConfigForm(data);
     }
-  }, [customerSearch, customers]);
+  }
 
-  const fetchCustomers = async () => {
-    try {
-      // Fetch customers from WooCommerce
-      const res = await fetch('/api/admin/customers');
-      if (res.ok) {
-        const data = await res.json();
-        setCustomers(data);
-        setFilteredCustomers(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch customers:', err);
+  async function fetchMembers() {
+    const params = memberSearch ? `?search=${encodeURIComponent(memberSearch)}` : '';
+    const res = await fetch(`/api/loyalty/members${params}`);
+    if (res.ok) {
+      const data = await res.json();
+      setMembers(data.members);
     }
-  };
+  }
 
-  const fetchCustomerPoints = async (customerId: number) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/loyalty/points?userId=${customerId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPoints(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch points:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSelectCustomer = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    fetchCustomerPoints(customer.id);
-  };
-
-  const handleAwardPoints = async (e: React.FormEvent) => {
+  async function handleScan(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedCustomer || !awardAmount || !awardReason) return;
+    if (!scanPhone.trim()) return;
+    setScanning(true);
+    setScanResult(null);
 
     try {
-      const res = await fetch('/api/loyalty/award', {
+      const res = await fetch('/api/loyalty/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: selectedCustomer.id,
-          amount: parseInt(awardAmount),
-          reason: awardReason,
-        }),
+        body: JSON.stringify({ phone: scanPhone.trim() }),
       });
-
+      const data = await res.json();
       if (res.ok) {
-        alert('Points awarded successfully!');
-        setAwardAmount('');
-        setAwardReason('');
-        fetchCustomerPoints(selectedCustomer.id);
+        setScanResult(data);
       } else {
-        alert('Failed to award points');
+        alert(data.error || 'Scan failed');
       }
-    } catch (err) {
-      console.error('Failed to award points:', err);
-      alert('Error awarding points');
+    } catch {
+      alert('Failed to process scan');
+    } finally {
+      setScanning(false);
     }
-  };
+  }
+
+  async function saveConfig(e: React.FormEvent) {
+    e.preventDefault();
+    if (!configForm) return;
+    setSaving(true);
+
+    try {
+      const res = await fetch('/api/loyalty/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(configForm),
+      });
+      if (res.ok) {
+        setConfig(configForm);
+        alert('Settings saved');
+      } else {
+        alert('Failed to save settings');
+      }
+    } catch {
+      alert('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-white border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/admin" className="p-2 hover:bg-gray-100 rounded-lg transition">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Star className="w-7 h-7 text-yellow-500" />
-                Loyalty Points Management
-              </h1>
-              <p className="text-sm text-gray-500">View and manage customer loyalty points</p>
+        <div className="max-w-5xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/admin" className="p-2 hover:bg-gray-100 rounded-lg">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  <Star className="w-6 h-6 text-yellow-500" />
+                  Loyalty Program
+                </h1>
+                {config && (
+                  <p className="text-sm text-gray-500">
+                    {config.is_active ? 'Active' : 'Disabled'} — {config.points_per_scan} pt/scan, {config.points_threshold} pts for voucher
+                  </p>
+                )}
+              </div>
             </div>
+            <Link
+              href="/admin/vouchers"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100"
+            >
+              <Gift className="w-4 h-4" />
+              Vouchers
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          <div className="flex gap-1 mt-4">
+            {(['scan', 'members', 'config'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-2 rounded-t-lg text-sm font-medium capitalize ${
+                  tab === t ? 'bg-gray-50 text-blue-600 border border-b-0' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t === 'scan' && <QrCode className="w-4 h-4 inline mr-1.5" />}
+                {t === 'members' && <Users className="w-4 h-4 inline mr-1.5" />}
+                {t === 'config' && <Settings className="w-4 h-4 inline mr-1.5" />}
+                {t}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="flex h-[calc(100vh-120px)]">
-        {/* Customer List Sidebar */}
-        <div className="w-80 bg-white border-r flex flex-col">
-          <div className="p-4 border-b">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search customers..."
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
-              />
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        {tab === 'scan' && (
+          <div className="max-w-lg mx-auto space-y-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-lg font-semibold mb-4">Scan Customer</h2>
+              <form onSubmit={handleScan} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={scanPhone}
+                    onChange={e => setScanPhone(e.target.value)}
+                    className="w-full px-4 py-3 border rounded-lg text-lg"
+                    placeholder="e.g. 0123456789"
+                    autoFocus
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Enter or scan the customer&apos;s phone number</p>
+                </div>
+                <button
+                  type="submit"
+                  disabled={scanning || !scanPhone.trim()}
+                  className="w-full py-3 bg-yellow-500 text-white rounded-lg font-semibold hover:bg-yellow-600 disabled:opacity-50"
+                >
+                  {scanning ? 'Processing...' : 'Add Points'}
+                </button>
+              </form>
             </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto">
-            {filteredCustomers.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
-                <p>No customers found</p>
-              </div>
-            ) : (
-              <div className="divide-y">
-                {filteredCustomers.map((customer) => (
-                  <button
-                    key={customer.id}
-                    onClick={() => handleSelectCustomer(customer)}
-                    className={`w-full text-left p-4 hover:bg-gray-50 transition ${
-                      selectedCustomer?.id === customer.id ? 'bg-yellow-50 border-l-4 border-yellow-500' : ''
-                    }`}
-                  >
-                    <div className="font-medium">
-                      {customer.first_name} {customer.last_name}
-                    </div>
-                    <div className="text-sm text-gray-600">{customer.email}</div>
-                    {customer.billing?.phone && (
-                      <div className="text-xs text-gray-500">{customer.billing.phone}</div>
-                    )}
-                  </button>
-                ))}
+            {scanResult && (
+              <div className="bg-white rounded-lg shadow p-6 space-y-4">
+                <div className="text-center">
+                  <p className="text-green-600 font-semibold text-lg">
+                    +{scanResult.points_added} point{scanResult.points_added !== 1 ? 's' : ''} added!
+                  </p>
+                  <p className="text-gray-600">
+                    {scanResult.member.name || scanResult.member.phone}
+                  </p>
+                </div>
+
+                <div className="bg-yellow-50 rounded-lg p-4 text-center">
+                  <p className="text-sm text-yellow-700">Current Balance</p>
+                  <p className="text-3xl font-bold text-yellow-600">{scanResult.member.points_balance}</p>
+                  <p className="text-xs text-yellow-600 mt-1">
+                    {scanResult.points_until_voucher > 0
+                      ? `${scanResult.points_until_voucher} more until next voucher`
+                      : 'Voucher threshold reached!'}
+                  </p>
+                </div>
+
+                {scanResult.voucher_issued && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                    <Gift className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                    <p className="font-semibold text-green-800">Voucher Issued!</p>
+                    <p className="text-2xl font-mono font-bold text-green-700 mt-1">
+                      {scanResult.voucher_issued.code}
+                    </p>
+                    <p className="text-sm text-green-600 mt-1">
+                      {scanResult.voucher_issued.type === 'fixed'
+                        ? `RM ${scanResult.voucher_issued.discount_value} off`
+                        : `${scanResult.voucher_issued.discount_value}% off`}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => { setScanResult(null); setScanPhone(''); }}
+                  className="w-full py-2 border rounded-lg text-gray-600 hover:bg-gray-50"
+                >
+                  Scan Another
+                </button>
               </div>
             )}
           </div>
-        </div>
+        )}
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {!selectedCustomer ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <div className="text-center">
-                <Star className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <p>Select a customer to view their loyalty points</p>
-              </div>
-            </div>
-          ) : loading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading points...</p>
-              </div>
-            </div>
-          ) : (
-            <div className="max-w-4xl mx-auto space-y-6">
-              {/* Customer Header */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold mb-2">
-                  {selectedCustomer.first_name} {selectedCustomer.last_name}
-                </h2>
-                <p className="text-gray-600">{selectedCustomer.email}</p>
-              </div>
+        {tab === 'members' && (
+          <div className="space-y-4">
+            <input
+              type="text"
+              value={memberSearch}
+              onChange={e => setMemberSearch(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg"
+              placeholder="Search by phone or name..."
+            />
 
-              {/* Points Balance */}
-              <div className="bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-lg shadow-lg p-8 text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-yellow-100 text-sm uppercase tracking-wide mb-2">Current Balance</p>
-                    <p className="text-5xl font-bold">{points?.balance || 0}</p>
-                    <p className="text-yellow-100 mt-2">points</p>
-                  </div>
-                  <Award className="w-24 h-24 text-yellow-200 opacity-50" />
-                </div>
-                <div className="mt-4 pt-4 border-t border-yellow-300">
-                  <p className="text-sm text-yellow-100">
-                    Worth approximately RM {((points?.balance || 0) / 100).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Award Points Form */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <Gift className="w-5 h-5 text-yellow-600" />
-                  Award Points
-                </h3>
-                <form onSubmit={handleAwardPoints} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Points Amount
-                      </label>
-                      <input
-                        type="number"
-                        value={awardAmount}
-                        onChange={(e) => setAwardAmount(e.target.value)}
-                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-500"
-                        placeholder="e.g., 50"
-                        min="1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Reason
-                      </label>
-                      <input
-                        type="text"
-                        value={awardReason}
-                        onChange={(e) => setAwardReason(e.target.value)}
-                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-500"
-                        placeholder="e.g., Birthday bonus"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full bg-yellow-500 text-white py-2 rounded-lg hover:bg-yellow-600 transition font-medium"
-                  >
-                    Award Points
-                  </button>
-                </form>
-              </div>
-
-              {/* Points History */}
-              <div className="bg-white rounded-lg shadow">
-                <div className="p-6 border-b">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-gray-600" />
-                    Points History
-                  </h3>
-                </div>
-                <div className="divide-y">
-                  {!points || points.history.length === 0 ? (
-                    <div className="p-6 text-center text-gray-500">
-                      <p>No transaction history</p>
-                    </div>
-                  ) : (
-                    points.history.map((transaction) => (
-                      <div key={transaction.id} className="p-4 flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{transaction.reason}</p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(transaction.timestamp).toLocaleDateString('en-MY', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
-                          {transaction.orderId && (
-                            <p className="text-xs text-gray-400">Order #{transaction.orderId}</p>
-                          )}
-                        </div>
-                        <div
-                          className={`text-lg font-bold ${
-                            transaction.type === 'earned' ? 'text-green-600' : 'text-red-600'
-                          }`}
-                        >
-                          {transaction.type === 'earned' ? '+' : '-'}
-                          {transaction.amount}
-                        </div>
-                      </div>
-                    ))
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Member</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Balance</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Total Earned</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Joined</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {members.map(m => (
+                    <tr key={m.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{m.name || '—'}</div>
+                        <div className="text-sm text-gray-500">{m.phone}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="font-semibold text-yellow-600">{m.points_balance}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm text-gray-600">{m.total_points_earned}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {new Date(m.created_at).toLocaleDateString('en-MY')}
+                      </td>
+                    </tr>
+                  ))}
+                  {members.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                        No members found
+                      </td>
+                    </tr>
                   )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {tab === 'config' && configForm && (
+          <div className="max-w-lg mx-auto">
+            <form onSubmit={saveConfig} className="bg-white rounded-lg shadow p-6 space-y-5">
+              <h2 className="text-lg font-semibold">Program Settings</h2>
+
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <label className="font-medium">Program Active</label>
+                <input
+                  type="checkbox"
+                  checked={configForm.is_active}
+                  onChange={e => setConfigForm({ ...configForm, is_active: e.target.checked })}
+                  className="w-5 h-5 text-yellow-500 rounded"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Points Per Scan</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={configForm.points_per_scan}
+                    onChange={e => setConfigForm({ ...configForm, points_per_scan: parseInt(e.target.value) || 1 })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Points for Voucher</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={configForm.points_threshold}
+                    onChange={e => setConfigForm({ ...configForm, points_threshold: parseInt(e.target.value) || 10 })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+
+              <hr />
+              <h3 className="font-medium text-gray-700">Auto-Generated Voucher</h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Type</label>
+                  <select
+                    value={configForm.voucher_type}
+                    onChange={e => setConfigForm({ ...configForm, voucher_type: e.target.value as 'fixed' | 'percent' })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="fixed">Fixed (RM)</option>
+                    <option value="percent">Percentage (%)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Discount Value {configForm.voucher_type === 'fixed' ? '(RM)' : '(%)'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={configForm.voucher_discount_value}
+                    onChange={e => setConfigForm({ ...configForm, voucher_discount_value: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Valid For (days)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={configForm.voucher_validity_days}
+                    onChange={e => setConfigForm({ ...configForm, voucher_validity_days: parseInt(e.target.value) || 30 })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Min Order (RM)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={configForm.voucher_min_order}
+                    onChange={e => setConfigForm({ ...configForm, voucher_min_order: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Settings'}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );

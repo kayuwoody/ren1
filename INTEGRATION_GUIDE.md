@@ -637,7 +637,105 @@ products.forEach(product => {
 
 ---
 
-## 6. Migration Notes
+## 6. Loyalty Program & Vouchers
+
+Supabase is the source of truth for loyalty and vouchers (not SQLite). Both the POS and customer app read/write directly to Supabase.
+
+### Supabase Tables
+
+See `LOYALTY_SCHEMA.md` for the full SQL. Key tables:
+
+- `loyalty_members` — customers enrolled in loyalty (identified by phone number)
+- `loyalty_transactions` — audit log of points earned/redeemed
+- `loyalty_config` — program settings (points per scan, threshold, voucher value)
+- `vouchers` — discount codes (auto-generated from loyalty or manually created)
+
+### Customer App: Loyalty Flow
+
+1. **Check membership** — look up by phone number:
+```typescript
+const { data: member } = await supabase
+  .from('loyalty_members')
+  .select('*')
+  .eq('phone', customerPhone)
+  .single();
+```
+
+2. **Show points balance** — `member.points_balance` is the current balance, `member.total_points_earned` is lifetime
+
+3. **Show transaction history:**
+```typescript
+const { data: transactions } = await supabase
+  .from('loyalty_transactions')
+  .select('*')
+  .eq('member_id', member.id)
+  .order('created_at', { ascending: false });
+```
+
+4. **Show available vouchers:**
+```typescript
+const { data: vouchers } = await supabase
+  .from('vouchers')
+  .select('*')
+  .eq('member_id', member.id)
+  .eq('is_active', true)
+  .gt('expires_at', new Date().toISOString())
+  .filter('times_used', 'lt', 'max_uses');  // not fully used
+```
+
+### Customer App: Applying Vouchers at Checkout
+
+1. Customer enters a voucher code
+2. Validate via POS API:
+```typescript
+const res = await fetch('/api/vouchers/validate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ code: 'CO-ABC123', order_total: 25.00 }),
+});
+const result = await res.json();
+// result.valid — boolean
+// result.reason — why it's invalid (if applicable)
+// result.voucher.discount_amount — RM discount to apply
+// result.voucher.type — 'fixed' or 'percent'
+```
+
+3. If valid, apply the discount and include the voucher in the order:
+```typescript
+{
+  // ... in online_order mods or a new field:
+  voucher_code: 'CO-ABC123',
+  voucher_discount: 5.00,
+}
+```
+
+4. **After order is paid**, increment `times_used` on the voucher:
+```typescript
+await supabase.rpc('increment_voucher_usage', { voucher_code: 'CO-ABC123' });
+// Or: UPDATE vouchers SET times_used = times_used + 1 WHERE code = 'CO-ABC123'
+```
+
+### QR Code Content
+
+The customer's QR code should encode their **phone number**. When scanned at the POS, the phone number is sent to `POST /api/loyalty/scan` which:
+- Finds or creates the loyalty member
+- Adds points (configurable, default 1 per scan)
+- Auto-issues a voucher if the points threshold is reached
+- Returns the updated balance and any voucher issued
+
+### Loyalty Config
+
+Staff configure the program via POS admin (`/admin/loyalty` > Config tab):
+- **Points per scan** — how many points each visit earns (default: 1)
+- **Points threshold** — points needed to earn a voucher (default: 10)
+- **Voucher type** — fixed RM discount or percentage
+- **Voucher value** — discount amount
+- **Voucher validity** — days until expiry
+- **Min order** — minimum order amount to use the voucher
+
+---
+
+## 7. Migration Notes
 
 ### Legacy `online_products` Table (being phased out)
 
@@ -653,7 +751,7 @@ The POS previously used a separate `online_products` table with hardcoded mock p
 
 ---
 
-## 7. Summary Checklist for Customer App
+## 8. Summary Checklist for Customer App
 
 ### Must Have
 - [ ] Read menu from `products` table (not mock data)
@@ -680,6 +778,15 @@ The POS previously used a separate `online_products` table with hardcoded mock p
 - [ ] Show placeholder for products without `image_url`
 - [ ] Subscribe to `outlet_settings` Realtime for auto-unblock when intake resumes
 
+### Loyalty & Vouchers
+- [ ] Look up loyalty member by phone from `loyalty_members`
+- [ ] Show points balance and transaction history
+- [ ] Show available vouchers for the member
+- [ ] Voucher code input at checkout — validate via `POST /api/vouchers/validate`
+- [ ] Apply voucher discount to order total
+- [ ] Increment `times_used` on voucher after successful payment
+- [ ] QR code in customer app encodes phone number for in-store scanning
+
 ### Nice to Have
 - [ ] Subscribe to `products` Realtime for live menu updates (new items, price changes)
 - [ ] Cache product list locally, sync-check for updates on app open
@@ -687,7 +794,7 @@ The POS previously used a separate `online_products` table with hardcoded mock p
 
 ---
 
-## 8. Supabase Setup SQL
+## 9. Supabase Setup SQL
 
 Run this in the Supabase SQL Editor if the tables don't exist yet:
 
