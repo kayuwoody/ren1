@@ -84,6 +84,27 @@ const { data: products } = await supabase
   .order('name', { ascending: true });
 ```
 
+### Identifying Coffee Products (Milk/Sugar Options)
+
+Use the `category` field on the `products` table to determine if a standalone product is a coffee:
+
+```typescript
+const isCoffee = product.category === 'coffee';
+// If true, show milk/sugar customization options
+```
+
+For **combo selections**, you do NOT need to query the product's category separately. Each item inside `selection_config` already has an `isCoffee` boolean pre-computed by the POS:
+
+```typescript
+// Standalone product:
+product.category === 'coffee'  // ← use this
+
+// Inside a combo's selection_config:
+item.isCoffee                  // ← already provided, no extra query needed
+```
+
+**No separate `is_coffee` column is needed** on the Supabase `products` table — the information is already available via `category` for standalone products and via `isCoffee` inside `selection_config` for combo items.
+
 ### Combos, Bundles & Selection Config
 
 A product is a combo/bundle if it has a non-null `selection_config` field. This JSONB column contains a **pre-flattened** view of all selection groups and optional items, including nested choices — no recursive queries needed.
