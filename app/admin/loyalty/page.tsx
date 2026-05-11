@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Star, QrCode, Settings, Users, Gift, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Star, QrCode, Settings, Users, Gift, ChevronRight, Plus, ExternalLink } from 'lucide-react';
 
 interface LoyaltyProgram {
   id: string;
@@ -49,6 +50,7 @@ interface ScanResult {
 }
 
 export default function LoyaltyPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<'scan' | 'members' | 'programs'>('scan');
   const [programs, setPrograms] = useState<LoyaltyProgram[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -228,12 +230,21 @@ export default function LoyaltyPage() {
                   </div>
                 ))}
 
-                <button
-                  onClick={() => { setScanResult(null); setScanPhone(''); }}
-                  className="w-full py-2 border rounded-lg text-gray-600 hover:bg-gray-50"
-                >
-                  Scan Another
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setScanResult(null); setScanPhone(''); }}
+                    className="flex-1 py-2 border rounded-lg text-gray-600 hover:bg-gray-50"
+                  >
+                    Scan Another
+                  </button>
+                  <Link
+                    href={`/admin/loyalty/members/${scanResult.member.id}`}
+                    className="flex-1 py-2 border rounded-lg text-blue-600 hover:bg-blue-50 text-center flex items-center justify-center gap-1"
+                  >
+                    View Profile
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
               </div>
             )}
           </div>
@@ -260,7 +271,11 @@ export default function LoyaltyPage() {
                 </thead>
                 <tbody className="divide-y">
                   {members.map(m => (
-                    <tr key={m.id} className="hover:bg-gray-50">
+                    <tr
+                      key={m.id}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => router.push(`/admin/loyalty/members/${m.id}`)}
+                    >
                       <td className="px-4 py-3">
                         <div className="font-medium">{m.name || '—'}</div>
                         <div className="text-sm text-gray-500">{m.phone}</div>
@@ -268,8 +283,9 @@ export default function LoyaltyPage() {
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {new Date(m.enrolled_at).toLocaleDateString('en-MY')}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 text-right">
+                      <td className="px-4 py-3 text-sm text-gray-500 text-right flex items-center justify-end gap-1">
                         {new Date(m.updated_at).toLocaleDateString('en-MY')}
+                        <ChevronRight className="w-4 h-4 text-gray-300" />
                       </td>
                     </tr>
                   ))}
