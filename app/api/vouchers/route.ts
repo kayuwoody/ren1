@@ -5,16 +5,16 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const source = url.searchParams.get('source');
   const active = url.searchParams.get('active');
+  const member_id = url.searchParams.get('member_id');
 
   let query = supabase
     .from('vouchers')
-    .select('*, loyalty_members(phone, name)')
+    .select('*, loyalty_members(phone, name), loyalty_programs(name)')
     .order('created_at', { ascending: false });
 
-  if (source) query = query.eq('source', source);
   if (active === 'true') query = query.eq('is_active', true);
+  if (member_id) query = query.eq('member_id', member_id);
 
   const { data, error } = await query.limit(200);
 
@@ -27,10 +27,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { code, type, discount_value, min_order_amount, max_uses, expires_at, member_id } = body;
+  const { code, type, discount_amount, min_order, max_uses, expires_at, member_id, program_id } = body;
 
-  if (!code || !discount_value) {
-    return NextResponse.json({ error: 'code and discount_value are required' }, { status: 400 });
+  if (!code || !discount_amount) {
+    return NextResponse.json({ error: 'code and discount_amount are required' }, { status: 400 });
   }
 
   const { data, error } = await supabase
@@ -38,12 +38,12 @@ export async function POST(req: Request) {
     .insert({
       code: code.toUpperCase(),
       type: type || 'fixed',
-      discount_value,
-      min_order_amount: min_order_amount || 0,
+      discount_amount,
+      min_order: min_order || null,
       max_uses: max_uses || 1,
       expires_at: expires_at || null,
       member_id: member_id || null,
-      source: 'manual',
+      program_id: program_id || null,
     })
     .select()
     .single();
