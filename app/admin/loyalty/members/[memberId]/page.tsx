@@ -40,15 +40,14 @@ interface Voucher {
   id: string;
   code: string;
   type: 'fixed' | 'percent';
-  discount_amount: number;
-  min_order: number | null;
+  discount_value: number;
+  min_order_amount: number;
   max_uses: number;
   times_used: number;
   expires_at: string | null;
   is_active: boolean;
-  program_id: string | null;
+  source: string;
   created_at: string;
-  loyalty_programs: { name: string } | null;
 }
 
 interface Program {
@@ -197,7 +196,7 @@ export default function MemberDetailPage() {
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Code</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Discount</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Program</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Source</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Status</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Expires</th>
                   </tr>
@@ -216,9 +215,9 @@ export default function MemberDetailPage() {
                       <tr key={v.id} className={`${!v.is_active || expired ? 'opacity-60' : ''}`}>
                         <td className="px-4 py-2 font-mono text-sm font-semibold">{v.code}</td>
                         <td className="px-4 py-2 text-sm">
-                          {v.type === 'fixed' ? `RM ${v.discount_amount.toFixed(2)}` : `${v.discount_amount}%`}
+                          {v.type === 'fixed' ? `RM ${v.discount_value.toFixed(2)}` : `${v.discount_value}%`}
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600">{v.loyalty_programs?.name || '—'}</td>
+                        <td className="px-4 py-2 text-sm capitalize text-gray-600">{v.source}</td>
                         <td className="px-4 py-2">
                           <span className={`px-2 py-0.5 rounded text-xs ${statusColor}`}>{statusText}</span>
                         </td>

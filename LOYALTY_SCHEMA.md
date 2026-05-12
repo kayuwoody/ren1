@@ -71,17 +71,16 @@ CREATE TABLE IF NOT EXISTS vouchers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code TEXT UNIQUE NOT NULL,
   member_id UUID REFERENCES loyalty_members(id),
-  program_id UUID REFERENCES loyalty_programs(id),
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  expires_at TIMESTAMPTZ,
-  times_used INTEGER NOT NULL DEFAULT 0,
+  type TEXT NOT NULL DEFAULT 'fixed',
+  discount_value NUMERIC NOT NULL,
+  min_order_amount NUMERIC NOT NULL DEFAULT 0,
   max_uses INTEGER NOT NULL DEFAULT 1,
-  discount_amount NUMERIC NOT NULL,
-  type TEXT NOT NULL DEFAULT 'fixed'
-    CHECK (type IN ('fixed', 'percent')),
-  min_order NUMERIC,
-  reference_id TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  times_used INTEGER NOT NULL DEFAULT 0,
+  expires_at TIMESTAMPTZ,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  source TEXT NOT NULL DEFAULT 'manual',    -- 'loyalty' | 'manual' | 'promo'
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_vouchers_member ON vouchers(member_id);

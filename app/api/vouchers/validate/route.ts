@@ -31,16 +31,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ valid: false, reason: 'Voucher has expired' });
   }
 
-  if (order_total !== undefined && voucher.min_order && order_total < voucher.min_order) {
+  if (order_total !== undefined && voucher.min_order_amount > 0 && order_total < voucher.min_order_amount) {
     return NextResponse.json({
       valid: false,
-      reason: `Minimum order amount is RM ${voucher.min_order.toFixed(2)}`,
+      reason: `Minimum order amount is RM ${voucher.min_order_amount.toFixed(2)}`,
     });
   }
 
   const discount = voucher.type === 'percent'
-    ? (order_total || 0) * (voucher.discount_amount / 100)
-    : voucher.discount_amount;
+    ? (order_total || 0) * (voucher.discount_value / 100)
+    : voucher.discount_value;
 
   return NextResponse.json({
     valid: true,
@@ -48,9 +48,9 @@ export async function POST(req: Request) {
       id: voucher.id,
       code: voucher.code,
       type: voucher.type,
-      discount_amount: voucher.discount_amount,
-      calculated_discount: Math.round(discount * 100) / 100,
-      min_order: voucher.min_order,
+      discount_value: voucher.discount_value,
+      discount_amount: Math.round(discount * 100) / 100,
+      min_order_amount: voucher.min_order_amount,
     },
   });
 }

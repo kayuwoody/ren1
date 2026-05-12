@@ -58,16 +58,14 @@ async function issueVoucher(
   const { data, error } = await supabase.from('vouchers').insert({
     code,
     member_id: member.id,
-    program_id: program.id,
-    discount_amount: program.voucher_discount_value,
     type: program.voucher_type,
-    min_order: program.voucher_min_order,
+    discount_value: program.voucher_discount_value,
+    min_order_amount: program.voucher_min_order ?? 0,
     expires_at: expiresAt,
-    reference_id: referenceId,
+    source: 'loyalty',
     max_uses: 1,
     times_used: 0,
     is_active: true,
-    created_at: now,
   }).select().single();
 
   if (error) throw new Error(error.message);

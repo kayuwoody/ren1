@@ -31,7 +31,7 @@ export async function GET(
 
   const { data: vouchers } = await supabase
     .from('vouchers')
-    .select('*, loyalty_programs(name)')
+    .select('*')
     .eq('member_id', memberId)
     .order('created_at', { ascending: false });
 

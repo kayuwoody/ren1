@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
   let query = supabase
     .from('vouchers')
-    .select('*, loyalty_members(phone, name), loyalty_programs(name)')
+    .select('*, loyalty_members(phone, name)')
     .order('created_at', { ascending: false });
 
   if (active === 'true') query = query.eq('is_active', true);
@@ -27,10 +27,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { code, type, discount_amount, min_order, max_uses, expires_at, member_id, program_id } = body;
+  const { code, type, discount_value, min_order_amount, max_uses, expires_at, member_id } = body;
 
-  if (!code || !discount_amount) {
-    return NextResponse.json({ error: 'code and discount_amount are required' }, { status: 400 });
+  if (!code || !discount_value) {
+    return NextResponse.json({ error: 'code and discount_value are required' }, { status: 400 });
   }
 
   const { data, error } = await supabase
@@ -38,12 +38,12 @@ export async function POST(req: Request) {
     .insert({
       code: code.toUpperCase(),
       type: type || 'fixed',
-      discount_amount,
-      min_order: min_order || null,
+      discount_value,
+      min_order_amount: min_order_amount || 0,
       max_uses: max_uses || 1,
       expires_at: expires_at || null,
       member_id: member_id || null,
-      program_id: program_id || null,
+      source: 'manual',
     })
     .select()
     .single();

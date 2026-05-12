@@ -8,16 +8,15 @@ interface Voucher {
   id: string;
   code: string;
   type: 'fixed' | 'percent';
-  discount_amount: number;
-  min_order: number | null;
+  discount_value: number;
+  min_order_amount: number;
   max_uses: number;
   times_used: number;
   expires_at: string | null;
   is_active: boolean;
-  program_id: string | null;
+  source: string;
   member_id: string | null;
   loyalty_members?: { phone: string; name: string | null } | null;
-  loyalty_programs?: { name: string } | null;
   created_at: string;
 }
 
@@ -116,7 +115,7 @@ export default function VouchersPage() {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Discount</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Usage</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Program</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Source</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Member</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Expires</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
@@ -134,16 +133,14 @@ export default function VouchersPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      {v.type === 'fixed' ? `RM ${v.discount_amount.toFixed(2)}` : `${v.discount_amount}%`}
-                      {v.min_order != null && v.min_order > 0 && (
-                        <span className="text-gray-400 text-xs block">min RM {v.min_order.toFixed(2)}</span>
+                      {v.type === 'fixed' ? `RM ${v.discount_value.toFixed(2)}` : `${v.discount_value}%`}
+                      {v.min_order_amount != null && v.min_order_amount > 0 && (
+                        <span className="text-gray-400 text-xs block">min RM {v.min_order_amount.toFixed(2)}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">{statusBadge(v)}</td>
                     <td className="px-4 py-3 text-sm">{v.times_used}/{v.max_uses}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {v.loyalty_programs?.name || '—'}
-                    </td>
+                    <td className="px-4 py-3 text-sm capitalize text-gray-600">{v.source}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {v.loyalty_members ? (v.loyalty_members.name || v.loyalty_members.phone) : '—'}
                     </td>
@@ -199,8 +196,8 @@ function CreateVoucherModal({ onClose, onCreated }: { onClose: () => void; onCre
   const [form, setForm] = useState({
     code: '',
     type: 'fixed' as 'fixed' | 'percent',
-    discount_amount: '',
-    min_order: '',
+    discount_value: '',
+    min_order_amount: '',
     max_uses: '1',
     expires_days: '30',
   });
@@ -226,8 +223,8 @@ function CreateVoucherModal({ onClose, onCreated }: { onClose: () => void; onCre
         body: JSON.stringify({
           code: form.code,
           type: form.type,
-          discount_amount: parseFloat(form.discount_amount) || 0,
-          min_order: form.min_order ? parseFloat(form.min_order) : null,
+          discount_value: parseFloat(form.discount_value) || 0,
+          min_order_amount: form.min_order_amount ? parseFloat(form.min_order_amount) : 0,
           max_uses: parseInt(form.max_uses) || 1,
           expires_at: expiresAt.toISOString(),
         }),
@@ -286,8 +283,8 @@ function CreateVoucherModal({ onClose, onCreated }: { onClose: () => void; onCre
                 type="number"
                 min="0"
                 step="0.01"
-                value={form.discount_amount}
-                onChange={e => setForm({ ...form, discount_amount: e.target.value })}
+                value={form.discount_value}
+                onChange={e => setForm({ ...form, discount_value: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg"
                 required
               />
@@ -298,8 +295,8 @@ function CreateVoucherModal({ onClose, onCreated }: { onClose: () => void; onCre
                 type="number"
                 min="0"
                 step="0.01"
-                value={form.min_order}
-                onChange={e => setForm({ ...form, min_order: e.target.value })}
+                value={form.min_order_amount}
+                onChange={e => setForm({ ...form, min_order_amount: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg"
                 placeholder="None"
               />
