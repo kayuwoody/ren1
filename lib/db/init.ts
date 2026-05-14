@@ -216,6 +216,20 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Migration: Add isDefault column to ProductRecipe if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(ProductRecipe)").all() as any[];
+    const hasIsDefault = tableInfo.some((col: any) => col.name === 'isDefault');
+
+    if (tableInfo.length > 0 && !hasIsDefault) {
+      console.log('🔄 Adding isDefault column to ProductRecipe table...');
+      db.exec(`ALTER TABLE ProductRecipe ADD COLUMN isDefault INTEGER NOT NULL DEFAULT 0`);
+      console.log('✅ isDefault column added');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
   // Migration: Add supplierCost column to Product table if it doesn't exist
   try {
     const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];

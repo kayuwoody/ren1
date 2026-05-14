@@ -82,6 +82,7 @@ export async function syncRecipe(productId: string) {
       quantity: item.quantity,
       unit: item.unit,
       is_optional: item.isOptional === 1,
+      is_default: item.isDefault === 1,
       selection_group: item.selectionGroup,
       price_adjustment: item.priceAdjustment,
       sort_order: item.sortOrder,

@@ -16,6 +16,7 @@ export interface FlattenedXORGroup {
     basePrice: number;          // Product's base/sales price
     priceAdjustment: number;    // Extra charge on top of combo override
     isCoffee: boolean;          // Whether this item is a coffee (for milk/sugar options)
+    isDefault: boolean;         // Pre-selected option within the group
   }>;
 }
 
@@ -133,6 +134,7 @@ export function flattenAllChoices(
             basePrice: linkedProd?.basePrice || 0,
             priceAdjustment: item.priceAdjustment || 0,
             isCoffee: linkedProd?.category === 'coffee',
+            isDefault: item.isDefault,
           };
         }),
     });
