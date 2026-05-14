@@ -1,31 +1,20 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
 import { useBranch } from "@/context/branchContext";
 import CashPayment from "@/components/CashPayment";
-import { useScanDetector } from "@/lib/hooks/useScanDetector";
 import { Gift, X } from "lucide-react";
-
-interface AppliedVoucher {
-  id: string;
-  code: string;
-  type: "fixed" | "percent";
-  discount_value: number;
-  discount_amount: number;
-}
 
 export default function PaymentPage() {
   const router = useRouter();
-  const { cartItems, clearCart } = useCart();
+  const { cartItems, clearCart, customer, voucher, setVoucher } = useCart();
   const { branchFetch } = useBranch();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_qr" | null>(null);
-  const [voucher, setVoucher] = useState<AppliedVoucher | null>(null);
-  const [voucherError, setVoucherError] = useState<string | null>(null);
 
   const retailTotal = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
   const itemFinalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
@@ -33,32 +22,6 @@ export default function PaymentPage() {
   const voucherAmount = voucher?.discount_amount ?? 0;
   const finalTotal = Math.max(0, itemFinalTotal - voucherAmount);
   const hasDiscount = itemDiscount > 0 || voucherAmount > 0;
-
-  const handleVoucherScan = useCallback(async (scannedValue: string) => {
-    if (order) return;
-    const code = scannedValue.trim().toUpperCase();
-    if (!/^[A-Z0-9\-]{4,}$/.test(code)) return;
-    if (/^(\+?60|0)\d{8,11}$/.test(code.replace(/[^0-9+]/g, ''))) return;
-
-    setVoucherError(null);
-    try {
-      const res = await fetch("/api/vouchers/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, order_total: itemFinalTotal }),
-      });
-      const data = await res.json();
-      if (!data.valid) {
-        setVoucherError(data.reason || "Invalid voucher");
-        return;
-      }
-      setVoucher(data.voucher);
-    } catch {
-      setVoucherError("Failed to validate voucher");
-    }
-  }, [order, itemFinalTotal]);
-
-  useScanDetector(handleVoucherScan);
 
   useEffect(() => {
     if (cartItems.length > 0) {
@@ -96,6 +59,15 @@ export default function PaymentPage() {
           { key: "_voucher_code", value: voucher.code },
           { key: "_voucher_discount", value: voucherAmount.toFixed(2) },
         );
+      }
+      if (customer) {
+        orderMetaData.push(
+          { key: "_loyalty_member_id", value: customer.member_id },
+          { key: "_loyalty_member_phone", value: customer.phone },
+        );
+        if (customer.name) {
+          orderMetaData.push({ key: "_loyalty_member_name", value: customer.name });
+        }
       }
 
       const response = await branchFetch("/api/orders/create-with-payment", {
@@ -147,10 +119,9 @@ export default function PaymentPage() {
             };
           }),
           meta_data: orderMetaData.length > 0 ? orderMetaData : [],
-          voucher_code: voucher?.code || null,
-          order_total_override: voucher ? finalTotal : undefined,
           billing: {
-            first_name: "Walk-in Customer",
+            first_name: customer?.name || "Walk-in Customer",
+            phone: customer?.phone || null,
             email: "pos@coffee-oasis.com.my",
           },
         }),
@@ -160,14 +131,6 @@ export default function PaymentPage() {
 
       if (!data.success) {
         throw new Error(data.error || "Failed to create order");
-      }
-
-      if (voucher) {
-        fetch("/api/vouchers/use", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: voucher.code }),
-        }).catch(() => {});
       }
 
       setOrder(data.order);
@@ -191,6 +154,11 @@ export default function PaymentPage() {
   };
 
   const handlePaymentSuccess = async () => {
+    const orderId = order?.id;
+    const orderTotal = finalTotal;
+    const currentCustomer = customer;
+    const currentVoucher = voucher;
+
     clearCart();
 
     await fetch('/api/cart/current', {
@@ -201,6 +169,26 @@ export default function PaymentPage() {
         setPendingOrder: false,
       }),
     });
+
+    if (currentVoucher) {
+      fetch("/api/vouchers/use", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: currentVoucher.code }),
+      }).catch(() => {});
+    }
+
+    if (currentCustomer && orderTotal > 0) {
+      fetch("/api/loyalty/purchase-points", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: currentCustomer.member_id,
+          order_total: orderTotal,
+          order_id: orderId,
+        }),
+      }).catch(() => {});
+    }
 
     router.push("/admin/pos");
   };
@@ -256,6 +244,15 @@ export default function PaymentPage() {
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Select Payment Method</h1>
         <p className="text-gray-600 mb-6">How will the customer pay?</p>
 
+        {/* Customer Attribution */}
+        {customer && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <p className="text-sm font-semibold text-blue-800">{customer.name || customer.phone}</p>
+            {customer.name && <p className="text-xs text-blue-600">{customer.phone}</p>}
+            <p className="text-xs text-blue-500 mt-0.5">Purchase points will be awarded</p>
+          </div>
+        )}
+
         {/* Order Summary */}
         <div className="bg-gray-50 rounded-lg p-4 mb-6">
           <p className="text-sm text-gray-500 mb-1">Order Total</p>
@@ -295,9 +292,6 @@ export default function PaymentPage() {
         ) : (
           <div className="mb-6">
             <p className="text-xs text-gray-400 text-center">Scan a voucher QR code to apply discount</p>
-            {voucherError && (
-              <p className="text-xs text-red-500 text-center mt-1">{voucherError}</p>
-            )}
           </div>
         )}
 

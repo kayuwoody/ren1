@@ -42,6 +42,16 @@ export async function POST(req: Request) {
     ? (order_total || 0) * (voucher.discount_value / 100)
     : voucher.discount_value;
 
+  let member = null;
+  if (voucher.member_id) {
+    const { data } = await supabase
+      .from('loyalty_members')
+      .select('id, phone, name')
+      .eq('id', voucher.member_id)
+      .single();
+    member = data;
+  }
+
   return NextResponse.json({
     valid: true,
     voucher: {
@@ -52,5 +62,6 @@ export async function POST(req: Request) {
       discount_amount: Math.round(discount * 100) / 100,
       min_order_amount: voucher.min_order_amount,
     },
+    member,
   });
 }

@@ -18,6 +18,8 @@ import {
   Edit2,
   X,
   TrendingUp,
+  Gift,
+  User,
 } from 'lucide-react';
 import Link from 'next/link';
 import HoldOrderManager from '@/components/HoldOrderManager';
@@ -36,7 +38,7 @@ import HoldOrderManager from '@/components/HoldOrderManager';
 
 export default function POSPage() {
   const router = useRouter();
-  const { cartItems, clearCart, updateItemDiscount, updateItemSurcharge, removeFromCart, updateQuantity, loadCart } = useCart();
+  const { cartItems, clearCart, updateItemDiscount, updateItemSurcharge, removeFromCart, updateQuantity, loadCart, customer, voucher, setCustomer, setVoucher } = useCart();
   const { branchFetch } = useBranch();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
@@ -226,6 +228,35 @@ export default function POSPage() {
           </div>
         </div>
       </header>
+
+      {/* Customer / Voucher Strip */}
+      {(customer || voucher) && (
+        <div className="max-w-7xl mx-auto px-4 pt-4">
+          <div className="flex flex-wrap gap-2">
+            {customer && (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">
+                <User className="w-4 h-4 text-blue-600" />
+                <span className="font-medium text-blue-800">{customer.name || customer.phone}</span>
+                <button onClick={() => setCustomer(null)} className="ml-1 p-0.5 hover:bg-blue-100 rounded">
+                  <X className="w-3.5 h-3.5 text-blue-400" />
+                </button>
+              </div>
+            )}
+            {voucher && (
+              <div className="flex items-center gap-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-sm">
+                <Gift className="w-4 h-4 text-purple-600" />
+                <span className="font-medium text-purple-800">{voucher.code}</span>
+                <span className="text-purple-600">
+                  {voucher.type === 'fixed' ? `-RM ${voucher.discount_value.toFixed(2)}` : `-${voucher.discount_value}%`}
+                </span>
+                <button onClick={() => setVoucher(null)} className="ml-1 p-0.5 hover:bg-purple-100 rounded">
+                  <X className="w-3.5 h-3.5 text-purple-400" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
