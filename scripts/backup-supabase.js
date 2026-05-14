@@ -30,7 +30,7 @@ if (envPath) {
     const match = line.match(/^([^#=]+)=(.*)$/);
     if (match) {
       const key = match[1].trim();
-      const value = match[2].trim();
+      const value = match[2].trim().replace(/^(['"])(.*)\1$/, '$2');
       if (!process.env[key]) process.env[key] = value;
     }
   });
@@ -44,6 +44,9 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local');
+  console.error('  SUPABASE_URL:', SUPABASE_URL ? '✅' : '❌ missing');
+  console.error('  NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅' : '❌ missing');
+  console.error('  SUPABASE_SERVICE_ROLE_KEY:', SUPABASE_KEY ? '✅' : '❌ missing');
   process.exit(1);
 }
 
