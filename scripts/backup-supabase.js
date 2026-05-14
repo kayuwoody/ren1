@@ -17,9 +17,14 @@
 const fs = require('fs');
 const path = require('path');
 
-// Load .env.local
-const envPath = path.join(__dirname, '..', '.env.local');
-if (fs.existsSync(envPath)) {
+// Load env file (.env.local or .env)
+const projectRoot = path.join(__dirname, '..');
+const envLocal = path.join(projectRoot, '.env.local');
+const envDefault = path.join(projectRoot, '.env');
+const envPath = fs.existsSync(envLocal) ? envLocal : fs.existsSync(envDefault) ? envDefault : null;
+
+if (envPath) {
+  console.log(`Loading env from: ${envPath}`);
   const envContent = fs.readFileSync(envPath, 'utf-8');
   envContent.split(/\r?\n/).forEach(line => {
     const match = line.match(/^([^#=]+)=(.*)$/);
@@ -30,8 +35,7 @@ if (fs.existsSync(envPath)) {
     }
   });
 } else {
-  console.error(`No .env.local found at: ${envPath}`);
-  console.error('Make sure you run this from the project root or scripts/ directory.');
+  console.error(`No .env.local or .env found in: ${projectRoot}`);
   process.exit(1);
 }
 
