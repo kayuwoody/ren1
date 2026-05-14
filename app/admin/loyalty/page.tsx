@@ -2,321 +2,560 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Star, TrendingUp, Gift, Search, Award } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Star, QrCode, Settings, Users, Gift, ChevronRight, Plus, ExternalLink } from 'lucide-react';
 
-interface Customer {
-  id: number;
-  email: string;
-  first_name: string;
-  last_name: string;
-  billing?: {
-    phone?: string;
-  };
-}
-
-interface PointsTransaction {
+interface LoyaltyProgram {
   id: string;
-  type: 'earned' | 'redeemed';
-  amount: number;
-  reason: string;
-  orderId?: string;
-  timestamp: string;
+  name: string;
+  description: string | null;
+  trigger_type: 'scan' | 'purchase' | 'manual';
+  points_per_trigger: number;
+  points_per_rm: number | null;
+  threshold: number;
+  voucher_type: 'fixed' | 'percent';
+  voucher_discount_value: number;
+  voucher_validity_days: number;
+  voucher_min_order: number | null;
+  is_active: boolean;
+  sort_order: number;
 }
 
-interface LoyaltyPoints {
-  balance: number;
-  history: PointsTransaction[];
+interface Member {
+  id: string;
+  phone: string;
+  name: string | null;
+  enrolled_at: string;
+  updated_at: string;
 }
 
-export default function AdminLoyaltyPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [points, setPoints] = useState<LoyaltyPoints | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [awardAmount, setAwardAmount] = useState('');
-  const [awardReason, setAwardReason] = useState('');
+interface MemberBalance {
+  id: string;
+  program_id: string;
+  points_balance: number;
+  total_earned: number;
+  loyalty_programs: { name: string; threshold: number; trigger_type: string } | null;
+}
+
+interface ScanResult {
+  member: Member;
+  results: Array<{
+    program_id: string;
+    program_name: string;
+    points_added: number;
+    new_balance: number;
+    vouchers_issued: any[];
+  }>;
+  balances: MemberBalance[];
+}
+
+export default function LoyaltyPage() {
+  const router = useRouter();
+  const [tab, setTab] = useState<'scan' | 'members' | 'programs'>('scan');
+  const [programs, setPrograms] = useState<LoyaltyProgram[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [scanPhone, setScanPhone] = useState('');
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [showCreateProgram, setShowCreateProgram] = useState(false);
 
   useEffect(() => {
-    fetchCustomers();
+    fetchPrograms();
   }, []);
 
   useEffect(() => {
-    if (customerSearch) {
-      const filtered = customers.filter(c =>
-        c.email.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.first_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.last_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.billing?.phone?.includes(customerSearch)
-      );
-      setFilteredCustomers(filtered);
-    } else {
-      setFilteredCustomers(customers);
+    if (tab === 'members') fetchMembers();
+  }, [tab, memberSearch]);
+
+  async function fetchPrograms() {
+    const res = await fetch('/api/loyalty/config');
+    if (res.ok) {
+      const data = await res.json();
+      setPrograms(data.programs);
     }
-  }, [customerSearch, customers]);
+  }
 
-  const fetchCustomers = async () => {
-    try {
-      // Fetch customers from WooCommerce
-      const res = await fetch('/api/admin/customers');
-      if (res.ok) {
-        const data = await res.json();
-        setCustomers(data);
-        setFilteredCustomers(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch customers:', err);
+  async function fetchMembers() {
+    const params = memberSearch ? `?search=${encodeURIComponent(memberSearch)}` : '';
+    const res = await fetch(`/api/loyalty/members${params}`);
+    if (res.ok) {
+      const data = await res.json();
+      setMembers(data.members);
     }
-  };
+  }
 
-  const fetchCustomerPoints = async (customerId: number) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/loyalty/points?userId=${customerId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPoints(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch points:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSelectCustomer = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    fetchCustomerPoints(customer.id);
-  };
-
-  const handleAwardPoints = async (e: React.FormEvent) => {
+  async function handleScan(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedCustomer || !awardAmount || !awardReason) return;
+    if (!scanPhone.trim()) return;
+    setScanning(true);
+    setScanResult(null);
 
     try {
-      const res = await fetch('/api/loyalty/award', {
+      const res = await fetch('/api/loyalty/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: selectedCustomer.id,
-          amount: parseInt(awardAmount),
-          reason: awardReason,
-        }),
+        body: JSON.stringify({ phone: scanPhone.trim() }),
       });
-
+      const data = await res.json();
       if (res.ok) {
-        alert('Points awarded successfully!');
-        setAwardAmount('');
-        setAwardReason('');
-        fetchCustomerPoints(selectedCustomer.id);
+        setScanResult(data);
       } else {
-        alert('Failed to award points');
+        alert(data.error || 'Scan failed');
       }
-    } catch (err) {
-      console.error('Failed to award points:', err);
-      alert('Error awarding points');
+    } catch {
+      alert('Failed to process scan');
+    } finally {
+      setScanning(false);
     }
-  };
+  }
+
+  async function toggleProgram(program: LoyaltyProgram) {
+    await fetch('/api/loyalty/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: program.id, is_active: !program.is_active }),
+    });
+    fetchPrograms();
+  }
+
+  const scanPrograms = programs.filter(p => p.trigger_type === 'scan' && p.is_active);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-white border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/admin" className="p-2 hover:bg-gray-100 rounded-lg transition">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Star className="w-7 h-7 text-yellow-500" />
-                Loyalty Points Management
-              </h1>
-              <p className="text-sm text-gray-500">View and manage customer loyalty points</p>
+        <div className="max-w-5xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/admin" className="p-2 hover:bg-gray-100 rounded-lg">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  <Star className="w-6 h-6 text-yellow-500" />
+                  Loyalty Program
+                </h1>
+                <p className="text-sm text-gray-500">
+                  {programs.filter(p => p.is_active).length} active program{programs.filter(p => p.is_active).length !== 1 ? 's' : ''}
+                </p>
+              </div>
             </div>
+            <Link
+              href="/admin/vouchers"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100"
+            >
+              <Gift className="w-4 h-4" />
+              Vouchers
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          <div className="flex gap-1 mt-4">
+            {(['scan', 'members', 'programs'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-2 rounded-t-lg text-sm font-medium capitalize ${
+                  tab === t ? 'bg-gray-50 text-blue-600 border border-b-0' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t === 'scan' && <QrCode className="w-4 h-4 inline mr-1.5" />}
+                {t === 'members' && <Users className="w-4 h-4 inline mr-1.5" />}
+                {t === 'programs' && <Settings className="w-4 h-4 inline mr-1.5" />}
+                {t}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="flex h-[calc(100vh-120px)]">
-        {/* Customer List Sidebar */}
-        <div className="w-80 bg-white border-r flex flex-col">
-          <div className="p-4 border-b">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        {tab === 'scan' && (
+          <div className="max-w-lg mx-auto space-y-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-lg font-semibold mb-4">Scan Customer</h2>
+              {scanPrograms.length === 0 && (
+                <p className="text-sm text-orange-600 bg-orange-50 rounded-lg p-3 mb-4">
+                  No active scan programs. Create one in the Programs tab.
+                </p>
+              )}
+              <form onSubmit={handleScan} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={scanPhone}
+                    onChange={e => setScanPhone(e.target.value)}
+                    className="w-full px-4 py-3 border rounded-lg text-lg"
+                    placeholder="e.g. 0123456789"
+                    autoFocus
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Enter or scan the customer&apos;s phone number</p>
+                </div>
+                <button
+                  type="submit"
+                  disabled={scanning || !scanPhone.trim() || scanPrograms.length === 0}
+                  className="w-full py-3 bg-yellow-500 text-white rounded-lg font-semibold hover:bg-yellow-600 disabled:opacity-50"
+                >
+                  {scanning ? 'Processing...' : 'Add Points'}
+                </button>
+              </form>
+            </div>
+
+            {scanResult && (
+              <div className="bg-white rounded-lg shadow p-6 space-y-4">
+                <div className="text-center">
+                  <p className="text-green-600 font-semibold text-lg">Scan recorded!</p>
+                  <p className="text-gray-600">
+                    {scanResult.member.name || scanResult.member.phone}
+                  </p>
+                </div>
+
+                {scanResult.results.map(r => (
+                  <div key={r.program_id} className="bg-yellow-50 rounded-lg p-4">
+                    <p className="text-sm font-medium text-yellow-800">{r.program_name}</p>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-sm text-yellow-700">+{r.points_added} point{r.points_added !== 1 ? 's' : ''}</span>
+                      <span className="text-lg font-bold text-yellow-600">{r.new_balance} pts</span>
+                    </div>
+                    {r.vouchers_issued.length > 0 && (
+                      <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                        <Gift className="w-6 h-6 text-green-600 mx-auto mb-1" />
+                        <p className="font-semibold text-green-800 text-sm">Voucher Issued!</p>
+                        {r.vouchers_issued.map((v: any) => (
+                          <p key={v.id} className="text-lg font-mono font-bold text-green-700">{v.code}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setScanResult(null); setScanPhone(''); }}
+                    className="flex-1 py-2 border rounded-lg text-gray-600 hover:bg-gray-50"
+                  >
+                    Scan Another
+                  </button>
+                  <Link
+                    href={`/admin/loyalty/members/${scanResult.member.id}`}
+                    className="flex-1 py-2 border rounded-lg text-blue-600 hover:bg-blue-50 text-center flex items-center justify-center gap-1"
+                  >
+                    View Profile
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'members' && (
+          <div className="space-y-4">
+            <input
+              type="text"
+              value={memberSearch}
+              onChange={e => setMemberSearch(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg"
+              placeholder="Search by phone or name..."
+            />
+
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Member</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Joined</th>
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Last Active</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {members.map(m => (
+                    <tr
+                      key={m.id}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => router.push(`/admin/loyalty/members/${m.id}`)}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{m.name || '—'}</div>
+                        <div className="text-sm text-gray-500">{m.phone}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {new Date(m.enrolled_at).toLocaleDateString('en-MY')}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 text-right flex items-center justify-end gap-1">
+                        {new Date(m.updated_at).toLocaleDateString('en-MY')}
+                        <ChevronRight className="w-4 h-4 text-gray-300" />
+                      </td>
+                    </tr>
+                  ))}
+                  {members.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-8 text-center text-gray-500">
+                        No members found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {tab === 'programs' && (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowCreateProgram(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                <Plus className="w-4 h-4" />
+                New Program
+              </button>
+            </div>
+
+            {programs.length === 0 && (
+              <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+                <Settings className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p>No programs yet. Create one to get started.</p>
+              </div>
+            )}
+
+            {programs.map(p => (
+              <div key={p.id} className={`bg-white rounded-lg shadow p-5 ${!p.is_active ? 'opacity-60' : ''}`}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-lg">{p.name}</h3>
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        p.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {p.is_active ? 'Active' : 'Disabled'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-600 capitalize">
+                        {p.trigger_type}
+                      </span>
+                    </div>
+                    {p.description && <p className="text-sm text-gray-500 mt-1">{p.description}</p>}
+                  </div>
+                  <button
+                    onClick={() => toggleProgram(p)}
+                    className={`px-3 py-1 text-sm rounded ${
+                      p.is_active ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                    }`}
+                  >
+                    {p.is_active ? 'Disable' : 'Enable'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm">
+                  <div>
+                    <p className="text-gray-500">Points/trigger</p>
+                    <p className="font-medium">{p.points_per_trigger}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Threshold</p>
+                    <p className="font-medium">{p.threshold} pts</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Reward</p>
+                    <p className="font-medium">
+                      {p.voucher_type === 'fixed' ? `RM ${p.voucher_discount_value.toFixed(2)}` : `${p.voucher_discount_value}%`} off
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Voucher valid</p>
+                    <p className="font-medium">{p.voucher_validity_days} days</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showCreateProgram && (
+        <CreateProgramModal
+          onClose={() => setShowCreateProgram(false)}
+          onCreated={() => { setShowCreateProgram(false); fetchPrograms(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: '',
+    description: '',
+    trigger_type: 'scan' as 'scan' | 'purchase' | 'manual',
+    points_per_trigger: '1',
+    threshold: '10',
+    voucher_type: 'fixed' as 'fixed' | 'percent',
+    voucher_discount_value: '5',
+    voucher_validity_days: '90',
+    voucher_min_order: '',
+  });
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+
+    try {
+      const res = await fetch('/api/loyalty/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          description: form.description || null,
+          trigger_type: form.trigger_type,
+          points_per_trigger: parseInt(form.points_per_trigger) || 1,
+          threshold: parseInt(form.threshold) || 10,
+          voucher_type: form.voucher_type,
+          voucher_discount_value: parseFloat(form.voucher_discount_value) || 0,
+          voucher_validity_days: parseInt(form.voucher_validity_days) || 90,
+          voucher_min_order: form.voucher_min_order ? parseFloat(form.voucher_min_order) : null,
+        }),
+      });
+
+      if (res.ok) {
+        onCreated();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to create program');
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-bold mb-4">New Loyalty Program</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Program Name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="e.g. Visit Stamps"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <input
+              type="text"
+              value={form.description}
+              onChange={e => setForm({ ...form, description: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="e.g. Earn 1 stamp per visit"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Trigger Type</label>
+            <select
+              value={form.trigger_type}
+              onChange={e => setForm({ ...form, trigger_type: e.target.value as any })}
+              className="w-full px-3 py-2 border rounded-lg"
+            >
+              <option value="scan">Scan (POS QR scan)</option>
+              <option value="purchase">Purchase (auto on payment)</option>
+              <option value="manual">Manual (staff awards)</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Points Per Trigger</label>
               <input
-                type="text"
-                placeholder="Search customers..."
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                type="number"
+                min="1"
+                value={form.points_per_trigger}
+                onChange={e => setForm({ ...form, points_per_trigger: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Threshold (pts)</label>
+              <input
+                type="number"
+                min="1"
+                value={form.threshold}
+                onChange={e => setForm({ ...form, threshold: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
               />
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            {filteredCustomers.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
-                <p>No customers found</p>
-              </div>
-            ) : (
-              <div className="divide-y">
-                {filteredCustomers.map((customer) => (
-                  <button
-                    key={customer.id}
-                    onClick={() => handleSelectCustomer(customer)}
-                    className={`w-full text-left p-4 hover:bg-gray-50 transition ${
-                      selectedCustomer?.id === customer.id ? 'bg-yellow-50 border-l-4 border-yellow-500' : ''
-                    }`}
-                  >
-                    <div className="font-medium">
-                      {customer.first_name} {customer.last_name}
-                    </div>
-                    <div className="text-sm text-gray-600">{customer.email}</div>
-                    {customer.billing?.phone && (
-                      <div className="text-xs text-gray-500">{customer.billing.phone}</div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
+          <hr />
+          <h3 className="font-medium text-gray-700">Reward Voucher</h3>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Discount Type</label>
+              <select
+                value={form.voucher_type}
+                onChange={e => setForm({ ...form, voucher_type: e.target.value as 'fixed' | 'percent' })}
+                className="w-full px-3 py-2 border rounded-lg"
+              >
+                <option value="fixed">Fixed (RM)</option>
+                <option value="percent">Percentage (%)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Value {form.voucher_type === 'fixed' ? '(RM)' : '(%)'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.voucher_discount_value}
+                onChange={e => setForm({ ...form, voucher_discount_value: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Valid For (days)</label>
+              <input
+                type="number"
+                min="1"
+                value={form.voucher_validity_days}
+                onChange={e => setForm({ ...form, voucher_validity_days: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Min Order (RM)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.voucher_min_order}
+                onChange={e => setForm({ ...form, voucher_min_order: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
+                placeholder="None"
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {!selectedCustomer ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              <div className="text-center">
-                <Star className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <p>Select a customer to view their loyalty points</p>
-              </div>
-            </div>
-          ) : loading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading points...</p>
-              </div>
-            </div>
-          ) : (
-            <div className="max-w-4xl mx-auto space-y-6">
-              {/* Customer Header */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-xl font-bold mb-2">
-                  {selectedCustomer.first_name} {selectedCustomer.last_name}
-                </h2>
-                <p className="text-gray-600">{selectedCustomer.email}</p>
-              </div>
-
-              {/* Points Balance */}
-              <div className="bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-lg shadow-lg p-8 text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-yellow-100 text-sm uppercase tracking-wide mb-2">Current Balance</p>
-                    <p className="text-5xl font-bold">{points?.balance || 0}</p>
-                    <p className="text-yellow-100 mt-2">points</p>
-                  </div>
-                  <Award className="w-24 h-24 text-yellow-200 opacity-50" />
-                </div>
-                <div className="mt-4 pt-4 border-t border-yellow-300">
-                  <p className="text-sm text-yellow-100">
-                    Worth approximately RM {((points?.balance || 0) / 100).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Award Points Form */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <Gift className="w-5 h-5 text-yellow-600" />
-                  Award Points
-                </h3>
-                <form onSubmit={handleAwardPoints} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Points Amount
-                      </label>
-                      <input
-                        type="number"
-                        value={awardAmount}
-                        onChange={(e) => setAwardAmount(e.target.value)}
-                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-500"
-                        placeholder="e.g., 50"
-                        min="1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Reason
-                      </label>
-                      <input
-                        type="text"
-                        value={awardReason}
-                        onChange={(e) => setAwardReason(e.target.value)}
-                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-500"
-                        placeholder="e.g., Birthday bonus"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full bg-yellow-500 text-white py-2 rounded-lg hover:bg-yellow-600 transition font-medium"
-                  >
-                    Award Points
-                  </button>
-                </form>
-              </div>
-
-              {/* Points History */}
-              <div className="bg-white rounded-lg shadow">
-                <div className="p-6 border-b">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-gray-600" />
-                    Points History
-                  </h3>
-                </div>
-                <div className="divide-y">
-                  {!points || points.history.length === 0 ? (
-                    <div className="p-6 text-center text-gray-500">
-                      <p>No transaction history</p>
-                    </div>
-                  ) : (
-                    points.history.map((transaction) => (
-                      <div key={transaction.id} className="p-4 flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{transaction.reason}</p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(transaction.timestamp).toLocaleDateString('en-MY', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
-                          {transaction.orderId && (
-                            <p className="text-xs text-gray-400">Order #{transaction.orderId}</p>
-                          )}
-                        </div>
-                        <div
-                          className={`text-lg font-bold ${
-                            transaction.type === 'earned' ? 'text-green-600' : 'text-red-600'
-                          }`}
-                        >
-                          {transaction.type === 'earned' ? '+' : '-'}
-                          {transaction.amount}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2 border rounded-lg hover:bg-gray-50" disabled={saving}>
+              Cancel
+            </button>
+            <button type="submit" className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50" disabled={saving}>
+              {saving ? 'Creating...' : 'Create Program'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

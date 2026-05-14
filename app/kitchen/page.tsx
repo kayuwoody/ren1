@@ -3,23 +3,27 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { labelPrinter } from "@/lib/labelPrinterService";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 interface OrderItem {
-  id: number;
+  id: number | string;
   name: string;
   quantity: number;
-  total: string;
+  total?: string;
   sku?: string;
   meta_data?: Array<{ key: string; value: any }>;
 }
 
 interface Order {
-  id: number;
+  id: number | string;
   number: string;
   status: string;
   date_created: string;
   total: string;
   customer_note?: string;
+  source?: 'pos' | 'online';
+  pickup_type?: string;
+  customer_name?: string;
   line_items: OrderItem[];
   meta_data: Array<{ key: string; value: any }>;
 }
@@ -29,18 +33,18 @@ export default function KitchenDisplayPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState<number | string | null>(null);
 
   // Track which items are being worked on (kitchen staff can click to mark)
   const [itemsInProgress, setItemsInProgress] = useState<Set<string>>(new Set());
 
   // Label printing state
-  const [labelsPrinted, setLabelsPrinted] = useState<Set<number>>(new Set());
-  const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
+  const [labelsPrinted, setLabelsPrinted] = useState<Set<number | string>>(new Set());
+  const [printingOrderId, setPrintingOrderId] = useState<number | string | null>(null);
   const [labelPrinterConnected, setLabelPrinterConnected] = useState(false);
 
   // Track previous order IDs to detect new orders
-  const previousOrderIds = useRef<Set<number>>(new Set());
+  const previousOrderIds = useRef<Set<string>>(new Set());
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Load items in progress from localStorage on mount
@@ -136,7 +140,7 @@ export default function KitchenDisplayPage() {
   };
 
   // Toggle item in progress state
-  const toggleItemInProgress = (orderId: number, itemId: number) => {
+  const toggleItemInProgress = (orderId: number | string, itemId: number | string) => {
     const key = `${orderId}-${itemId}`;
     setItemsInProgress((prev) => {
       const next = new Set(prev);
@@ -150,7 +154,7 @@ export default function KitchenDisplayPage() {
   };
 
   // Clear in-progress items for a specific order
-  const clearOrderItems = (orderId: number) => {
+  const clearOrderItems = (orderId: number | string) => {
     setItemsInProgress((prev) => {
       const next = new Set(prev);
       // Remove all items for this order
@@ -176,9 +180,9 @@ export default function KitchenDisplayPage() {
       console.log(`✅ Kitchen: ${data.length} orders in processing status`);
 
       // Detect new orders
-      const currentOrderIds = new Set<number>(data.map((order) => order.id));
+      const currentOrderIds = new Set<string>(data.map((order) => String(order.id)));
       const newOrders = data.filter(
-        (order) => !previousOrderIds.current.has(order.id)
+        (order) => !previousOrderIds.current.has(String(order.id))
       );
 
       // Play alert sound if there are new orders (and not first load)
@@ -218,47 +222,40 @@ export default function KitchenDisplayPage() {
   };
 
   // Mark order as ready (pickup or delivery)
-  const markReady = async (orderId: number, readyType: "pickup" | "delivery") => {
+  const markReady = async (orderId: number | string, readyType: "pickup" | "delivery", source?: string) => {
     setUpdatingOrderId(orderId);
     try {
-      // For pickup: move to ready-for-pickup status
-      // For delivery: keep in processing with out_for_delivery flag
-      const status = readyType === "pickup" ? "ready-for-pickup" : "processing";
-
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status,
-          meta_data: [
-            {
-              key: "kitchen_ready",
-              value: "yes", // Mark as ready (removes from kitchen display)
-            },
-            {
-              key: "fulfillment_method",
-              value: readyType, // "pickup" or "delivery"
-            },
-            {
-              key: "out_for_delivery",
-              value: readyType === "delivery" ? "yes" : "no",
-            },
-            {
-              key: "ready_timestamp",
-              value: new Date().toISOString(),
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update order");
+      if (source === 'online') {
+        const res = await fetch(`/api/online-orders/${orderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'ready' }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Failed to update online order');
+        }
+      } else {
+        const status = readyType === "pickup" ? "ready-for-pickup" : "processing";
+        const response = await fetch(`/api/orders/${orderId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status,
+            meta_data: [
+              { key: "kitchen_ready", value: "yes" },
+              { key: "fulfillment_method", value: readyType },
+              { key: "out_for_delivery", value: readyType === "delivery" ? "yes" : "no" },
+              { key: "ready_timestamp", value: new Date().toISOString() },
+            ],
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Failed to update order");
+        }
       }
 
-      // Clear in-progress items for this order
       clearOrderItems(orderId);
-
-      // Refresh orders immediately
       await fetchOrders();
     } catch (err: any) {
       console.error("Error updating order:", err);
@@ -379,9 +376,24 @@ export default function KitchenDisplayPage() {
       // EventSource will automatically attempt to reconnect
     };
 
+    const channel = supabaseBrowser
+      .channel('kitchen-online-orders')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
+        () => fetchOrders()
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
+        () => fetchOrders()
+      )
+      .subscribe();
+
     return () => {
       console.log('🍳 Kitchen Display: Disconnecting from order stream');
       eventSource.close();
+      supabaseBrowser.removeChannel(channel);
     };
   }, []);
 
@@ -454,10 +466,13 @@ export default function KitchenDisplayPage() {
           {orders.map((order) => {
             const timerInfo = getTimerInfo(order);
             const isUpdating = updatingOrderId === order.id;
+            const isOnline = order.source === 'online';
 
-            // Border color based on timer status
+            // Border color based on source or timer status
             let borderColor = "border-gray-600";
-            if (timerInfo) {
+            if (isOnline) {
+              borderColor = "border-orange-500";
+            } else if (timerInfo) {
               if (timerInfo.statusColor === "green") borderColor = "border-green-500";
               else if (timerInfo.statusColor === "yellow") borderColor = "border-yellow-500";
               else if (timerInfo.statusColor === "red") borderColor = "border-red-500";
@@ -465,16 +480,29 @@ export default function KitchenDisplayPage() {
 
             return (
               <div
-                key={order.id}
+                key={`${order.source}-${order.id}`}
                 className={`bg-gray-50 rounded-lg border-2 ${borderColor} p-3 shadow-lg min-h-[200px]`}
               >
-                {/* Order Number */}
+                {/* Order Number + Source Badge */}
                 <div className="mb-2">
-                  <h2 className="text-3xl font-bold text-gray-900 mb-1">
-                    #{order.number}
-                  </h2>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-3xl font-bold text-gray-900">
+                      {isOnline ? order.number : `#${order.number}`}
+                    </h2>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold text-white ${
+                      isOnline ? 'bg-orange-500' : 'bg-blue-600'
+                    }`}>
+                      {isOnline ? 'ONLINE' : 'POS'}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-between">
-                    <p className="text-gray-600 text-sm">Order ID: {order.id}</p>
+                    {isOnline ? (
+                      <p className="text-gray-600 text-sm">
+                        {order.customer_name || 'Guest'} · {order.pickup_type === 'curbside' ? '🚗 Curbside' : '🏪 Counter'}
+                      </p>
+                    ) : (
+                      <p className="text-gray-600 text-sm">Order ID: {order.id}</p>
+                    )}
                     <p className="text-blue-600 text-sm font-semibold">
                       🕐 {getOrderAge(order)}m old
                     </p>
@@ -517,13 +545,13 @@ export default function KitchenDisplayPage() {
                       Started {timerInfo.elapsedMinutes}m ago
                     </p>
                   </div>
-                ) : (
+                ) : !isOnline ? (
                   <div className="mb-4 bg-yellow-50 border border-yellow-500 rounded p-2">
                     <p className="text-yellow-700 text-xs">
                       ⚠️ No timer set for this order
                     </p>
                   </div>
-                )}
+                ) : null}
 
                 {/* Items */}
                 <div className="mb-4">
@@ -607,7 +635,7 @@ export default function KitchenDisplayPage() {
                               <p className={`text-xs mt-2 ${
                                 isInProgress ? "text-blue-700" : "text-gray-600"
                               }`}>
-                                RM {parseFloat(item.total).toFixed(2)}
+                                RM {parseFloat(item.total || '0').toFixed(2)}
                               </p>
                             </div>
                           </div>
@@ -664,36 +692,53 @@ export default function KitchenDisplayPage() {
                 </div>
 
                 {/* Mark Ready Buttons */}
-                <div className="grid grid-cols-2 gap-3">
+                {isOnline ? (
                   <button
-                    onClick={() => markReady(order.id, "pickup")}
+                    onClick={() => markReady(order.id, "pickup", "online")}
                     disabled={isUpdating}
-                    className={`py-3 rounded-lg font-bold text-base transition-all ${
+                    className={`w-full py-3 rounded-lg font-bold text-base transition-all ${
                       isUpdating
                         ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                        : "bg-green-600 text-white hover:bg-green-500 active:scale-95"
+                        : "bg-orange-500 text-white hover:bg-orange-400 active:scale-95"
                     }`}
                   >
                     <div className="flex flex-col items-center gap-1">
                       <span>{isUpdating ? "⏳" : "✅"}</span>
-                      <span className="text-sm">{isUpdating ? "Wait..." : "Ready Pickup"}</span>
+                      <span className="text-sm">{isUpdating ? "Wait..." : "Ready for Pickup"}</span>
                     </div>
                   </button>
-                  <button
-                    onClick={() => markReady(order.id, "delivery")}
-                    disabled={isUpdating}
-                    className={`py-3 rounded-lg font-bold text-base transition-all ${
-                      isUpdating
-                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                        : "bg-blue-600 text-white hover:bg-blue-500 active:scale-95"
-                    }`}
-                  >
-                    <div className="flex flex-col items-center gap-1">
-                      <span>{isUpdating ? "⏳" : "🚗"}</span>
-                      <span className="text-sm">{isUpdating ? "Wait..." : "Ready Delivery"}</span>
-                    </div>
-                  </button>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => markReady(order.id, "pickup")}
+                      disabled={isUpdating}
+                      className={`py-3 rounded-lg font-bold text-base transition-all ${
+                        isUpdating
+                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                          : "bg-green-600 text-white hover:bg-green-500 active:scale-95"
+                      }`}
+                    >
+                      <div className="flex flex-col items-center gap-1">
+                        <span>{isUpdating ? "⏳" : "✅"}</span>
+                        <span className="text-sm">{isUpdating ? "Wait..." : "Ready Pickup"}</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => markReady(order.id, "delivery")}
+                      disabled={isUpdating}
+                      className={`py-3 rounded-lg font-bold text-base transition-all ${
+                        isUpdating
+                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                          : "bg-blue-600 text-white hover:bg-blue-500 active:scale-95"
+                      }`}
+                    >
+                      <div className="flex flex-col items-center gap-1">
+                        <span>{isUpdating ? "⏳" : "🚗"}</span>
+                        <span className="text-sm">{isUpdating ? "Wait..." : "Ready Delivery"}</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

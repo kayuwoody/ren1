@@ -216,6 +216,20 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Migration: Add isDefault column to ProductRecipe if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(ProductRecipe)").all() as any[];
+    const hasIsDefault = tableInfo.some((col: any) => col.name === 'isDefault');
+
+    if (tableInfo.length > 0 && !hasIsDefault) {
+      console.log('🔄 Adding isDefault column to ProductRecipe table...');
+      db.exec(`ALTER TABLE ProductRecipe ADD COLUMN isDefault INTEGER NOT NULL DEFAULT 0`);
+      console.log('✅ isDefault column added');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
   // Migration: Add supplierCost column to Product table if it doesn't exist
   try {
     const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
@@ -286,6 +300,20 @@ export function initDatabase() {
       db.exec(`ALTER TABLE Product ADD COLUMN quantityPerCarton INTEGER`);
       console.log('✅ quantityPerCarton column added');
       console.log('📝 Note: Number of units per carton for purchase order calculations');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
+  // Migration: Add availableOnline column to Product table if it doesn't exist
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const hasAvailableOnline = tableInfo.some((col: any) => col.name === 'availableOnline');
+
+    if (tableInfo.length > 0 && !hasAvailableOnline) {
+      console.log('🔄 Adding availableOnline column to Product table...');
+      db.exec(`ALTER TABLE Product ADD COLUMN availableOnline INTEGER NOT NULL DEFAULT 1`);
+      console.log('✅ availableOnline column added');
     }
   } catch (e) {
     // Column already exists or table doesn't exist
@@ -599,3 +627,14 @@ export function initDatabase() {
 
 // Run initialization when module is first imported
 initDatabase();
+
+// Fire-and-forget catalog sync on startup
+import('../catalogSync').then(({ syncAllProducts, syncAllRecipes, syncAllBranches }) => {
+  syncAllProducts()
+    .then(r => console.log(`Startup catalog sync: ${r.synced}/${r.total} products`))
+    .then(() => syncAllRecipes())
+    .then(r => console.log(`Startup catalog sync: ${r!.synced}/${r!.total} recipes`))
+    .then(() => syncAllBranches())
+    .then(r => console.log(`Startup catalog sync: ${r!.synced}/${r!.total} branches`))
+    .catch(err => console.warn('Startup catalog sync failed (will retry on next restart):', err.message));
+});

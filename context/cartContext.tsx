@@ -25,8 +25,24 @@ export interface CartItem {
   }>;
 }
 
+export interface CartCustomer {
+  member_id: string;
+  phone: string;
+  name: string | null;
+}
+
+export interface CartVoucher {
+  id: string;
+  code: string;
+  type: 'fixed' | 'percent';
+  discount_value: number;
+  discount_amount: number;
+}
+
 interface CartContextType {
   cartItems: CartItem[];
+  customer: CartCustomer | null;
+  voucher: CartVoucher | null;
   addToCart: (item: Omit<CartItem, 'finalPrice'>) => void;
   removeFromCart: (index: number) => void;
   updateQuantity: (index: number, quantity: number) => void;
@@ -36,6 +52,8 @@ interface CartContextType {
     reason?: string
   }) => void;
   updateItemSurcharge: (index: number, amount: number, reason?: string) => void;
+  setCustomer: (customer: CartCustomer | null) => void;
+  setVoucher: (voucher: CartVoucher | null) => void;
   clearCart: () => void;
   loadCart: (items: CartItem[]) => void;
 }
@@ -84,9 +102,18 @@ function isSameCartItem(item1: CartItem, item2: Omit<CartItem, 'finalPrice'>): b
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [customer, setCustomerState] = useState<CartCustomer | null>(null);
+  const [voucher, setVoucherState] = useState<CartVoucher | null>(null);
 
   // Load cart from localStorage on mount (for persistence across page refreshes)
   useEffect(() => {
+    try {
+      const savedCustomer = localStorage.getItem('cart_customer');
+      if (savedCustomer) setCustomerState(JSON.parse(savedCustomer));
+      const savedVoucher = localStorage.getItem('cart_voucher');
+      if (savedVoucher) setVoucherState(JSON.parse(savedVoucher));
+    } catch {}
+
     const saved = localStorage.getItem('cart');
     if (saved) {
       try {
@@ -132,18 +159,17 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   // Save cart to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(cartItems));
-    console.log('💾 Saved cart to localStorage:', cartItems);
 
     // Sync to server for cross-device updates (customer display)
     fetch('/api/cart/current', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cart: cartItems })
+      body: JSON.stringify({ cart: cartItems, voucher: voucher })
     }).catch(err => console.error('Failed to sync cart to server:', err));
 
     // Dispatch custom event for same-tab updates
     window.dispatchEvent(new CustomEvent('cart-updated', { detail: cartItems }));
-  }, [cartItems]);
+  }, [cartItems, voucher]);
 
   // Listen for storage changes from other tabs/windows (for customer display)
   useEffect(() => {
@@ -264,9 +290,23 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
+  const setCustomer = (c: CartCustomer | null) => {
+    setCustomerState(c);
+    if (c) localStorage.setItem('cart_customer', JSON.stringify(c));
+    else localStorage.removeItem('cart_customer');
+  };
+
+  const setVoucher = (v: CartVoucher | null) => {
+    setVoucherState(v);
+    if (v) localStorage.setItem('cart_voucher', JSON.stringify(v));
+    else localStorage.removeItem('cart_voucher');
+  };
+
   const clearCart = () => {
     console.log('🗑️ Clearing cart');
     setCartItems([]);
+    setCustomer(null);
+    setVoucher(null);
     localStorage.removeItem('cart');
   };
 
@@ -277,7 +317,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <CartContext.Provider value={{ cartItems, addToCart, removeFromCart, updateQuantity, updateItemDiscount, updateItemSurcharge, clearCart, loadCart }}>
+    <CartContext.Provider value={{ cartItems, customer, voucher, addToCart, removeFromCart, updateQuantity, updateItemDiscount, updateItemSurcharge, setCustomer, setVoucher, clearCart, loadCart }}>
       {children}
     </CartContext.Provider>
   );

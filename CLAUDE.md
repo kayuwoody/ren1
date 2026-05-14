@@ -2,13 +2,14 @@
 
 ## Overview
 
-Physical point-of-sale system for Coffee Oasis, a grab-and-go coffee shop in Malaysia. Runs on a local Windows PC with multi-screen setup (POS, customer display, kitchen display). All data is local SQLite — no cloud dependency for core operations.
+Physical point-of-sale system for Coffee Oasis, a grab-and-go coffee shop in Malaysia. Runs on a local Windows PC with multi-screen setup (POS, customer display, kitchen display). Core POS data is local SQLite — no cloud dependency for in-store operations. Online ordering syncs via Supabase Realtime (shared database with customer-facing app).
 
 ## Stack
 
 - **Framework:** Next.js 14.2 (App Router)
 - **Language:** TypeScript
-- **Database:** SQLite via better-sqlite3 (no ORM — raw SQL)
+- **Database:** SQLite via better-sqlite3 (no ORM — raw SQL) for local POS data
+- **Cloud DB:** Supabase (PostgreSQL) for online orders — shared with customer app
 - **Styling:** Tailwind CSS
 - **Icons:** Lucide React
 - **Currency:** Malaysian Ringgit (RM)
@@ -106,11 +107,50 @@ CLabel B21 via Web Bluetooth (`lib/labelPrinterService.ts`). TSPL commands, 15mm
 
 `/kitchen` — SSE-based real-time updates. Orders appear after payment, staff marks as ready. Auto-fit grid for tablets/Chromebooks. Accessible from LAN devices.
 
+### Online Orders (`/admin/online-orders`)
+
+Kanban board for managing orders placed via the customer-facing web app (bubu1.vercel.app). Shares a Supabase database — no API calls between apps.
+
+**Architecture:** Customer app writes `online_orders` + `online_order_items` to Supabase after Fiuu payment. POS subscribes via Supabase Realtime and updates order status. Customer's order page sees status changes instantly via Realtime.
+
+**Status flow:** `pending` → `accepted` | `rejected`, `accepted` → `ready` | `rejected`, `ready` → `collected`. Terminal: `collected`, `rejected`.
+
+**Supabase clients:**
+- `lib/supabase.ts` — Server-side, uses `SUPABASE_SERVICE_ROLE_KEY` (bypasses RLS)
+- `lib/supabaseBrowser.ts` — Client-side, uses `NEXT_PUBLIC_SUPABASE_ANON_KEY` (for Realtime subscriptions)
+
+**API routes:**
+- `GET /api/online-orders` — Fetch active orders (pending/accepted/ready)
+- `PATCH /api/online-orders/[orderId]` — Update status with transition validation, auto-decrements stock on accept
+- `GET/POST /api/online-orders/intake` — Get/set pause state (blocks new customer orders)
+- `GET /api/online-orders/avg-wait` — Average wait time from recent completed orders
+
+**Features:** Audio alerts for new orders, pause/resume intake toggle, reject with optional reason, auto-stock decrement on accept, 15s polling fallback alongside Realtime.
+
+### Catalog Sync (`lib/catalogSync.ts`)
+
+Product catalog auto-syncs from local SQLite to Supabase so the customer-facing app reads real products with correct UUIDs.
+
+**Architecture:** POS SQLite is the source of truth. On every product or recipe create/update/delete, data syncs to Supabase `products` and `product_recipe_items` tables. If internet is down, changes queue in `_sync_queue` table and retry automatically.
+
+**Flow:** Staff edits product in POS admin → SQLite writes → async Supabase upsert (fire-and-forget) → customer app reads from Supabase.
+
+**Key functions:**
+- `syncProduct(id)` — Upserts a single product to Supabase
+- `syncRecipe(productId)` — Replaces all recipe items for a product in Supabase
+- `syncAllProducts()` / `syncAllRecipes()` — Full catalog push
+- `flushSyncQueue()` — Processes pending offline syncs
+
+**API:** `POST /api/admin/catalog-sync` triggers a full sync. `GET` returns pending queue count.
+
+**Supabase tables:** See `CATALOG_SCHEMA.md` for the SQL schema and customer app integration guide.
+
 ## Active Pages
 
 ### Staff-facing
 - `/admin` — Dashboard with daily stats
 - `/admin/pos` — **Primary POS interface**. Cart, discounts, surcharges, COGS display, hold orders.
+- `/admin/online-orders` — **Online order Kanban board**. Accept/reject/ready/collect orders from customer app.
 - `/products` — Product catalog / menu. Tap to add to cart, selection modal for combos.
 - `/payment` — Payment method selection (cash / bank QR), order creation.
 - `/kitchen` — Kitchen display system (for kitchen staff / tablet)
@@ -150,6 +190,10 @@ All API routes are Next.js Route Handlers. Key endpoints:
 - `POST /api/debug/recreate-consumptions` — Backfill COGS for orders missing consumption data.
 - `GET /api/kitchen/orders` — Kitchen order feed.
 - `GET /api/kitchen/stream` — SSE stream for kitchen display.
+- `GET /api/online-orders` — Active online orders from Supabase.
+- `PATCH /api/online-orders/[orderId]` — Update online order status.
+- `GET/POST /api/online-orders/intake` — Pause/resume online ordering.
+- `GET /api/online-orders/avg-wait` — Average wait time for online orders.
 
 ## Key Files
 
@@ -161,8 +205,9 @@ app/kitchen/page.tsx            — Kitchen display
 context/cartContext.tsx          — Cart state, discount/surcharge logic
 context/branchContext.tsx        — Branch selection, X-Branch-Id header
 lib/db/init.ts                  — Database schema and connection
-lib/db/productService.ts        — Product CRUD
-lib/db/recipeService.ts         — Recipe management
+lib/db/productService.ts        — Product CRUD (auto-syncs to Supabase)
+lib/db/recipeService.ts         — Recipe management (auto-syncs to Supabase)
+lib/catalogSync.ts              — SQLite→Supabase catalog sync + offline queue
 lib/db/recursiveProductExpansion.ts — Bundle flattening and price calculation
 lib/db/inventoryConsumptionService.ts — COGS recording and calculation
 lib/db/branchStockService.ts    — Stock management (source of truth)
@@ -174,6 +219,9 @@ scripts/diagnose-orders.js      — Order COGS diagnostic tool
 components/ProductSelectionModal.tsx — Bundle/combo selection UI
 components/CashPayment.tsx       — Cash payment with change calculation
 components/HoldOrderManager.tsx  — Hold/resume order system
+app/admin/online-orders/page.tsx — Online order Kanban board
+lib/supabase.ts                  — Supabase server client (service role)
+lib/supabaseBrowser.ts           — Supabase browser client (anon key, Realtime)
 ```
 
 ## Auth
@@ -193,6 +241,12 @@ FTP_HOST=ftp.coffee-oasis.com.my
 FTP_USER=...
 FTP_PASSWORD=...
 FTP_RECEIPT_PATH=/domains/coffee-oasis.com.my/public_html/receipts
+
+# Supabase (online orders — shared with customer app)
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 ```
 
 ## Multi-Screen Setup

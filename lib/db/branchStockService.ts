@@ -46,6 +46,11 @@ export function updateBranchStock(
       VALUES (?, ?, ?, ?, ?, 0, ?)
     `).run(uuidv4(), branchId, itemType, itemId, quantity, now);
   }
+
+  if (itemType === 'product') {
+    const { syncProductStock } = require('../catalogSync');
+    syncProductStock(itemId).catch(() => {});
+  }
 }
 
 export function adjustBranchStock(

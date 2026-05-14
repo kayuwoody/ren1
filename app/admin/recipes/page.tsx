@@ -41,6 +41,7 @@ interface RecipeItem {
   calculatedCost?: number;
   isOptional?: boolean;
   selectionGroup?: string;
+  priceAdjustment?: number;
 }
 
 interface Recipe {
@@ -185,6 +186,7 @@ export default function RecipesPage() {
         unit: item.unit,
         isOptional: item.isOptional || false,
         selectionGroup: item.selectionGroup,
+        priceAdjustment: item.priceAdjustment || 0,
       }));
 
       const res = await fetch(`/api/admin/recipes/${selectedProduct.id}`, {
@@ -407,7 +409,7 @@ export default function RecipesPage() {
     }
   }
 
-  function addItem(itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean, selectionGroup?: string) {
+  function addItem(itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean, selectionGroup?: string, priceAdjustment?: number) {
     if (!selectedProduct) return;
 
     let newItem: RecipeItem;
@@ -443,6 +445,7 @@ export default function RecipesPage() {
         calculatedCost: quantity * product.unitCost,
         isOptional,
         selectionGroup: selectionGroup || undefined,
+        priceAdjustment: priceAdjustment || 0,
       };
     }
 
@@ -841,6 +844,25 @@ export default function RecipesPage() {
                               @ RM {(item.costPerUnit || 0).toFixed(4)}/{item.unit}
                             </div>
                           </div>
+                          {item.itemType === 'product' && (item.selectionGroup || item.isOptional) && (
+                            <div className="flex items-center gap-1 min-w-[90px]">
+                              <span className="text-xs text-gray-500">+RM</span>
+                              <input
+                                type="number"
+                                step="0.10"
+                                min="0"
+                                value={item.priceAdjustment || 0}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  const newItems = [...recipe.items];
+                                  newItems[index] = { ...item, priceAdjustment: val };
+                                  setRecipe({ ...recipe, items: newItems });
+                                }}
+                                className="w-16 px-1 py-1 border rounded text-right text-sm"
+                                title="Price adjustment (added to combo override)"
+                              />
+                            </div>
+                          )}
                           {item.isOptional && (
                             <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
                               Optional
@@ -1164,7 +1186,7 @@ function AddItemModal({
   materials: Material[];
   products: Product[];
   onClose: () => void;
-  onAdd: (itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean, selectionGroup?: string) => void;
+  onAdd: (itemType: 'material' | 'product', itemId: string, quantity: number, isOptional: boolean, selectionGroup?: string, priceAdjustment?: number) => void;
 }) {
   const [itemType, setItemType] = useState<'material' | 'product'>('material');
   const [selectedMaterial, setSelectedMaterial] = useState('');
@@ -1172,6 +1194,7 @@ function AddItemModal({
   const [quantity, setQuantity] = useState<string>('1');
   const [isOptional, setIsOptional] = useState(false);
   const [selectionGroup, setSelectionGroup] = useState('');
+  const [priceAdjustment, setPriceAdjustment] = useState('');
   const [filter, setFilter] = useState('');
 
   const material = materials.find(m => m.id === selectedMaterial);
@@ -1206,7 +1229,7 @@ function AddItemModal({
       return;
     }
 
-    onAdd(itemType, itemId, parseFloat(quantity), isOptional, selectionGroup || undefined);
+    onAdd(itemType, itemId, parseFloat(quantity), isOptional, selectionGroup || undefined, parseFloat(priceAdjustment) || 0);
   }
 
   return (
@@ -1363,6 +1386,29 @@ function AddItemModal({
               <p className="text-xs text-gray-500 mt-1">
                 <strong>For XOR choices:</strong> Items in the same group are mutually exclusive (choose one).
                 <br />Example: "Hot" and "Iced" both have selectionGroup="temperature" → customer must pick one.
+              </p>
+            </div>
+          )}
+
+          {/* Price Adjustment (for product items in selection groups or optional) */}
+          {itemType === 'product' && (selectionGroup || isOptional) && (
+            <div className="border-t pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Price Adjustment (RM)
+              </label>
+              <input
+                type="number"
+                step="0.10"
+                min="0"
+                value={priceAdjustment}
+                onChange={(e) => setPriceAdjustment(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+                placeholder="0.00"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Extra charge added to combo override price when this option is selected.
+                <br />Example: Milk drink upgrade = 1.50 → combo RM13 becomes RM14.50.
+                <br />Leave at 0 for options included in the combo price.
               </p>
             </div>
           )}

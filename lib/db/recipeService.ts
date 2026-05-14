@@ -2,6 +2,7 @@ import { db, initDatabase } from './init';
 import { getMaterial } from './materialService';
 import { getProduct } from './productService';
 import { v4 as uuidv4 } from 'uuid';
+import { syncRecipe } from '../catalogSync';
 
 // Ensure database is initialized
 initDatabase();
@@ -22,7 +23,9 @@ export interface ProductRecipeItem {
   unit: string;
   calculatedCost: number;
   isOptional: boolean;
+  isDefault: boolean; // Pre-selected option within an XOR group
   selectionGroup?: string; // Items in same group are mutually exclusive (XOR choice)
+  priceAdjustment: number; // Extra charge on top of combo override (e.g. +1.50 for milk upgrade)
   sortOrder: number;
   createdAt: string;
 }
@@ -38,7 +41,9 @@ export function addRecipeItem(item: {
   quantity: number;
   unit: string;
   isOptional?: boolean;
+  isDefault?: boolean;
   selectionGroup?: string;
+  priceAdjustment?: number;
   sortOrder?: number;
 }): ProductRecipeItem {
   const id = uuidv4();
@@ -71,8 +76,8 @@ export function addRecipeItem(item: {
 
   const stmt = db.prepare(`
     INSERT INTO ProductRecipe
-    (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, selectionGroup, sortOrder, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, productId, itemType, materialId, linkedProductId, quantity, unit, calculatedCost, isOptional, isDefault, selectionGroup, priceAdjustment, sortOrder, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -85,7 +90,9 @@ export function addRecipeItem(item: {
     item.unit,
     calculatedCost,
     item.isOptional ? 1 : 0,
+    item.isDefault ? 1 : 0,
     item.selectionGroup || null,
+    item.priceAdjustment ?? 0,
     item.sortOrder ?? 0,
     now
   );
@@ -93,7 +100,9 @@ export function addRecipeItem(item: {
   // Update product total cost
   updateProductTotalCost(item.productId);
 
-  return getRecipeItem(id)!;
+  const saved = getRecipeItem(id)!;
+  syncRecipe(item.productId).catch(() => {});
+  return saved;
 }
 
 /**
@@ -133,6 +142,9 @@ export function getRecipeItem(id: string): ProductRecipeItem | undefined {
     unit: row.unit,
     calculatedCost: row.calculatedCost,
     isOptional: row.isOptional === 1,
+    isDefault: row.isDefault === 1,
+    selectionGroup: row.selectionGroup,
+    priceAdjustment: row.priceAdjustment || 0,
     sortOrder: row.sortOrder,
     createdAt: row.createdAt,
   };
@@ -175,7 +187,9 @@ export function getProductRecipe(productId: string): ProductRecipeItem[] {
     unit: row.unit,
     calculatedCost: row.calculatedCost,
     isOptional: row.isOptional === 1,
+    isDefault: row.isDefault === 1,
     selectionGroup: row.selectionGroup,
+    priceAdjustment: row.priceAdjustment || 0,
     sortOrder: row.sortOrder,
     createdAt: row.createdAt,
   }));
@@ -189,6 +203,8 @@ export function updateRecipeItem(
   updates: {
     quantity?: number;
     isOptional?: boolean;
+    isDefault?: boolean;
+    priceAdjustment?: number;
     sortOrder?: number;
   }
 ): ProductRecipeItem {
@@ -216,7 +232,7 @@ export function updateRecipeItem(
 
   const stmt = db.prepare(`
     UPDATE ProductRecipe
-    SET quantity = ?, calculatedCost = ?, isOptional = ?, sortOrder = ?
+    SET quantity = ?, calculatedCost = ?, isOptional = ?, isDefault = ?, priceAdjustment = ?, sortOrder = ?
     WHERE id = ?
   `);
 
@@ -224,6 +240,8 @@ export function updateRecipeItem(
     quantity,
     calculatedCost,
     updates.isOptional !== undefined ? (updates.isOptional ? 1 : 0) : existing.isOptional,
+    updates.isDefault !== undefined ? (updates.isDefault ? 1 : 0) : (existing.isDefault ? 1 : 0),
+    updates.priceAdjustment ?? existing.priceAdjustment,
     updates.sortOrder ?? existing.sortOrder,
     id
   );
@@ -245,8 +263,8 @@ export function deleteRecipeItem(id: string): boolean {
   const result = stmt.run(id);
 
   if (result.changes > 0) {
-    // Update product total cost
     updateProductTotalCost(item.productId);
+    syncRecipe(item.productId).catch(() => {});
   }
 
   return result.changes > 0;
@@ -279,7 +297,9 @@ export function setProductRecipe(
     quantity: number;
     unit: string;
     isOptional?: boolean;
+    isDefault?: boolean;
     selectionGroup?: string;
+    priceAdjustment?: number;
   }>
 ): ProductRecipeItem[] {
   // Delete existing recipe
@@ -297,11 +317,13 @@ export function setProductRecipe(
       unit: item.unit,
       isOptional: item.isOptional,
       selectionGroup: item.selectionGroup,
+      priceAdjustment: item.priceAdjustment,
       sortOrder: index,
     });
     recipeItems.push(recipeItem);
   });
 
+  syncRecipe(productId).catch(() => {});
   return recipeItems;
 }
 

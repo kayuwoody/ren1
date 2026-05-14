@@ -30,7 +30,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { name, sku, category, basePrice, manageStock, imageUrl, supplier, quantityPerCarton } = body;
+    const { name, sku, category, basePrice, manageStock, availableOnline, imageUrl, supplier, quantityPerCarton } = body;
 
     if (!name || !sku || !category) {
       return NextResponse.json({ error: 'name, sku, and category are required' }, { status: 400 });
@@ -54,6 +54,7 @@ export async function PUT(
       unitCost: existing.unitCost,
       stockQuantity: existing.stockQuantity,
       manageStock: manageStock ?? existing.manageStock,
+      availableOnline: availableOnline ?? existing.availableOnline,
       imageUrl: imageUrl || undefined,
       supplier: supplier || undefined,
       quantityPerCarton: quantityPerCarton || undefined,

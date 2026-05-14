@@ -14,6 +14,9 @@ export interface FlattenedXORGroup {
     id: string;                 // Product ID
     name: string;
     basePrice: number;          // Product's base/sales price
+    priceAdjustment: number;    // Extra charge on top of combo override
+    isCoffee: boolean;          // Whether this item is a coffee (for milk/sugar options)
+    isDefault: boolean;         // Pre-selected option within the group
   }>;
 }
 
@@ -24,6 +27,8 @@ export interface FlattenedOptionalItem {
   id: string;
   name: string;
   basePrice: number;          // Product's base/sales price
+  priceAdjustment: number;    // Extra charge on top of combo override
+  isCoffee: boolean;          // Whether this item is a coffee (for milk/sugar options)
   parentProductId?: string;
   parentProductName?: string;
 }
@@ -127,6 +132,9 @@ export function flattenAllChoices(
             id: item.linkedProductId!,
             name: item.linkedProductName || linkedProd?.name || 'Unknown',
             basePrice: linkedProd?.basePrice || 0,
+            priceAdjustment: item.priceAdjustment || 0,
+            isCoffee: linkedProd?.category === 'coffee',
+            isDefault: item.isDefault,
           };
         }),
     });
@@ -142,6 +150,8 @@ export function flattenAllChoices(
         id: item.linkedProductId,
         name: item.linkedProductName || linkedProd?.name || 'Unknown',
         basePrice: linkedProd?.basePrice || 0,
+        priceAdjustment: item.priceAdjustment || 0,
+        isCoffee: linkedProd?.category === 'coffee',
         parentProductId: depth === 0 ? undefined : product.id,
         parentProductName: depth === 0 ? undefined : product.name,
       });
@@ -167,14 +177,17 @@ export function flattenAllChoices(
   });
 
   // Also recurse into XOR group items (they might have nested choices too)
+  // e.g. Americano (in "Drink" group) has its own "Temp" group with Hot/Iced
+  // parentProductId = the XOR item's linkedProductId (Americano), NOT the combo
+  // so the frontend knows: "show Temp group only when Americano is selected"
   Object.values(groupedBySelection).flat().forEach(item => {
     if (item.itemType === 'product' && item.linkedProductId) {
       const nested = flattenAllChoices(
         item.linkedProductId,
         depth + 1,
         parentPath ? `${parentPath} > ${product.name}` : product.name,
-        product.id,
-        product.name
+        item.linkedProductId,
+        item.linkedProductName || getProduct(item.linkedProductId)?.name
       );
 
       xorGroups.push(...nested.xorGroups);
@@ -206,8 +219,10 @@ export function calculatePriceWithSelections(
   if (!product) return 0;
 
   // Check for combo price override (only at root level)
+  // Override = fixed base + sum of selected items' priceAdjustment
   if (depth === 0 && product.comboPriceOverride !== undefined && product.comboPriceOverride !== null) {
-    return product.comboPriceOverride * quantity;
+    const adjustments = sumPriceAdjustments(productId, selections);
+    return (product.comboPriceOverride + adjustments) * quantity;
   }
 
   const recipe = getProductRecipe(productId);
@@ -269,6 +284,40 @@ export function calculatePriceWithSelections(
   });
 
   return totalPrice;
+}
+
+/**
+ * Sum priceAdjustment values for all selected recipe items (root and nested).
+ * Used when comboPriceOverride is set to add upgrade surcharges on top of the fixed combo price.
+ */
+function sumPriceAdjustments(
+  productId: string,
+  selections: UnifiedBundleSelection,
+  depth: number = 0
+): number {
+  const recipe = getProductRecipe(productId);
+  let total = 0;
+
+  recipe.forEach(item => {
+    if (item.isOptional) {
+      if (!selections.selectedOptional.includes(item.linkedProductId || '')) return;
+    }
+
+    if (item.selectionGroup) {
+      const uniqueKey = depth === 0 ? `root:${item.selectionGroup}` : `${productId}:${item.selectionGroup}`;
+      const selectedId = selections.selectedMandatory[uniqueKey];
+      if (selectedId !== item.linkedProductId) return;
+    }
+
+    total += item.priceAdjustment || 0;
+
+    // Recurse into linked products for nested adjustments
+    if (item.itemType === 'product' && item.linkedProductId) {
+      total += sumPriceAdjustments(item.linkedProductId, selections, depth + 1);
+    }
+  });
+
+  return total;
 }
 
 /**

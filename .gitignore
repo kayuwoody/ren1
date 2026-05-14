@@ -43,3 +43,6 @@ prisma/dev.db-wal
 *.db-wal
 prisma/dev.db
 prisma/dev.db
+
+# backups
+/backups/

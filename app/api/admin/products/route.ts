@@ -31,6 +31,7 @@ export async function GET(req: Request) {
         imageUrl: product.imageUrl,
         stockQuantity: product.stockQuantity ?? null,
         manageStock: product.manageStock ?? false,
+        availableOnline: product.availableOnline ?? true,
       };
     });
 
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, sku, category, basePrice, manageStock, imageUrl, supplier, quantityPerCarton } = body;
+    const { name, sku, category, basePrice, manageStock, availableOnline, imageUrl, supplier, quantityPerCarton } = body;
 
     if (!name || !sku || !category) {
       return NextResponse.json({ error: 'name, sku, and category are required' }, { status: 400 });
@@ -65,6 +66,7 @@ export async function POST(req: Request) {
       unitCost: 0,
       stockQuantity: 0,
       manageStock: manageStock ?? false,
+      availableOnline: availableOnline ?? true,
       imageUrl: imageUrl || undefined,
       supplier: supplier || undefined,
       quantityPerCarton: quantityPerCarton || undefined,

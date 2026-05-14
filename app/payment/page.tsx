@@ -5,23 +5,24 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cartContext";
 import { useBranch } from "@/context/branchContext";
 import CashPayment from "@/components/CashPayment";
+import { Gift, X } from "lucide-react";
 
 export default function PaymentPage() {
   const router = useRouter();
-  const { cartItems, clearCart } = useCart();
+  const { cartItems, clearCart, customer, voucher, setVoucher } = useCart();
   const { branchFetch } = useBranch();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_qr" | null>(null);
 
-  // Calculate total (using finalPrice which includes discounts)
   const retailTotal = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
-  const finalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
-  const totalDiscount = retailTotal - finalTotal;
-  const hasDiscount = totalDiscount > 0;
+  const itemFinalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
+  const itemDiscount = retailTotal - itemFinalTotal;
+  const voucherAmount = voucher?.discount_amount ?? 0;
+  const finalTotal = Math.max(0, itemFinalTotal - voucherAmount);
+  const hasDiscount = itemDiscount > 0 || voucherAmount > 0;
 
-  // Set pending order on mount to keep customer display populated
   useEffect(() => {
     if (cartItems.length > 0) {
       fetch('/api/cart/current', {
@@ -34,16 +35,14 @@ export default function PaymentPage() {
         }),
       }).catch(err => console.error('Failed to set pending order:', err));
     }
-  }, [cartItems, order]); // Re-run when cart or order changes
+  }, [cartItems, order]);
 
-  // Create order when payment method is selected
   const handlePaymentMethodSelect = async (method: "cash" | "bank_qr") => {
     setPaymentMethod(method);
     setLoading(true);
     setError(null);
 
     try {
-      // Calculate total discount across all items
       const totalDiscount = cartItems.reduce((sum, item) => {
         if (item.discountReason) {
           return sum + ((item.retailPrice - item.finalPrice) * item.quantity);
@@ -51,7 +50,26 @@ export default function PaymentPage() {
         return sum;
       }, 0);
 
-      // Create order in WooCommerce, tagged with current branch
+      const orderMetaData: Array<{ key: string; value: string }> = [];
+      if (totalDiscount > 0) {
+        orderMetaData.push({ key: "_total_discount", value: totalDiscount.toFixed(2) });
+      }
+      if (voucher) {
+        orderMetaData.push(
+          { key: "_voucher_code", value: voucher.code },
+          { key: "_voucher_discount", value: voucherAmount.toFixed(2) },
+        );
+      }
+      if (customer) {
+        orderMetaData.push(
+          { key: "_loyalty_member_id", value: customer.member_id },
+          { key: "_loyalty_member_phone", value: customer.phone },
+        );
+        if (customer.name) {
+          orderMetaData.push({ key: "_loyalty_member_name", value: customer.name });
+        }
+      }
+
       const response = await branchFetch("/api/orders/create-with-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,7 +77,6 @@ export default function PaymentPage() {
           line_items: cartItems.map((item) => {
             const meta_data: Array<{ key: string; value: string }> = [];
 
-            // Add discount metadata if applicable
             if (item.discountReason) {
               meta_data.push(
                 { key: "_discount_reason", value: item.discountReason },
@@ -68,7 +85,6 @@ export default function PaymentPage() {
               );
             }
 
-            // Add surcharge metadata if applicable
             if (item.surchargeAmount && item.surchargeAmount > 0) {
               meta_data.push(
                 { key: "_surcharge_amount", value: item.surchargeAmount.toString() },
@@ -76,10 +92,8 @@ export default function PaymentPage() {
               );
             }
 
-            // Add final price metadata (always)
             meta_data.push({ key: "_final_price", value: item.finalPrice.toString() });
 
-            // Add bundle metadata if this is a bundle product
             if (item.bundle) {
               meta_data.push(
                 { key: "_is_bundle", value: "true" },
@@ -89,7 +103,6 @@ export default function PaymentPage() {
                 { key: "_bundle_optional", value: JSON.stringify(item.bundle.selectedOptional) }
               );
 
-              // Store expanded components (already fetched at add-to-cart time)
               if (item.components) {
                 meta_data.push(
                   { key: "_bundle_components", value: JSON.stringify(item.components) }
@@ -105,11 +118,10 @@ export default function PaymentPage() {
               meta_data,
             };
           }),
-          meta_data: totalDiscount > 0 ? [
-            { key: "_total_discount", value: totalDiscount.toFixed(2) }
-          ] : [],
+          meta_data: orderMetaData.length > 0 ? orderMetaData : [],
           billing: {
-            first_name: "Walk-in Customer",
+            first_name: customer?.name || "Walk-in Customer",
+            phone: customer?.phone || null,
             email: "pos@coffee-oasis.com.my",
           },
         }),
@@ -123,7 +135,6 @@ export default function PaymentPage() {
 
       setOrder(data.order);
 
-      // Set pending order so customer display stays populated during payment
       await fetch('/api/cart/current', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -143,25 +154,46 @@ export default function PaymentPage() {
   };
 
   const handlePaymentSuccess = async () => {
-    // Clear cart locally
+    const orderId = order?.id;
+    const orderTotal = finalTotal;
+    const currentCustomer = customer;
+    const currentVoucher = voucher;
+
     clearCart();
 
-    // Clear pending order and cart on server (broadcasts empty cart to customer display)
     await fetch('/api/cart/current', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        cart: [], // Explicitly clear server-side cart
+        cart: [],
         setPendingOrder: false,
       }),
     });
 
-    // Redirect to admin POS
+    if (currentVoucher) {
+      fetch("/api/vouchers/use", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: currentVoucher.code }),
+      }).catch(() => {});
+    }
+
+    if (currentCustomer && orderTotal > 0) {
+      fetch("/api/loyalty/purchase-points", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: currentCustomer.member_id,
+          order_total: orderTotal,
+          order_id: orderId,
+        }),
+      }).catch(() => {});
+    }
+
     router.push("/admin/pos");
   };
 
   const handleCancel = async () => {
-    // Clear pending order when payment is cancelled
     await fetch('/api/cart/current', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -175,14 +207,12 @@ export default function PaymentPage() {
     setError(null);
   };
 
-  // Redirect if cart is empty
   useEffect(() => {
     if (cartItems.length === 0 && !order) {
       router.push("/admin/pos");
     }
   }, [cartItems, order, router]);
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -194,7 +224,6 @@ export default function PaymentPage() {
     );
   }
 
-  // Show CashPayment component after order created
   if (order && paymentMethod) {
     return (
       <div className="min-h-screen bg-gray-100 p-4">
@@ -209,13 +238,20 @@ export default function PaymentPage() {
     );
   }
 
-  // Payment method selection screen
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
-        {/* Header */}
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Select Payment Method</h1>
         <p className="text-gray-600 mb-6">How will the customer pay?</p>
+
+        {/* Customer Attribution */}
+        {customer && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <p className="text-sm font-semibold text-blue-800">{customer.name || customer.phone}</p>
+            {customer.name && <p className="text-xs text-blue-600">{customer.phone}</p>}
+            <p className="text-xs text-blue-500 mt-0.5">Purchase points will be awarded</p>
+          </div>
+        )}
 
         {/* Order Summary */}
         <div className="bg-gray-50 rounded-lg p-4 mb-6">
@@ -224,13 +260,40 @@ export default function PaymentPage() {
             <p className="text-lg text-gray-400 line-through">RM {retailTotal.toFixed(2)}</p>
           )}
           <p className="text-3xl font-bold text-gray-900">RM {finalTotal.toFixed(2)}</p>
-          {hasDiscount && (
+          {itemDiscount > 0 && (
             <p className="text-sm text-green-600 font-medium mt-1">
-              Saved RM {totalDiscount.toFixed(2)}
+              Item discounts: -RM {itemDiscount.toFixed(2)}
+            </p>
+          )}
+          {voucher && (
+            <p className="text-sm text-purple-600 font-medium mt-1">
+              Voucher ({voucher.code}): -RM {voucherAmount.toFixed(2)}
             </p>
           )}
           <p className="text-sm text-gray-600 mt-2">{cartItems.length} item(s)</p>
         </div>
+
+        {/* Voucher Section */}
+        {voucher ? (
+          <div className="flex items-center justify-between bg-purple-50 border border-purple-200 rounded-lg p-3 mb-6">
+            <div className="flex items-center gap-2">
+              <Gift className="w-5 h-5 text-purple-600" />
+              <div>
+                <p className="text-sm font-semibold text-purple-800">{voucher.code}</p>
+                <p className="text-xs text-purple-600">
+                  {voucher.type === 'fixed' ? `RM ${voucher.discount_value.toFixed(2)} off` : `${voucher.discount_value}% off`}
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setVoucher(null)} className="p-1 hover:bg-purple-100 rounded">
+              <X className="w-4 h-4 text-purple-600" />
+            </button>
+          </div>
+        ) : (
+          <div className="mb-6">
+            <p className="text-xs text-gray-400 text-center">Scan a voucher QR code to apply discount</p>
+          </div>
+        )}
 
         {/* Error Display */}
         {error && (

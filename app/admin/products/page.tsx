@@ -20,6 +20,7 @@ interface Product {
   imageUrl?: string;
   stockQuantity?: number | null;
   manageStock: boolean;
+  availableOnline: boolean;
 }
 
 export default function ProductsPage() {
@@ -301,6 +302,7 @@ function ProductModal({
     category: product?.category || '',
     basePrice: product?.currentPrice ?? '',
     manageStock: product?.manageStock ?? false,
+    availableOnline: product?.availableOnline ?? true,
     imageUrl: product?.imageUrl || '',
     supplier: product?.supplier || '',
     quantityPerCarton: product?.quantityPerCarton ?? '',
@@ -495,6 +497,19 @@ function ProductModal({
               />
               <label htmlFor="manageStock" className="text-sm font-medium text-gray-700">
                 Track inventory for this product
+              </label>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="availableOnline"
+                checked={formData.availableOnline}
+                onChange={(e) => setFormData({ ...formData, availableOnline: e.target.checked })}
+                className="w-4 h-4 text-green-600 border-gray-300 rounded"
+              />
+              <label htmlFor="availableOnline" className="text-sm font-medium text-gray-700">
+                Available for online ordering
               </label>
             </div>
           </div>

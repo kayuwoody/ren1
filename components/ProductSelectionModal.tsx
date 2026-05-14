@@ -10,6 +10,7 @@ interface SelectionGroup {
     id: string;
     name: string;
     basePrice: number;      // Product's base/sales price
+    priceAdjustment?: number; // Extra charge on top of combo override
   }>;
 }
 
@@ -28,6 +29,7 @@ interface RecipeConfig {
     id: string;
     name: string;
     basePrice: number;      // Product's base/sales price
+    priceAdjustment?: number; // Extra charge on top of combo override
   }>;
 }
 
@@ -87,19 +89,33 @@ export default function ProductSelectionModal({
   }, [isOpen, recipe]);
 
   // Calculate total price based on selections
+  const hasComboOverride = product.comboPriceOverride !== undefined &&
+    product.comboPriceOverride !== null &&
+    product.comboPriceOverride > 0;
+
   const calculateTotal = () => {
-    // If combo price override is set, use that exact price (ignore option adjustments)
-    if (product.comboPriceOverride !== undefined &&
-        product.comboPriceOverride !== null &&
-        product.comboPriceOverride > 0) {
-      return product.comboPriceOverride;
+    if (hasComboOverride) {
+      // Combo override: fixed base + sum of selected items' priceAdjustment
+      let adjustments = 0;
+      recipe.mandatoryGroups.forEach((group) => {
+        const selectedId = mandatorySelections[group.uniqueKey];
+        const selectedItem = group.items.find((item) => item.id === selectedId);
+        if (selectedItem) {
+          adjustments += selectedItem.priceAdjustment || 0;
+        }
+      });
+      recipe.optional.forEach((item) => {
+        if (optionalSelections.has(item.id)) {
+          adjustments += item.priceAdjustment || 0;
+        }
+      });
+      return product.comboPriceOverride! + adjustments;
     }
 
     // For non-combo products, start with the base product price
-    // For combos, only sum component prices
+    // For combos without override, sum component prices
     let total = isCombo ? 0 : product.basePrice;
 
-    // Add basePrices from mandatory selections
     recipe.mandatoryGroups.forEach((group) => {
       const selectedId = mandatorySelections[group.uniqueKey];
       const selectedItem = group.items.find((item) => item.id === selectedId);
@@ -108,7 +124,6 @@ export default function ProductSelectionModal({
       }
     });
 
-    // Add basePrices from optional selections
     recipe.optional.forEach((item) => {
       if (optionalSelections.has(item.id)) {
         total += item.basePrice;
@@ -254,7 +269,10 @@ export default function ProductSelectionModal({
                         />
                         <span className="ml-3 flex-1">{item.name}</span>
                         <span className="text-sm text-gray-600">
-                          RM {item.basePrice.toFixed(2)}
+                          {hasComboOverride
+                            ? (item.priceAdjustment ? `+RM ${item.priceAdjustment.toFixed(2)}` : 'Included')
+                            : `RM ${item.basePrice.toFixed(2)}`
+                          }
                         </span>
                       </label>
 
@@ -285,7 +303,10 @@ export default function ProductSelectionModal({
                                 />
                                 <span className="ml-2 flex-1">{nestedItem.name}</span>
                                 <span className="text-xs text-gray-600">
-                                  RM {nestedItem.basePrice.toFixed(2)}
+                                  {hasComboOverride
+                                    ? (nestedItem.priceAdjustment ? `+RM ${nestedItem.priceAdjustment.toFixed(2)}` : 'Included')
+                                    : `RM ${nestedItem.basePrice.toFixed(2)}`
+                                  }
                                 </span>
                               </label>
                             ))}
@@ -326,7 +347,10 @@ export default function ProductSelectionModal({
                     />
                     <span className="ml-3 flex-1">{item.name}</span>
                     <span className="text-sm text-gray-600">
-                      RM {item.basePrice.toFixed(2)}
+                      {hasComboOverride
+                        ? (item.priceAdjustment ? `+RM ${item.priceAdjustment.toFixed(2)}` : 'Included')
+                        : `RM ${item.basePrice.toFixed(2)}`
+                      }
                     </span>
                   </label>
                 ))}
@@ -354,7 +378,10 @@ export default function ProductSelectionModal({
                     />
                     <span className="ml-3 flex-1">{item.name}</span>
                     <span className="text-sm text-gray-600">
-                      RM {item.basePrice.toFixed(2)}
+                      {hasComboOverride
+                        ? (item.priceAdjustment ? `+RM ${item.priceAdjustment.toFixed(2)}` : 'Included')
+                        : `+RM ${item.basePrice.toFixed(2)}`
+                      }
                     </span>
                   </label>
                 ))}

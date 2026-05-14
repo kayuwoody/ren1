@@ -10,22 +10,23 @@ import { broadcastCartUpdate } from '@/lib/sse/cartStreamManager';
  */
 
 let currentCart: any[] = [];
-let pendingOrder: { orderId: string; items: any[] } | null = null;
+let currentVoucher: any = null;
+let pendingOrder: { orderId: string; items: any[]; voucher?: any } | null = null;
 
 export async function GET() {
-  // Return pending order items if they exist, otherwise return cart
-  // This keeps the customer display populated during checkout/payment
   if (pendingOrder && pendingOrder.items.length > 0) {
     return NextResponse.json({
       cart: pendingOrder.items,
       isPendingOrder: true,
-      orderId: pendingOrder.orderId
+      orderId: pendingOrder.orderId,
+      voucher: pendingOrder.voucher || null,
     });
   }
 
   return NextResponse.json({
     cart: currentCart,
-    isPendingOrder: false
+    isPendingOrder: false,
+    voucher: currentVoucher,
   });
 }
 
@@ -36,26 +37,28 @@ export async function POST(req: Request) {
     let cartUpdated = false;
     let pendingOrderUpdated = false;
 
+    if (body.voucher !== undefined) {
+      currentVoucher = body.voucher;
+    }
+
     // Update cart
     if (body.cart !== undefined) {
-      // IMPORTANT: If cart is being updated with new items (not empty),
-      // clear any stale pending order to prevent display from showing old order
       if (body.cart.length > 0 && pendingOrder !== null && body.setPendingOrder === undefined) {
         console.log(`🧹 Auto-clearing stale pending order (${pendingOrder.orderId}) due to new cart items`);
 
-        // First, broadcast empty cart to force display to reset
-        broadcastCartUpdate([], false);
+        broadcastCartUpdate([], false, null);
         console.log(`📺 Sent empty cart to reset display`);
 
-        // Clear the pending order
         pendingOrder = null;
         pendingOrderUpdated = true;
 
-        // Small delay to ensure empty cart is processed first
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
       currentCart = body.cart || [];
+      if (body.cart.length === 0) {
+        currentVoucher = null;
+      }
       cartUpdated = true;
       console.log(`🛒 Updated cart with ${currentCart.length} items`);
     }
@@ -65,28 +68,25 @@ export async function POST(req: Request) {
       if (body.setPendingOrder) {
         pendingOrder = {
           orderId: body.orderId,
-          items: body.items || []
+          items: body.items || [],
+          voucher: body.voucher ?? currentVoucher,
         };
         console.log(`📋 Set pending order: ${body.orderId} with ${body.items?.length || 0} items`);
 
-        // Broadcast pending order to display
-        broadcastCartUpdate(pendingOrder.items, true);
+        broadcastCartUpdate(pendingOrder.items, true, pendingOrder.voucher);
         pendingOrderUpdated = true;
       } else {
-        // Clear pending order (when payment is complete)
         console.log(`✅ Cleared pending order: ${pendingOrder?.orderId}`);
         pendingOrder = null;
+        currentVoucher = null;
         pendingOrderUpdated = true;
       }
     }
 
-    // Broadcast cart update if cart was updated and no pending order update occurred
-    // (if pending order was updated, we already broadcast in the pending order logic)
     if (cartUpdated && !pendingOrderUpdated) {
-      broadcastCartUpdate(currentCart, false);
+      broadcastCartUpdate(currentCart, false, currentVoucher);
     } else if (cartUpdated && pendingOrderUpdated && !body.setPendingOrder) {
-      // Special case: both cart cleared and pending order cleared (payment complete)
-      broadcastCartUpdate(currentCart, false);
+      broadcastCartUpdate(currentCart, false, currentVoucher);
     }
 
     if (cartUpdated || pendingOrderUpdated) {
