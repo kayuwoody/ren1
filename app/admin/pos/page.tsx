@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/cartContext';
 import { useBranch } from '@/context/branchContext';
@@ -17,10 +17,14 @@ import {
   DollarSign,
   Edit2,
   X,
-  TrendingUp
+  TrendingUp,
+  Check,
+  AlertCircle,
+  Star,
 } from 'lucide-react';
 import Link from 'next/link';
 import HoldOrderManager from '@/components/HoldOrderManager';
+import { useScanDetector } from '@/lib/hooks/useScanDetector';
 
 /**
  * Point of Sale (POS) Interface
@@ -54,6 +58,54 @@ export default function POSPage() {
   const [discountValue, setDiscountValue] = useState("");
   const [discountReason, setDiscountReason] = useState("");
   const [cogsData, setCogsData] = useState<Record<number, { totalCOGS: number; breakdown: any[] }>>({});
+  const [scanToast, setScanToast] = useState<{
+    type: 'success' | 'info' | 'error';
+    message: string;
+    sub?: string;
+  } | null>(null);
+  const scanCooldown = useRef(false);
+
+  const handleScan = useCallback(async (value: string) => {
+    if (scanCooldown.current) return;
+    scanCooldown.current = true;
+    setTimeout(() => { scanCooldown.current = false; }, 2000);
+
+    const cleaned = value.replace(/[^0-9+\-]/g, '');
+    const isPhone = /^(\+?60|0)\d{8,11}$/.test(cleaned);
+    if (!isPhone) return;
+
+    try {
+      const res = await fetch('/api/loyalty/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleaned }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setScanToast({ type: 'error', message: data.error || 'Scan failed' });
+      } else if (data.already_scanned_today) {
+        const name = data.member?.name || cleaned;
+        setScanToast({ type: 'info', message: `${name} already scanned today` });
+      } else {
+        const name = data.member?.name || cleaned;
+        const earned = data.results?.filter((r: any) => !r.skipped) || [];
+        const vouchers = earned.flatMap((r: any) => r.vouchers_issued || []);
+        let sub = earned.map((r: any) => `${r.program_name}: +${r.points_added}`).join(', ');
+        if (vouchers.length > 0) sub += ` | ${vouchers.length} voucher${vouchers.length > 1 ? 's' : ''} issued!`;
+        setScanToast({ type: 'success', message: `${name} — stamp recorded`, sub });
+      }
+    } catch {
+      setScanToast({ type: 'error', message: 'Scan failed — network error' });
+    }
+  }, []);
+
+  useScanDetector(handleScan);
+
+  useEffect(() => {
+    if (!scanToast) return;
+    const t = setTimeout(() => setScanToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [scanToast]);
 
   useEffect(() => {
     // Check admin authentication
@@ -553,6 +605,23 @@ export default function POSPage() {
           </div>
         </div>
       </div>
+
+      {/* Loyalty Scan Toast */}
+      {scanToast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-start gap-3 px-5 py-4 rounded-lg shadow-lg max-w-sm animate-in slide-in-from-right ${
+          scanToast.type === 'success' ? 'bg-green-600 text-white' :
+          scanToast.type === 'info' ? 'bg-blue-600 text-white' :
+          'bg-red-600 text-white'
+        }`}>
+          {scanToast.type === 'success' ? <Check className="w-5 h-5 mt-0.5 shrink-0" /> :
+           scanToast.type === 'info' ? <Star className="w-5 h-5 mt-0.5 shrink-0" /> :
+           <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />}
+          <div>
+            <p className="font-semibold text-sm">{scanToast.message}</p>
+            {scanToast.sub && <p className="text-xs opacity-90 mt-0.5">{scanToast.sub}</p>}
+          </div>
+        </div>
+      )}
 
       {/* Custom Discount Modal */}
       {discountModal.isOpen && (
