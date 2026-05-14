@@ -18,7 +18,7 @@ export function removeClient(controller: ReadableStreamDefaultController) {
   console.log('📺 Active clients:', Array.from(clients).map((c, i) => `Client-${i}`));
 }
 
-export function broadcastCartUpdate(cart: any[], isPendingOrder: boolean = false) {
+export function broadcastCartUpdate(cart: any[], isPendingOrder: boolean = false, voucher: any = null) {
   console.log(`📢 Broadcasting to ${clients.size} client(s):`, cart.length, 'items', isPendingOrder ? '(pending order)' : '');
 
   if (clients.size === 0) {
@@ -30,7 +30,8 @@ export function broadcastCartUpdate(cart: any[], isPendingOrder: boolean = false
   const message = `data: ${JSON.stringify({
     type: 'cart-update',
     cart,
-    isPendingOrder
+    isPendingOrder,
+    voucher,
   })}\n\n`;
   const encodedMessage = encoder.encode(message);
 

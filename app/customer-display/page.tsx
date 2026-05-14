@@ -5,6 +5,7 @@ import Image from "next/image";
 
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
+  const [voucher, setVoucher] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
@@ -47,14 +48,15 @@ export default function CustomerDisplayPage() {
 
           if (data.type === 'cart-update') {
             setCartItems(data.cart || []);
+            setVoucher(data.voucher || null);
             console.log('📺 Customer Display: Updated cart with', data.cart?.length || 0, 'items');
           } else if (data.type === 'connected') {
             console.log('📺 Customer Display: Connection confirmed by server');
-            // Fetch initial cart state
             fetch('/api/cart/current')
               .then(res => res.json())
               .then(data => {
                 setCartItems(data.cart || []);
+                setVoucher(data.voucher || null);
                 console.log('📺 Customer Display: Loaded initial cart with', data.cart?.length || 0, 'items');
               })
               .catch(err => console.error('Failed to fetch initial cart:', err));
@@ -105,7 +107,10 @@ export default function CustomerDisplayPage() {
 
   // Calculate totals
   const retailTotal = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
-  const finalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
+  const itemFinalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
+  const totalItemDiscount = retailTotal - itemFinalTotal;
+  const voucherAmount = voucher?.discount_amount ?? 0;
+  const finalTotal = Math.max(0, itemFinalTotal - voucherAmount);
   const totalDiscount = retailTotal - finalTotal;
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const hasDiscount = totalDiscount > 0;
@@ -287,15 +292,28 @@ export default function CustomerDisplayPage() {
               </div>
             )}
 
-            {/* Discount */}
-            {hasDiscount && (
+            {/* Item Discount */}
+            {totalItemDiscount > 0 && (
               <div className="flex items-center justify-between text-sm text-green-600">
                 <span className="flex items-center gap-1">
                   <span className="text-base">🎉</span>
                   Discount
                 </span>
                 <span className="font-semibold">
-                  -RM {totalDiscount.toFixed(2)}
+                  -RM {totalItemDiscount.toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            {/* Voucher Discount */}
+            {voucherAmount > 0 && (
+              <div className="flex items-center justify-between text-sm text-purple-600">
+                <span className="flex items-center gap-1">
+                  <span className="text-base">🎫</span>
+                  Voucher ({voucher?.code})
+                </span>
+                <span className="font-semibold">
+                  -RM {voucherAmount.toFixed(2)}
                 </span>
               </div>
             )}

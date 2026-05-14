@@ -21,7 +21,7 @@ const path = require('path');
 const envPath = path.join(__dirname, '..', '.env.local');
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf-8');
-  envContent.split('\n').forEach(line => {
+  envContent.split(/\r?\n/).forEach(line => {
     const match = line.match(/^([^#=]+)=(.*)$/);
     if (match) {
       const key = match[1].trim();
@@ -29,9 +29,13 @@ if (fs.existsSync(envPath)) {
       if (!process.env[key]) process.env[key] = value;
     }
   });
+} else {
+  console.error(`No .env.local found at: ${envPath}`);
+  console.error('Make sure you run this from the project root or scripts/ directory.');
+  process.exit(1);
 }
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
