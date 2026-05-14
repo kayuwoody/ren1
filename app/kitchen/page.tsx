@@ -34,6 +34,7 @@ export default function KitchenDisplayPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | string | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
 
   // Track which items are being worked on (kitchen staff can click to mark)
   const [itemsInProgress, setItemsInProgress] = useState<Set<string>>(new Set());
@@ -265,6 +266,44 @@ export default function KitchenDisplayPage() {
     }
   };
 
+  const clearAllOrders = async () => {
+    if (orders.length === 0) return;
+    if (!confirm(`Mark all ${orders.length} order(s) as ready?`)) return;
+
+    setClearingAll(true);
+    try {
+      await Promise.all(orders.map(order => {
+        if (order.source === 'online') {
+          return fetch(`/api/online-orders/${order.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'ready' }),
+          });
+        } else {
+          return fetch(`/api/orders/${order.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 'ready-for-pickup',
+              meta_data: [
+                { key: 'kitchen_ready', value: 'yes' },
+                { key: 'fulfillment_method', value: 'pickup' },
+                { key: 'ready_timestamp', value: new Date().toISOString() },
+              ],
+            }),
+          });
+        }
+      }));
+      setItemsInProgress(new Set());
+      await fetchOrders();
+    } catch (err: any) {
+      console.error('Error clearing all orders:', err);
+      alert(`Error: ${err.message}`);
+    } finally {
+      setClearingAll(false);
+    }
+  };
+
   // Get time elapsed since order creation
   const getOrderAge = (order: Order) => {
     const createdTime = new Date(order.date_created).getTime();
@@ -430,16 +469,22 @@ export default function KitchenDisplayPage() {
               </p>
             </div>
           </div>
-          <div className="text-right">
+          <div className="flex items-center gap-2">
+            {orders.length > 0 && (
+              <button
+                onClick={clearAllOrders}
+                disabled={clearingAll}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 disabled:bg-green-800 transition text-sm font-semibold"
+              >
+                {clearingAll ? '✅ Clearing...' : '✅ Clear All'}
+              </button>
+            )}
             <button
               onClick={fetchOrders}
               className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition text-sm"
             >
               🔄 Refresh
             </button>
-            <p className="text-gray-300 text-sm mt-2">
-              Auto-refresh: 10s
-            </p>
           </div>
         </div>
       </div>
