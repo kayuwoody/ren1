@@ -13,7 +13,7 @@ interface OrderItem {
   product_name: string;
   qty: number;
   unit_price: number;
-  mods: Record<string, string> | null;
+  mods: Record<string, any> | null;
 }
 
 interface OnlineOrder {
@@ -51,12 +51,24 @@ function timeAgo(dateStr: string): string {
   return `${hrs}h ${mins % 60}m ago`;
 }
 
-function formatMods(mods: Record<string, string> | null): string {
-  if (!mods) return '';
-  return Object.entries(mods)
-    .filter(([k, v]) => v && k !== 'notes')
-    .map(([, v]) => v)
-    .join(' · ');
+function formatMods(mods: Record<string, any> | null): { simple: string; comboItems: string[] } {
+  if (!mods) return { simple: '', comboItems: [] };
+
+  const simpleParts: string[] = [];
+  const comboItems: string[] = [];
+
+  for (const [key, value] of Object.entries(mods)) {
+    if (key === 'notes') continue;
+    if (key === 'combo_selections' && typeof value === 'object' && value !== null) {
+      for (const [, sel] of Object.entries(value as Record<string, { name?: string }>)) {
+        if (sel?.name) comboItems.push(sel.name);
+      }
+    } else if (typeof value === 'string' && value) {
+      simpleParts.push(value);
+    }
+  }
+
+  return { simple: simpleParts.join(' · '), comboItems };
 }
 
 function playAlertSound() {
@@ -681,7 +693,7 @@ function OrderCard({
 
       <div className="space-y-1.5 border-t pt-2" style={{ borderColor: '#F0EBE4' }}>
         {order.online_order_items?.map(item => {
-          const mods = formatMods(item.mods);
+          const { simple, comboItems } = formatMods(item.mods);
           const notes = item.mods?.notes;
           return (
             <div key={item.id}>
@@ -693,9 +705,15 @@ function OrderCard({
                   {item.product_name}
                 </span>
               </div>
-              {mods && (
-                <div className="ml-6 text-xs" style={{ color: '#546E7A' }}>{mods}</div>
+              {simple && (
+                <div className="ml-6 text-xs" style={{ color: '#546E7A' }}>{simple}</div>
               )}
+              {comboItems.length > 0 && comboItems.map((name, idx) => (
+                <div key={idx} className="ml-6 text-xs flex items-start" style={{ color: '#546E7A' }}>
+                  <span className="mr-1">→</span>
+                  <span>{name}</span>
+                </div>
+              ))}
               {notes && (
                 <div className="ml-6 text-xs italic" style={{ color: '#F58220' }}>Note: {notes}</div>
               )}
