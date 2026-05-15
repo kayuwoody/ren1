@@ -63,6 +63,7 @@ export default function ProductsSoldPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [hideStaffMeals, setHideStaffMeals] = useState(true);
+  const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
   const [sortField, setSortField] = useState<SortField>('quantity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,14 +83,14 @@ export default function ProductsSoldPage() {
 
   useEffect(() => {
     fetchReport();
-  }, [dateRange, startDate, endDate, hideStaffMeals]);
+  }, [dateRange, startDate, endDate, hideStaffMeals, source]);
 
   const fetchReport = async () => {
     setLoading(true);
     try {
-      let url = `/api/admin/products-sold?range=${dateRange}&hideStaffMeals=${hideStaffMeals}`;
+      let url = `/api/admin/products-sold?range=${dateRange}&hideStaffMeals=${hideStaffMeals}&source=${source}`;
       if (startDate && endDate) {
-        url = `/api/admin/products-sold?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}`;
+        url = `/api/admin/products-sold?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}&source=${source}`;
       }
 
       const res = await fetch(url);
@@ -311,6 +312,22 @@ export default function ProductsSoldPage() {
             >
               {hideStaffMeals ? '✓ Staff Meals Hidden' : 'Show Staff Meals'}
             </button>
+
+            <div className="flex rounded-lg overflow-hidden border border-gray-300">
+              {(['all', 'pos', 'online'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSource(s)}
+                  className={`px-3 py-2 text-sm font-medium transition ${
+                    source === s
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {s === 'all' ? 'All' : s === 'pos' ? 'POS' : 'Online'}
+                </button>
+              ))}
+            </div>
 
             <button
               onClick={exportToCSV}

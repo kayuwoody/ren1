@@ -63,7 +63,7 @@ export interface OrderWithItems extends LocalOrder {
  * Helpers
  * ---------------------------------------------------------------- */
 
-function buildDateFilter(
+export function buildDateFilter(
   range: string,
   startDateParam?: string | null,
   endDateParam?: string | null,
