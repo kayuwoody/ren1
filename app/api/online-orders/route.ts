@@ -11,7 +11,7 @@ export async function GET() {
         id, status, pickup_type, outlet_id,
         customer_name, customer_phone,
         total_paid, currency, reject_reason,
-        accepted_at, ready_at, created_at, updated_at,
+        accepted_at, ready_at, arrived_at, created_at, updated_at,
         online_order_items ( id, product_id, product_name, qty, unit_price, mods )
       `)
       .eq('outlet_id', 'main')

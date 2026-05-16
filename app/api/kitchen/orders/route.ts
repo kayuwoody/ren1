@@ -45,7 +45,7 @@ export async function GET(req: Request) {
         .from('online_orders')
         .select(`
           id, status, pickup_type, customer_name,
-          total_paid, created_at,
+          total_paid, created_at, arrived_at,
           online_order_items ( id, product_id, product_name, qty, unit_price, mods )
         `)
         .eq('outlet_id', 'main')
@@ -64,6 +64,7 @@ export async function GET(req: Request) {
             source: 'online' as const,
             pickup_type: order.pickup_type,
             customer_name: order.customer_name,
+            arrived_at: order.arrived_at,
             line_items: items.map(item => {
               const modsEntries: { key: string; value: string }[] = [];
               if (item.mods) {

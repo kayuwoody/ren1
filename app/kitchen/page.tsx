@@ -24,6 +24,7 @@ interface Order {
   source?: 'pos' | 'online';
   pickup_type?: string;
   customer_name?: string;
+  arrived_at?: string | null;
   line_items: OrderItem[];
   meta_data: Array<{ key: string; value: any }>;
 }
@@ -539,6 +540,11 @@ export default function KitchenDisplayPage() {
                     }`}>
                       {isOnline ? 'ONLINE' : 'POS'}
                     </span>
+                    {order.arrived_at && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold text-white bg-red-600 animate-pulse">
+                        ARRIVED
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     {isOnline ? (

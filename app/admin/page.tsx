@@ -58,14 +58,23 @@ export default function AdminDashboard() {
   const [catalogSyncing, setCatalogSyncing] = useState(false);
   const [catalogSyncResult, setCatalogSyncResult] = useState<string | null>(null);
   const [onlineOrderCount, setOnlineOrderCount] = useState(0);
+  const [hasArrivedCustomer, setHasArrivedCustomer] = useState(false);
 
   const fetchOnlineOrderCount = useCallback(async () => {
     try {
-      const { count, error } = await supabaseBrowser
-        .from('online_orders')
-        .select('id', { count: 'exact', head: true })
-        .in('status', ['pending', 'accepted', 'ready']);
-      if (!error && count !== null) setOnlineOrderCount(count);
+      const [countRes, arrivedRes] = await Promise.all([
+        supabaseBrowser
+          .from('online_orders')
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['pending', 'accepted', 'ready']),
+        supabaseBrowser
+          .from('online_orders')
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['accepted', 'ready'])
+          .not('arrived_at', 'is', null),
+      ]);
+      if (!countRes.error && countRes.count !== null) setOnlineOrderCount(countRes.count);
+      setHasArrivedCustomer((arrivedRes.count ?? 0) > 0);
     } catch {}
   }, []);
 
@@ -330,7 +339,12 @@ export default function AdminDashboard() {
               >
                 {onlineOrderCount > 0 && (
                   <span className="absolute -top-2 -right-2 bg-red-600 text-white text-sm font-bold rounded-full min-w-[28px] h-7 flex items-center justify-center px-2 shadow-lg animate-pulse">
-                    {onlineOrderCount}
+                    {hasArrivedCustomer && '! '}{onlineOrderCount}
+                  </span>
+                )}
+                {hasArrivedCustomer && onlineOrderCount === 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-sm font-bold rounded-full w-7 h-7 flex items-center justify-center shadow-lg animate-pulse">
+                    !
                   </span>
                 )}
                 <div className="flex items-center gap-3 mb-2">
