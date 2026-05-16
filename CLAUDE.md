@@ -1,5 +1,12 @@
 # Coffee Oasis POS System
 
+## Working With the User
+
+- **Suggestions are proposals, not instructions.** When the user suggests an approach, cross-check it technically — does it fit the architecture, are there edge cases, is there a simpler way? Flag concerns or alternatives before proceeding. Reach consensus first, then implement.
+- **Only ask questions when the answer changes what you do next.** Don't ask filler questions or seek confirmation you don't actually need.
+- **Confirm UI changes are working.** Don't report frontend work as done until the user confirms it works on their end. The POS runs on a separate Windows PC.
+- **Be direct and concise.** Skip unnecessary preamble, summaries of what was just said, and verbose explanations.
+
 ## Overview
 
 Physical point-of-sale system for Coffee Oasis, a grab-and-go coffee shop in Malaysia. Runs on a local Windows PC with multi-screen setup (POS, customer display, kitchen display). Core POS data is local SQLite — no cloud dependency for in-store operations. Online ordering syncs via Supabase Realtime (shared database with customer-facing app).
