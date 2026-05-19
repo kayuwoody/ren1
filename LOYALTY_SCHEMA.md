@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS loyalty_transactions (
   points INTEGER NOT NULL,        -- positive = earn, negative = redeem/expire
   description TEXT,
   reference_id TEXT,
+  source TEXT NOT NULL DEFAULT 'pos',  -- 'pos' | 'online' | 'system'
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

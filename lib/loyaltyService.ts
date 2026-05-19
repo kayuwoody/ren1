@@ -179,12 +179,11 @@ export async function awardPoints(
     points,
     description: opts.description,
     reference_id: opts.reference_id,
+    source: 'pos',
     created_at: now,
   };
-  console.log('📝 Inserting loyalty_transaction:', JSON.stringify(txPayload));
   const { error: txError } = await supabase.from('loyalty_transactions').insert(txPayload);
   if (txError) console.error('❌ Failed to insert loyalty transaction:', JSON.stringify(txError));
-  else console.log('✅ loyalty_transaction inserted successfully');
 
   const vouchers_issued = [];
   for (let i = 0; i < vouchersToIssue; i++) {
