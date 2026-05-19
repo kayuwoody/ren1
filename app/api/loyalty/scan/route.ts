@@ -36,13 +36,18 @@ export async function POST(req: Request) {
   const now = new Date().toISOString();
 
   const { start, end } = todayRangeKL();
-  const { data: todayScans } = await supabase
+  console.log(`🔍 Dedup check: member=${member.id}, range=${start} to ${end}`);
+
+  const { data: todayScans, error: scanQueryErr } = await supabase
     .from('loyalty_transactions')
     .select('program_id')
     .eq('member_id', member.id)
     .eq('type', 'earn')
     .gte('created_at', start)
     .lt('created_at', end);
+
+  if (scanQueryErr) console.error('❌ Dedup query error:', scanQueryErr);
+  console.log(`🔍 Found ${todayScans?.length || 0} existing scans today:`, todayScans?.map(t => t.program_id));
 
   const scannedProgramIds = new Set((todayScans || []).map(t => t.program_id));
 

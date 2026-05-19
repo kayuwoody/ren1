@@ -226,12 +226,17 @@ export async function POST(req: Request) {
     // Auto-create pass enrollments if purchased products match a pass program
     try {
       const purchasedProductIds = itemRows.map(item => item.productId);
-      const { data: passPrograms } = await supabase
+      console.log(`🎟️ Checking pass programs for products:`, purchasedProductIds);
+
+      const { data: passPrograms, error: passQueryErr } = await supabase
         .from('loyalty_programs')
         .select('*')
         .eq('trigger_type', 'pass')
         .eq('is_active', true)
         .in('pass_product_id', purchasedProductIds);
+
+      if (passQueryErr) console.error('❌ Pass program query error:', passQueryErr);
+      console.log(`🎟️ Matching pass programs:`, passPrograms?.length || 0, passPrograms?.map(p => p.name));
 
       if (passPrograms && passPrograms.length > 0) {
         const getMeta = (key: string) =>
