@@ -371,11 +371,11 @@ function ProgramCard({ program: p, eligibleProducts, onToggle, onProductsUpdated
     if (!isPass) return;
     fetch('/api/products')
       .then(r => r.json())
-      .then(data => {
-        const prods = data.products || [];
-        setAllProducts(prods);
+      .then(prods => {
+        const list = Array.isArray(prods) ? prods : (prods.products || []);
+        setAllProducts(list);
         const map: Record<string, string> = {};
-        for (const prod of prods) {
+        for (const prod of list) {
           if (eligibleProducts.includes(prod.id)) {
             map[prod.id] = prod.name;
           }
@@ -579,7 +579,7 @@ function EditProductsModal({ programId, programName, currentProductIds, allProdu
                     {p.name}
                   </span>
                   <span className="flex items-center gap-2">
-                    <span className="text-gray-400 text-xs">RM {p.basePrice.toFixed(2)}</span>
+                    <span className="text-gray-400 text-xs">RM {parseFloat(p.price).toFixed(2)}</span>
                     {isSelected && <Check className="w-4 h-4 text-teal-600" />}
                   </span>
                 </button>
@@ -624,8 +624,8 @@ function EditProductsModal({ programId, programName, currentProductIds, allProdu
 interface CatalogProduct {
   id: string;
   name: string;
-  basePrice: number;
-  category: string;
+  price: string;
+  categories: Array<{ slug: string; name: string }>;
 }
 
 function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
@@ -653,7 +653,10 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
     if (isPass && products.length === 0) {
       fetch('/api/products')
         .then(r => r.json())
-        .then(data => setProducts(data.products || []))
+        .then(data => {
+          const list = Array.isArray(data) ? data : (data.products || []);
+          setProducts(list);
+        })
         .catch(() => {});
     }
   }, [isPass, products.length]);
@@ -792,7 +795,7 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
                 >
                   <option value="">— None (manual creation only) —</option>
                   {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} — RM {p.basePrice.toFixed(2)}</option>
+                    <option key={p.id} value={p.id}>{p.name} — RM {parseFloat(p.price).toFixed(2)}</option>
                   ))}
                 </select>
               </div>
@@ -831,7 +834,7 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
                             {p.name}
                           </span>
                           <span className="flex items-center gap-2">
-                            <span className="text-gray-400 text-xs">RM {p.basePrice.toFixed(2)}</span>
+                            <span className="text-gray-400 text-xs">RM {parseFloat(p.price).toFixed(2)}</span>
                             {selected && <Check className="w-4 h-4 text-teal-600" />}
                           </span>
                         </button>
