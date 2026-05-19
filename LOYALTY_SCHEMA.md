@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS loyalty_programs (
   voucher_validity_days INTEGER NOT NULL DEFAULT 90,
   voucher_min_order NUMERIC,
   pass_type TEXT CHECK (pass_type IN ('use_based', 'time_based')),
+  pass_product_id TEXT,                       -- local product UUID that triggers pass creation on purchase
   is_active BOOLEAN NOT NULL DEFAULT true,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -138,6 +139,7 @@ ALTER TABLE loyalty_programs ADD CONSTRAINT loyalty_programs_trigger_type_check
 -- Add pass fields to loyalty_programs
 ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS pass_type TEXT
   CHECK (pass_type IN ('use_based', 'time_based'));
+ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS pass_product_id TEXT;
 
 -- Add pass fields to loyalty_member_programs
 ALTER TABLE loyalty_member_programs ADD COLUMN IF NOT EXISTS code TEXT UNIQUE;

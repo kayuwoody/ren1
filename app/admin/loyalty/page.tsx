@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Star, QrCode, Settings, Users, Gift, ChevronRight, Plus, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Star, QrCode, Settings, Users, Gift, ChevronRight, Plus, ExternalLink, Ticket, Search, X, Check } from 'lucide-react';
 
 interface LoyaltyProgram {
   id: string;
   name: string;
   description: string | null;
-  trigger_type: 'scan' | 'purchase' | 'manual';
+  trigger_type: 'scan' | 'purchase' | 'manual' | 'pass';
   points_per_trigger: number;
   points_per_rm: number | null;
   threshold: number;
@@ -17,6 +17,8 @@ interface LoyaltyProgram {
   voucher_discount_value: number;
   voucher_validity_days: number;
   voucher_min_order: number | null;
+  pass_type: 'use_based' | 'time_based' | null;
+  pass_product_id: string | null;
   is_active: boolean;
   sort_order: number;
 }
@@ -59,6 +61,7 @@ export default function LoyaltyPage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [scanning, setScanning] = useState(false);
   const [showCreateProgram, setShowCreateProgram] = useState(false);
+  const [programProducts, setProgramProducts] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     fetchPrograms();
@@ -73,6 +76,14 @@ export default function LoyaltyPage() {
     if (res.ok) {
       const data = await res.json();
       setPrograms(data.programs);
+      const passPrograms = (data.programs as LoyaltyProgram[]).filter(p => p.trigger_type === 'pass');
+      for (const p of passPrograms) {
+        const r = await fetch(`/api/loyalty/program-products?program_id=${p.id}`);
+        if (r.ok) {
+          const d = await r.json();
+          setProgramProducts(prev => ({ ...prev, [p.id]: d.product_ids }));
+        }
+      }
     }
   }
 
@@ -322,53 +333,12 @@ export default function LoyaltyPage() {
             )}
 
             {programs.map(p => (
-              <div key={p.id} className={`bg-white rounded-lg shadow p-5 ${!p.is_active ? 'opacity-60' : ''}`}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-lg">{p.name}</h3>
-                      <span className={`px-2 py-0.5 rounded text-xs ${
-                        p.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {p.is_active ? 'Active' : 'Disabled'}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-600 capitalize">
-                        {p.trigger_type}
-                      </span>
-                    </div>
-                    {p.description && <p className="text-sm text-gray-500 mt-1">{p.description}</p>}
-                  </div>
-                  <button
-                    onClick={() => toggleProgram(p)}
-                    className={`px-3 py-1 text-sm rounded ${
-                      p.is_active ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
-                    }`}
-                  >
-                    {p.is_active ? 'Disable' : 'Enable'}
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm">
-                  <div>
-                    <p className="text-gray-500">Points/trigger</p>
-                    <p className="font-medium">{p.points_per_trigger}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Threshold</p>
-                    <p className="font-medium">{p.threshold} pts</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Reward</p>
-                    <p className="font-medium">
-                      {p.voucher_type === 'fixed' ? `RM ${p.voucher_discount_value.toFixed(2)}` : `${p.voucher_discount_value}%`} off
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Voucher valid</p>
-                    <p className="font-medium">{p.voucher_validity_days} days</p>
-                  </div>
-                </div>
-              </div>
+              <ProgramCard
+                key={p.id}
+                program={p}
+                eligibleProducts={programProducts[p.id] || []}
+                onToggle={() => toggleProgram(p)}
+              />
             ))}
           </div>
         )}
@@ -384,39 +354,209 @@ export default function LoyaltyPage() {
   );
 }
 
+function ProgramCard({ program: p, eligibleProducts, onToggle }: {
+  program: LoyaltyProgram;
+  eligibleProducts: string[];
+  onToggle: () => void;
+}) {
+  const isPass = p.trigger_type === 'pass';
+  const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [triggerProductName, setTriggerProductName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isPass) return;
+    if (eligibleProducts.length > 0) {
+      fetch('/api/products')
+        .then(r => r.json())
+        .then(data => {
+          const map: Record<string, string> = {};
+          for (const prod of data.products || []) {
+            if (eligibleProducts.includes(prod.id)) {
+              map[prod.id] = prod.name;
+            }
+            if (p.pass_product_id && prod.id === p.pass_product_id) {
+              setTriggerProductName(prod.name);
+            }
+          }
+          setProductNames(map);
+        })
+        .catch(() => {});
+    }
+    if (p.pass_product_id && eligibleProducts.length === 0) {
+      fetch('/api/products')
+        .then(r => r.json())
+        .then(data => {
+          const prod = (data.products || []).find((pr: any) => pr.id === p.pass_product_id);
+          if (prod) setTriggerProductName(prod.name);
+        })
+        .catch(() => {});
+    }
+  }, [isPass, eligibleProducts, p.pass_product_id]);
+
+  return (
+    <div className={`bg-white rounded-lg shadow p-5 ${!p.is_active ? 'opacity-60' : ''}`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-lg">{p.name}</h3>
+            <span className={`px-2 py-0.5 rounded text-xs ${
+              p.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {p.is_active ? 'Active' : 'Disabled'}
+            </span>
+            <span className={`px-2 py-0.5 rounded text-xs capitalize ${
+              isPass ? 'bg-teal-100 text-teal-600' : 'bg-blue-100 text-blue-600'
+            }`}>
+              {isPass ? (p.pass_type === 'time_based' ? 'time pass' : 'use pass') : p.trigger_type}
+            </span>
+          </div>
+          {p.description && <p className="text-sm text-gray-500 mt-1">{p.description}</p>}
+        </div>
+        <button
+          onClick={onToggle}
+          className={`px-3 py-1 text-sm rounded ${
+            p.is_active ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+          }`}
+        >
+          {p.is_active ? 'Disable' : 'Enable'}
+        </button>
+      </div>
+
+      {isPass ? (
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-gray-500">Uses per pass</p>
+              <p className="font-medium">{p.points_per_trigger}</p>
+            </div>
+            <div>
+              <p className="text-gray-500">Pass type</p>
+              <p className="font-medium capitalize">{p.pass_type?.replace('_', '-') || '—'}</p>
+            </div>
+            {triggerProductName && (
+              <div>
+                <p className="text-gray-500">Sold as</p>
+                <p className="font-medium">{triggerProductName}</p>
+              </div>
+            )}
+          </div>
+          {eligibleProducts.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Eligible products ({eligibleProducts.length})</p>
+              <div className="flex flex-wrap gap-1">
+                {eligibleProducts.map(pid => (
+                  <span key={pid} className="px-2 py-0.5 bg-teal-50 text-teal-700 text-xs rounded">
+                    {productNames[pid] || pid.slice(0, 8)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm">
+          <div>
+            <p className="text-gray-500">Points/trigger</p>
+            <p className="font-medium">{p.points_per_trigger}</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Threshold</p>
+            <p className="font-medium">{p.threshold} pts</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Reward</p>
+            <p className="font-medium">
+              {p.voucher_type === 'fixed' ? `RM ${p.voucher_discount_value.toFixed(2)}` : `${p.voucher_discount_value}%`} off
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500">Voucher valid</p>
+            <p className="font-medium">{p.voucher_validity_days} days</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface CatalogProduct {
+  id: string;
+  name: string;
+  basePrice: number;
+  category: string;
+}
+
 function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '',
     description: '',
-    trigger_type: 'scan' as 'scan' | 'purchase' | 'manual',
+    trigger_type: 'scan' as 'scan' | 'purchase' | 'manual' | 'pass',
     points_per_trigger: '1',
     threshold: '10',
     voucher_type: 'fixed' as 'fixed' | 'percent',
     voucher_discount_value: '5',
     voucher_validity_days: '90',
     voucher_min_order: '',
+    pass_type: 'use_based' as 'use_based' | 'time_based',
+    pass_product_id: '',
+    eligible_product_ids: [] as string[],
   });
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [productSearch, setProductSearch] = useState('');
+
+  const isPass = form.trigger_type === 'pass';
+
+  useEffect(() => {
+    if (isPass && products.length === 0) {
+      fetch('/api/products')
+        .then(r => r.json())
+        .then(data => setProducts(data.products || []))
+        .catch(() => {});
+    }
+  }, [isPass, products.length]);
+
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  function toggleEligibleProduct(id: string) {
+    setForm(prev => ({
+      ...prev,
+      eligible_product_ids: prev.eligible_product_ids.includes(id)
+        ? prev.eligible_product_ids.filter(x => x !== id)
+        : [...prev.eligible_product_ids, id],
+    }));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
 
     try {
+      const payload: any = {
+        name: form.name,
+        description: form.description || null,
+        trigger_type: form.trigger_type,
+        points_per_trigger: parseInt(form.points_per_trigger) || 1,
+      };
+
+      if (isPass) {
+        payload.pass_type = form.pass_type;
+        payload.pass_product_id = form.pass_product_id || null;
+        payload.eligible_product_ids = form.eligible_product_ids;
+      } else {
+        payload.threshold = parseInt(form.threshold) || 10;
+        payload.voucher_type = form.voucher_type;
+        payload.voucher_discount_value = parseFloat(form.voucher_discount_value) || 0;
+        payload.voucher_validity_days = parseInt(form.voucher_validity_days) || 90;
+        payload.voucher_min_order = form.voucher_min_order ? parseFloat(form.voucher_min_order) : null;
+      }
+
       const res = await fetch('/api/loyalty/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          description: form.description || null,
-          trigger_type: form.trigger_type,
-          points_per_trigger: parseInt(form.points_per_trigger) || 1,
-          threshold: parseInt(form.threshold) || 10,
-          voucher_type: form.voucher_type,
-          voucher_discount_value: parseFloat(form.voucher_discount_value) || 0,
-          voucher_validity_days: parseInt(form.voucher_validity_days) || 90,
-          voucher_min_order: form.voucher_min_order ? parseFloat(form.voucher_min_order) : null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -432,7 +572,7 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">New Loyalty Program</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -442,7 +582,7 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
               value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
               className="w-full px-3 py-2 border rounded-lg"
-              placeholder="e.g. Visit Stamps"
+              placeholder={isPass ? 'e.g. 5 Drink Pass' : 'e.g. Visit Stamps'}
               required
             />
           </div>
@@ -454,12 +594,12 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
               className="w-full px-3 py-2 border rounded-lg"
-              placeholder="e.g. Earn 1 stamp per visit"
+              placeholder={isPass ? 'e.g. Redeem 5 drinks from eligible menu' : 'e.g. Earn 1 stamp per visit'}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Trigger Type</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Program Type</label>
             <select
               value={form.trigger_type}
               onChange={e => setForm({ ...form, trigger_type: e.target.value as any })}
@@ -468,84 +608,191 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
               <option value="scan">Scan (POS QR scan)</option>
               <option value="purchase">Purchase (auto on payment)</option>
               <option value="manual">Manual (staff awards)</option>
+              <option value="pass">Pass (drink/product pass)</option>
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Points Per Trigger</label>
-              <input
-                type="number"
-                min="1"
-                value={form.points_per_trigger}
-                onChange={e => setForm({ ...form, points_per_trigger: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Threshold (pts)</label>
-              <input
-                type="number"
-                min="1"
-                value={form.threshold}
-                onChange={e => setForm({ ...form, threshold: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-          </div>
+          {isPass ? (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Uses Per Pass</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.points_per_trigger}
+                    onChange={e => setForm({ ...form, points_per_trigger: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pass Type</label>
+                  <select
+                    value={form.pass_type}
+                    onChange={e => setForm({ ...form, pass_type: e.target.value as any })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="use_based">Use-based (top-up allowed)</option>
+                    <option value="time_based">Time-based (no top-up while active)</option>
+                  </select>
+                </div>
+              </div>
 
-          <hr />
-          <h3 className="font-medium text-gray-700">Reward Voucher</h3>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Trigger Product
+                  <span className="text-gray-400 font-normal ml-1">(product that creates this pass when purchased)</span>
+                </label>
+                <select
+                  value={form.pass_product_id}
+                  onChange={e => setForm({ ...form, pass_product_id: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">— None (manual creation only) —</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} — RM {p.basePrice.toFixed(2)}</option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Discount Type</label>
-              <select
-                value={form.voucher_type}
-                onChange={e => setForm({ ...form, voucher_type: e.target.value as 'fixed' | 'percent' })}
-                className="w-full px-3 py-2 border rounded-lg"
-              >
-                <option value="fixed">Fixed (RM)</option>
-                <option value="percent">Percentage (%)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Value {form.voucher_type === 'fixed' ? '(RM)' : '(%)'}
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.voucher_discount_value}
-                onChange={e => setForm({ ...form, voucher_discount_value: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Valid For (days)</label>
-              <input
-                type="number"
-                min="1"
-                value={form.voucher_validity_days}
-                onChange={e => setForm({ ...form, voucher_validity_days: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Min Order (RM)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.voucher_min_order}
-                onChange={e => setForm({ ...form, voucher_min_order: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-                placeholder="None"
-              />
-            </div>
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Eligible Products
+                  <span className="text-gray-400 font-normal ml-1">({form.eligible_product_ids.length} selected)</span>
+                </label>
+                <div className="relative mb-2">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={productSearch}
+                    onChange={e => setProductSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm"
+                    placeholder="Search products..."
+                  />
+                </div>
+                <div className="border rounded-lg max-h-48 overflow-y-auto">
+                  {filteredProducts.length === 0 ? (
+                    <p className="p-3 text-sm text-gray-400 text-center">No products found</p>
+                  ) : (
+                    filteredProducts.map(p => {
+                      const selected = form.eligible_product_ids.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => toggleEligibleProduct(p.id)}
+                          className={`w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 border-b last:border-b-0 ${
+                            selected ? 'bg-teal-50' : ''
+                          }`}
+                        >
+                          <span className={selected ? 'text-teal-700 font-medium' : 'text-gray-700'}>
+                            {p.name}
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <span className="text-gray-400 text-xs">RM {p.basePrice.toFixed(2)}</span>
+                            {selected && <Check className="w-4 h-4 text-teal-600" />}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                {form.eligible_product_ids.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {form.eligible_product_ids.map(id => {
+                      const p = products.find(x => x.id === id);
+                      return (
+                        <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-100 text-teal-700 text-xs rounded">
+                          {p?.name || id.slice(0, 8)}
+                          <button type="button" onClick={() => toggleEligibleProduct(id)}>
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Points Per Trigger</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.points_per_trigger}
+                    onChange={e => setForm({ ...form, points_per_trigger: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Threshold (pts)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.threshold}
+                    onChange={e => setForm({ ...form, threshold: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+              </div>
+
+              <hr />
+              <h3 className="font-medium text-gray-700">Reward Voucher</h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Type</label>
+                  <select
+                    value={form.voucher_type}
+                    onChange={e => setForm({ ...form, voucher_type: e.target.value as 'fixed' | 'percent' })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="fixed">Fixed (RM)</option>
+                    <option value="percent">Percentage (%)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Value {form.voucher_type === 'fixed' ? '(RM)' : '(%)'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.voucher_discount_value}
+                    onChange={e => setForm({ ...form, voucher_discount_value: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Valid For (days)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.voucher_validity_days}
+                    onChange={e => setForm({ ...form, voucher_validity_days: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Min Order (RM)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.voucher_min_order}
+                    onChange={e => setForm({ ...form, voucher_min_order: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="None"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 py-2 border rounded-lg hover:bg-gray-50" disabled={saving}>

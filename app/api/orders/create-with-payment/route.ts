@@ -4,6 +4,8 @@ import { db } from "@/lib/db/init";
 import { v4 as uuidv4 } from "uuid";
 import { getProduct, getProductByWcId } from "@/lib/db/productService";
 import { calculateProductCOGS, recordProductSale } from "@/lib/db/inventoryConsumptionService";
+import { supabase } from "@/lib/supabase";
+import { upsertMember, createOrTopUpPass } from "@/lib/loyaltyService";
 
 /**
  * POST /api/orders/create-with-payment
@@ -219,6 +221,42 @@ export async function POST(req: Request) {
       console.log(`📦 Inventory consumption recorded for order #${orderNumber}`);
     } catch (consumptionErr) {
       console.error('⚠️ Error recording consumption (order still created):', consumptionErr);
+    }
+
+    // Auto-create pass enrollments if purchased products match a pass program
+    try {
+      const purchasedProductIds = itemRows.map(item => item.productId);
+      const { data: passPrograms } = await supabase
+        .from('loyalty_programs')
+        .select('*')
+        .eq('trigger_type', 'pass')
+        .eq('is_active', true)
+        .in('pass_product_id', purchasedProductIds);
+
+      if (passPrograms && passPrograms.length > 0) {
+        const getMeta = (key: string) =>
+          meta_data?.find((m: any) => m.key === key)?.value;
+        const memberId = getMeta('_loyalty_member_id');
+        const memberPhone = getMeta('_loyalty_member_phone');
+
+        if (memberPhone) {
+          const member = await upsertMember(memberPhone, getMeta('_loyalty_member_name') || undefined);
+
+          for (const program of passPrograms) {
+            const matchingItem = itemRows.find(item => item.productId === program.pass_product_id);
+            const qty = matchingItem?.quantity || 1;
+            const usesPerPass = program.points_per_trigger || 1;
+            const totalUses = usesPerPass * qty;
+
+            const result = await createOrTopUpPass(member, program, { uses: totalUses });
+            console.log(`🎟️ Pass ${result.is_new ? 'created' : 'topped up'}: ${program.name} — ${result.uses_remaining} uses, code: ${result.code}`);
+          }
+        } else {
+          console.log('⚠️ Pass product purchased but no member linked — pass not auto-created');
+        }
+      }
+    } catch (passErr) {
+      console.error('⚠️ Error auto-creating pass (order still created):', passErr);
     }
 
     return NextResponse.json({
