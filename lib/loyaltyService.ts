@@ -172,7 +172,7 @@ export async function awardPoints(
     })
     .eq('id', enrollment.id);
 
-  const { error: txError } = await supabase.from('loyalty_transactions').insert({
+  const txPayload = {
     member_id: member.id,
     program_id: program.id,
     type: opts.type,
@@ -180,8 +180,11 @@ export async function awardPoints(
     description: opts.description,
     reference_id: opts.reference_id,
     created_at: now,
-  });
-  if (txError) console.error('Failed to insert loyalty transaction:', txError);
+  };
+  console.log('📝 Inserting loyalty_transaction:', JSON.stringify(txPayload));
+  const { error: txError } = await supabase.from('loyalty_transactions').insert(txPayload);
+  if (txError) console.error('❌ Failed to insert loyalty transaction:', JSON.stringify(txError));
+  else console.log('✅ loyalty_transaction inserted successfully');
 
   const vouchers_issued = [];
   for (let i = 0; i < vouchersToIssue; i++) {
