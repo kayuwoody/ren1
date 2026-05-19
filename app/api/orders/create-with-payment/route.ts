@@ -227,6 +227,7 @@ export async function POST(req: Request) {
     try {
       const purchasedProductIds = itemRows.map(item => item.productId);
       console.log(`🎟️ Checking pass programs for products:`, purchasedProductIds);
+      console.log(`🎟️ Order meta_data:`, meta_data);
 
       const { data: passPrograms, error: passQueryErr } = await supabase
         .from('loyalty_programs')
