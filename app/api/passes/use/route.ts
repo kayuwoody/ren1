@@ -8,28 +8,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'pass_id, order_id, and product_ids required' }, { status: 400 });
   }
 
-  const { data: pass, error } = await supabase
-    .from('member_passes')
-    .select('id, uses_remaining, is_active, expires_at, program_id')
+  const { data: enrollment, error } = await supabase
+    .from('loyalty_member_programs')
+    .select('id, points_balance, is_active, expires_at, program_id')
     .eq('id', pass_id)
     .single();
 
-  if (error || !pass) {
+  if (error || !enrollment) {
     return NextResponse.json({ error: 'Pass not found' }, { status: 404 });
   }
 
-  if (!pass.is_active || pass.uses_remaining <= 0) {
+  if (!enrollment.is_active || enrollment.points_balance <= 0) {
     return NextResponse.json({ error: 'Pass is not usable' }, { status: 400 });
   }
 
-  if (pass.expires_at && new Date(pass.expires_at) < new Date()) {
+  if (enrollment.expires_at && new Date(enrollment.expires_at) < new Date()) {
     return NextResponse.json({ error: 'Pass has expired' }, { status: 400 });
   }
 
   const { data: programProducts } = await supabase
     .from('loyalty_program_products')
     .select('product_id')
-    .eq('program_id', pass.program_id);
+    .eq('program_id', enrollment.program_id);
 
   const eligibleSet = new Set((programProducts || []).map(p => p.product_id));
   const validProductIds = product_ids.filter((id: string) => eligibleSet.has(id));
@@ -38,14 +38,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No eligible products in this order' }, { status: 400 });
   }
 
-  const usesToDeduct = Math.min(validProductIds.length, pass.uses_remaining);
+  const usesToDeduct = Math.min(validProductIds.length, enrollment.points_balance);
   const productsToApply = validProductIds.slice(0, usesToDeduct);
+  const newBalance = enrollment.points_balance - usesToDeduct;
 
   const { error: updateErr } = await supabase
-    .from('member_passes')
+    .from('loyalty_member_programs')
     .update({
-      uses_remaining: pass.uses_remaining - usesToDeduct,
-      is_active: pass.uses_remaining - usesToDeduct > 0,
+      points_balance: newBalance,
+      is_active: newBalance > 0,
       updated_at: new Date().toISOString(),
     })
     .eq('id', pass_id);
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
   }
 
   const usageRows = productsToApply.map((productId: string) => ({
-    pass_id,
+    enrollment_id: pass_id,
     order_id,
     product_id: productId,
     used_at: new Date().toISOString(),
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     success: true,
     uses_deducted: usesToDeduct,
-    uses_remaining: pass.uses_remaining - usesToDeduct,
+    uses_remaining: newBalance,
     products_applied: productsToApply,
   });
 }
