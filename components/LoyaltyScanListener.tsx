@@ -35,16 +35,26 @@ export default function LoyaltyScanListener() {
         const data = await res.json();
         if (!res.ok) {
           setToast({ type: 'error', message: data.error || 'Scan failed' });
-        } else if (data.already_scanned_today) {
-          const name = data.member?.name || cleaned;
-          setToast({ type: 'info', message: `${name} already scanned today` });
         } else {
-          const name = data.member?.name || cleaned;
-          const earned = data.results?.filter((r: any) => !r.skipped) || [];
-          const vouchers = earned.flatMap((r: any) => r.vouchers_issued || []);
-          let sub = earned.map((r: any) => `${r.program_name}: +${r.points_added}`).join(', ');
-          if (vouchers.length > 0) sub += ` | ${vouchers.length} voucher${vouchers.length > 1 ? 's' : ''} issued!`;
-          setToast({ type: 'success', message: `${name} — stamp recorded`, sub });
+          if (data.member) {
+            setCustomer({
+              member_id: data.member.id,
+              phone: data.member.phone,
+              name: data.member.name,
+            });
+          }
+
+          if (data.already_scanned_today) {
+            const name = data.member?.name || cleaned;
+            setToast({ type: 'info', message: `${name} already scanned today` });
+          } else {
+            const name = data.member?.name || cleaned;
+            const earned = data.results?.filter((r: any) => !r.skipped) || [];
+            const vouchers = earned.flatMap((r: any) => r.vouchers_issued || []);
+            let sub = earned.map((r: any) => `${r.program_name}: +${r.points_added}`).join(', ');
+            if (vouchers.length > 0) sub += ` | ${vouchers.length} voucher${vouchers.length > 1 ? 's' : ''} issued!`;
+            setToast({ type: 'success', message: `${name} — stamp recorded`, sub });
+          }
         }
       } catch {
         setToast({ type: 'error', message: 'Scan failed — network error' });
