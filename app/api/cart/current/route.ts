@@ -11,7 +11,8 @@ import { broadcastCartUpdate } from '@/lib/sse/cartStreamManager';
 
 let currentCart: any[] = [];
 let currentVoucher: any = null;
-let pendingOrder: { orderId: string; items: any[]; voucher?: any } | null = null;
+let currentPass: any = null;
+let pendingOrder: { orderId: string; items: any[]; voucher?: any; pass?: any } | null = null;
 
 export async function GET() {
   if (pendingOrder && pendingOrder.items.length > 0) {
@@ -20,6 +21,7 @@ export async function GET() {
       isPendingOrder: true,
       orderId: pendingOrder.orderId,
       voucher: pendingOrder.voucher || null,
+      pass: pendingOrder.pass || null,
     });
   }
 
@@ -27,6 +29,7 @@ export async function GET() {
     cart: currentCart,
     isPendingOrder: false,
     voucher: currentVoucher,
+    pass: currentPass,
   });
 }
 
@@ -40,13 +43,16 @@ export async function POST(req: Request) {
     if (body.voucher !== undefined) {
       currentVoucher = body.voucher;
     }
+    if (body.pass !== undefined) {
+      currentPass = body.pass;
+    }
 
     // Update cart
     if (body.cart !== undefined) {
       if (body.cart.length > 0 && pendingOrder !== null && body.setPendingOrder === undefined) {
         console.log(`🧹 Auto-clearing stale pending order (${pendingOrder.orderId}) due to new cart items`);
 
-        broadcastCartUpdate([], false, null);
+        broadcastCartUpdate([], false, null, null);
         console.log(`📺 Sent empty cart to reset display`);
 
         pendingOrder = null;
@@ -58,6 +64,7 @@ export async function POST(req: Request) {
       currentCart = body.cart || [];
       if (body.cart.length === 0) {
         currentVoucher = null;
+        currentPass = null;
       }
       cartUpdated = true;
       console.log(`🛒 Updated cart with ${currentCart.length} items`);
@@ -70,23 +77,25 @@ export async function POST(req: Request) {
           orderId: body.orderId,
           items: body.items || [],
           voucher: body.voucher ?? currentVoucher,
+          pass: body.pass ?? currentPass,
         };
         console.log(`📋 Set pending order: ${body.orderId} with ${body.items?.length || 0} items`);
 
-        broadcastCartUpdate(pendingOrder.items, true, pendingOrder.voucher);
+        broadcastCartUpdate(pendingOrder.items, true, pendingOrder.voucher, pendingOrder.pass);
         pendingOrderUpdated = true;
       } else {
         console.log(`✅ Cleared pending order: ${pendingOrder?.orderId}`);
         pendingOrder = null;
         currentVoucher = null;
+        currentPass = null;
         pendingOrderUpdated = true;
       }
     }
 
     if (cartUpdated && !pendingOrderUpdated) {
-      broadcastCartUpdate(currentCart, false, currentVoucher);
+      broadcastCartUpdate(currentCart, false, currentVoucher, currentPass);
     } else if (cartUpdated && pendingOrderUpdated && !body.setPendingOrder) {
-      broadcastCartUpdate(currentCart, false, currentVoucher);
+      broadcastCartUpdate(currentCart, false, currentVoucher, currentPass);
     }
 
     if (cartUpdated || pendingOrderUpdated) {

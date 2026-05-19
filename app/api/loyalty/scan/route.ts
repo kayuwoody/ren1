@@ -3,15 +3,13 @@ import { supabase } from '@/lib/supabase';
 import { upsertMember, awardPoints } from '@/lib/loyaltyService';
 
 function todayRangeKL() {
-  const now = new Date();
-  const kl = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
-  const startOfDay = new Date(kl.getFullYear(), kl.getMonth(), kl.getDate());
-  const endOfDay = new Date(startOfDay.getTime() + 86_400_000);
-
-  const offset = now.getTime() - kl.getTime();
+  // Malaysia is always UTC+8 (no DST) — direct calculation avoids locale parsing issues on Windows
+  const KL_OFFSET_MS = 8 * 60 * 60 * 1000;
+  const klNowMs = Date.now() + KL_OFFSET_MS;
+  const klDayStartMs = Math.floor(klNowMs / 86_400_000) * 86_400_000;
   return {
-    start: new Date(startOfDay.getTime() + offset).toISOString(),
-    end: new Date(endOfDay.getTime() + offset).toISOString(),
+    start: new Date(klDayStartMs - KL_OFFSET_MS).toISOString(),
+    end: new Date(klDayStartMs - KL_OFFSET_MS + 86_400_000).toISOString(),
   };
 }
 

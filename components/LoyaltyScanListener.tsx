@@ -6,7 +6,7 @@ import { useCart } from '@/context/cartContext';
 import { Check, AlertCircle, Star, Gift } from 'lucide-react';
 
 export default function LoyaltyScanListener() {
-  const { setCustomer, setVoucher, voucher: currentVoucher, cartItems } = useCart();
+  const { setCustomer, setVoucher, setPass, cartItems } = useCart();
   const [toast, setToast] = useState<{
     type: 'success' | 'info' | 'error' | 'voucher';
     message: string;
@@ -58,6 +58,48 @@ export default function LoyaltyScanListener() {
     cooldown.current = true;
     setTimeout(() => { cooldown.current = false; }, 2000);
 
+    if (code.startsWith('PASS-')) {
+      try {
+        const productIds = cartItems.map(item => String(item.productId));
+        const res = await fetch('/api/passes/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, product_ids: productIds }),
+        });
+        const data = await res.json();
+        if (!data.valid) {
+          setToast({ type: 'error', message: data.reason || 'Invalid pass' });
+          return;
+        }
+
+        setPass({
+          id: data.pass.id,
+          code: data.pass.code,
+          program_name: data.pass.program_name,
+          uses_remaining: data.pass.uses_remaining,
+          eligible_product_ids: data.eligible_product_ids,
+        });
+
+        if (data.member) {
+          setCustomer({
+            member_id: data.member.id,
+            phone: data.member.phone,
+            name: data.member.name,
+          });
+        }
+
+        const applicable = data.applicable_products?.length || 0;
+        setToast({
+          type: 'voucher',
+          message: `Pass applied: ${data.pass.program_name}`,
+          sub: `${data.pass.uses_remaining} uses left${applicable > 0 ? ` · ${applicable} item${applicable > 1 ? 's' : ''} eligible` : ''}${data.member ? ` — ${data.member.name || data.member.phone}` : ''}`,
+        });
+      } catch {
+        setToast({ type: 'error', message: 'Pass validation failed' });
+      }
+      return;
+    }
+
     try {
       const res = await fetch('/api/vouchers/validate', {
         method: 'POST',
@@ -92,7 +134,7 @@ export default function LoyaltyScanListener() {
     } catch {
       setToast({ type: 'error', message: 'Voucher validation failed' });
     }
-  }, [itemFinalTotal, setCustomer, setVoucher]);
+  }, [itemFinalTotal, cartItems, setCustomer, setVoucher, setPass]);
 
   useScanDetector(handleScan);
 

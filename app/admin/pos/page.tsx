@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Gift,
   User,
+  Ticket,
 } from 'lucide-react';
 import Link from 'next/link';
 import HoldOrderManager from '@/components/HoldOrderManager';
@@ -38,7 +39,7 @@ import HoldOrderManager from '@/components/HoldOrderManager';
 
 export default function POSPage() {
   const router = useRouter();
-  const { cartItems, clearCart, updateItemDiscount, updateItemSurcharge, removeFromCart, updateQuantity, loadCart, customer, voucher, setCustomer, setVoucher } = useCart();
+  const { cartItems, clearCart, updateItemDiscount, updateItemSurcharge, removeFromCart, updateQuantity, loadCart, customer, voucher, pass, setCustomer, setVoucher, setPass } = useCart();
   const { branchFetch } = useBranch();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [discountModal, setDiscountModal] = useState<{
@@ -229,8 +230,8 @@ export default function POSPage() {
         </div>
       </header>
 
-      {/* Customer / Voucher Strip */}
-      {(customer || voucher) && (
+      {/* Customer / Voucher / Pass Strip */}
+      {(customer || voucher || pass) && (
         <div className="max-w-7xl mx-auto px-4 pt-4">
           <div className="flex flex-wrap gap-2">
             {customer && (
@@ -251,6 +252,16 @@ export default function POSPage() {
                 </span>
                 <button onClick={() => setVoucher(null)} className="ml-1 p-0.5 hover:bg-purple-100 rounded">
                   <X className="w-3.5 h-3.5 text-purple-400" />
+                </button>
+              </div>
+            )}
+            {pass && (
+              <div className="flex items-center gap-2 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 text-sm">
+                <Ticket className="w-4 h-4 text-teal-600" />
+                <span className="font-medium text-teal-800">{pass.program_name}</span>
+                <span className="text-teal-600">{pass.uses_remaining} uses left</span>
+                <button onClick={() => setPass(null)} className="ml-1 p-0.5 hover:bg-teal-100 rounded">
+                  <X className="w-3.5 h-3.5 text-teal-400" />
                 </button>
               </div>
             )}

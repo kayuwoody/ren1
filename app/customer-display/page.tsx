@@ -6,6 +6,7 @@ import Image from "next/image";
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [voucher, setVoucher] = useState<any>(null);
+  const [pass, setPass] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
@@ -49,6 +50,7 @@ export default function CustomerDisplayPage() {
           if (data.type === 'cart-update') {
             setCartItems(data.cart || []);
             setVoucher(data.voucher || null);
+            setPass(data.pass || null);
             console.log('📺 Customer Display: Updated cart with', data.cart?.length || 0, 'items');
           } else if (data.type === 'connected') {
             console.log('📺 Customer Display: Connection confirmed by server');
@@ -57,6 +59,7 @@ export default function CustomerDisplayPage() {
               .then(data => {
                 setCartItems(data.cart || []);
                 setVoucher(data.voucher || null);
+                setPass(data.pass || null);
                 console.log('📺 Customer Display: Loaded initial cart with', data.cart?.length || 0, 'items');
               })
               .catch(err => console.error('Failed to fetch initial cart:', err));
@@ -110,7 +113,21 @@ export default function CustomerDisplayPage() {
   const itemFinalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
   const totalItemDiscount = retailTotal - itemFinalTotal;
   const voucherAmount = voucher?.discount_amount ?? 0;
-  const finalTotal = Math.max(0, itemFinalTotal - voucherAmount);
+
+  let passDiscount = 0;
+  if (pass && pass.eligible_product_ids) {
+    let usesLeft = pass.uses_remaining;
+    for (const item of cartItems) {
+      if (usesLeft <= 0) break;
+      if (pass.eligible_product_ids.includes(String(item.productId))) {
+        const usesForItem = Math.min(item.quantity, usesLeft);
+        passDiscount += item.finalPrice * usesForItem;
+        usesLeft -= usesForItem;
+      }
+    }
+  }
+
+  const finalTotal = Math.max(0, itemFinalTotal - voucherAmount - passDiscount);
   const totalDiscount = retailTotal - finalTotal;
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const hasDiscount = totalDiscount > 0;
@@ -314,6 +331,19 @@ export default function CustomerDisplayPage() {
                 </span>
                 <span className="font-semibold">
                   -RM {voucherAmount.toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            {/* Pass Discount */}
+            {passDiscount > 0 && (
+              <div className="flex items-center justify-between text-sm text-teal-600">
+                <span className="flex items-center gap-1">
+                  <span className="text-base">🎟️</span>
+                  Pass ({pass?.program_name})
+                </span>
+                <span className="font-semibold">
+                  -RM {passDiscount.toFixed(2)}
                 </span>
               </div>
             )}
