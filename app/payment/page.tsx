@@ -15,6 +15,24 @@ export default function PaymentPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_qr" | null>(null);
+  const [passProductNames, setPassProductNames] = useState<string[]>([]);
+
+  // Check if cart contains pass products that require a customer
+  useEffect(() => {
+    if (cartItems.length === 0) return;
+    const productIds = cartItems.map(item => String(item.productId));
+    fetch('/api/loyalty/config')
+      .then(r => r.json())
+      .then(data => {
+        const passPrograms = (data.programs || []).filter(
+          (p: any) => p.trigger_type === 'pass' && p.is_active && p.pass_product_id && productIds.includes(p.pass_product_id)
+        );
+        setPassProductNames(passPrograms.map((p: any) => p.name));
+      })
+      .catch(() => {});
+  }, [cartItems]);
+
+  const hasPassProductWithoutCustomer = passProductNames.length > 0 && !customer;
 
   const retailTotal = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
   const itemFinalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
@@ -343,6 +361,17 @@ export default function PaymentPage() {
           </div>
         )}
 
+        {/* Pass product without customer warning */}
+        {hasPassProductWithoutCustomer && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-6">
+            <p className="text-red-800 font-semibold text-sm">Customer scan required</p>
+            <p className="text-red-700 text-sm mt-1">
+              This order contains a pass product ({passProductNames.join(', ')}). The customer must scan their QR code before payment so the pass can be linked to their account.
+            </p>
+            <p className="text-red-600 text-xs mt-2">Scan the customer&apos;s phone QR to continue.</p>
+          </div>
+        )}
+
         {/* Error Display */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
@@ -354,13 +383,18 @@ export default function PaymentPage() {
         <div className="space-y-3">
           <button
             onClick={() => handlePaymentMethodSelect("cash")}
-            className="w-full p-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-between"
+            disabled={hasPassProductWithoutCustomer}
+            className={`w-full p-4 text-white rounded-lg transition-colors flex items-center justify-between ${
+              hasPassProductWithoutCustomer
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700'
+            }`}
           >
             <span className="flex items-center gap-3">
               <span className="text-2xl">💵</span>
               <div className="text-left">
                 <p className="font-semibold">Cash Payment</p>
-                <p className="text-sm text-green-100">Accept cash and give change</p>
+                <p className="text-sm opacity-75">Accept cash and give change</p>
               </div>
             </span>
             <span className="text-2xl">→</span>
@@ -368,13 +402,18 @@ export default function PaymentPage() {
 
           <button
             onClick={() => handlePaymentMethodSelect("bank_qr")}
-            className="w-full p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-between"
+            disabled={hasPassProductWithoutCustomer}
+            className={`w-full p-4 text-white rounded-lg transition-colors flex items-center justify-between ${
+              hasPassProductWithoutCustomer
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             <span className="flex items-center gap-3">
               <span className="text-2xl">📱</span>
               <div className="text-left">
                 <p className="font-semibold">Bank QR Code</p>
-                <p className="text-sm text-blue-100">Customer scans your QR</p>
+                <p className="text-sm opacity-75">Customer scans your QR</p>
               </div>
             </span>
             <span className="text-2xl">→</span>
