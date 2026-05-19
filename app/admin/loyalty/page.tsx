@@ -338,6 +338,7 @@ export default function LoyaltyPage() {
                 program={p}
                 eligibleProducts={programProducts[p.id] || []}
                 onToggle={() => toggleProgram(p)}
+                onProductsUpdated={fetchPrograms}
               />
             ))}
           </div>
@@ -354,127 +355,268 @@ export default function LoyaltyPage() {
   );
 }
 
-function ProgramCard({ program: p, eligibleProducts, onToggle }: {
+function ProgramCard({ program: p, eligibleProducts, onToggle, onProductsUpdated }: {
   program: LoyaltyProgram;
   eligibleProducts: string[];
   onToggle: () => void;
+  onProductsUpdated: () => void;
 }) {
   const isPass = p.trigger_type === 'pass';
+  const [allProducts, setAllProducts] = useState<CatalogProduct[]>([]);
   const [productNames, setProductNames] = useState<Record<string, string>>({});
   const [triggerProductName, setTriggerProductName] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     if (!isPass) return;
-    if (eligibleProducts.length > 0) {
-      fetch('/api/products')
-        .then(r => r.json())
-        .then(data => {
-          const map: Record<string, string> = {};
-          for (const prod of data.products || []) {
-            if (eligibleProducts.includes(prod.id)) {
-              map[prod.id] = prod.name;
-            }
-            if (p.pass_product_id && prod.id === p.pass_product_id) {
-              setTriggerProductName(prod.name);
-            }
+    fetch('/api/products')
+      .then(r => r.json())
+      .then(data => {
+        const prods = data.products || [];
+        setAllProducts(prods);
+        const map: Record<string, string> = {};
+        for (const prod of prods) {
+          if (eligibleProducts.includes(prod.id)) {
+            map[prod.id] = prod.name;
           }
-          setProductNames(map);
-        })
-        .catch(() => {});
-    }
-    if (p.pass_product_id && eligibleProducts.length === 0) {
-      fetch('/api/products')
-        .then(r => r.json())
-        .then(data => {
-          const prod = (data.products || []).find((pr: any) => pr.id === p.pass_product_id);
-          if (prod) setTriggerProductName(prod.name);
-        })
-        .catch(() => {});
-    }
+          if (p.pass_product_id && prod.id === p.pass_product_id) {
+            setTriggerProductName(prod.name);
+          }
+        }
+        setProductNames(map);
+      })
+      .catch(() => {});
   }, [isPass, eligibleProducts, p.pass_product_id]);
 
   return (
-    <div className={`bg-white rounded-lg shadow p-5 ${!p.is_active ? 'opacity-60' : ''}`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-lg">{p.name}</h3>
-            <span className={`px-2 py-0.5 rounded text-xs ${
-              p.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'
-            }`}>
-              {p.is_active ? 'Active' : 'Disabled'}
-            </span>
-            <span className={`px-2 py-0.5 rounded text-xs capitalize ${
-              isPass ? 'bg-teal-100 text-teal-600' : 'bg-blue-100 text-blue-600'
-            }`}>
-              {isPass ? (p.pass_type === 'time_based' ? 'time pass' : 'use pass') : p.trigger_type}
-            </span>
+    <>
+      <div className={`bg-white rounded-lg shadow p-5 ${!p.is_active ? 'opacity-60' : ''}`}>
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-lg">{p.name}</h3>
+              <span className={`px-2 py-0.5 rounded text-xs ${
+                p.is_active ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {p.is_active ? 'Active' : 'Disabled'}
+              </span>
+              <span className={`px-2 py-0.5 rounded text-xs capitalize ${
+                isPass ? 'bg-teal-100 text-teal-600' : 'bg-blue-100 text-blue-600'
+              }`}>
+                {isPass ? (p.pass_type === 'time_based' ? 'time pass' : 'use pass') : p.trigger_type}
+              </span>
+            </div>
+            {p.description && <p className="text-sm text-gray-500 mt-1">{p.description}</p>}
           </div>
-          {p.description && <p className="text-sm text-gray-500 mt-1">{p.description}</p>}
+          <button
+            onClick={onToggle}
+            className={`px-3 py-1 text-sm rounded ${
+              p.is_active ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
+            }`}
+          >
+            {p.is_active ? 'Disable' : 'Enable'}
+          </button>
         </div>
-        <button
-          onClick={onToggle}
-          className={`px-3 py-1 text-sm rounded ${
-            p.is_active ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-green-100 text-green-700 hover:bg-green-200'
-          }`}
-        >
-          {p.is_active ? 'Disable' : 'Enable'}
-        </button>
-      </div>
 
-      {isPass ? (
-        <div className="mt-4 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+        {isPass ? (
+          <div className="mt-4 space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className="text-gray-500">Uses per pass</p>
+                <p className="font-medium">{p.points_per_trigger}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Pass type</p>
+                <p className="font-medium capitalize">{p.pass_type?.replace('_', '-') || '—'}</p>
+              </div>
+              {triggerProductName && (
+                <div>
+                  <p className="text-gray-500">Sold as</p>
+                  <p className="font-medium">{triggerProductName}</p>
+                </div>
+              )}
+            </div>
             <div>
-              <p className="text-gray-500">Uses per pass</p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-gray-500">Eligible products ({eligibleProducts.length})</p>
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-xs text-teal-600 hover:text-teal-800 font-medium"
+                >
+                  Edit Products
+                </button>
+              </div>
+              {eligibleProducts.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {eligibleProducts.map(pid => (
+                    <span key={pid} className="px-2 py-0.5 bg-teal-50 text-teal-700 text-xs rounded">
+                      {productNames[pid] || pid.slice(0, 8)}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-orange-500">No products linked — click Edit Products to add</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm">
+            <div>
+              <p className="text-gray-500">Points/trigger</p>
               <p className="font-medium">{p.points_per_trigger}</p>
             </div>
             <div>
-              <p className="text-gray-500">Pass type</p>
-              <p className="font-medium capitalize">{p.pass_type?.replace('_', '-') || '—'}</p>
+              <p className="text-gray-500">Threshold</p>
+              <p className="font-medium">{p.threshold} pts</p>
             </div>
-            {triggerProductName && (
-              <div>
-                <p className="text-gray-500">Sold as</p>
-                <p className="font-medium">{triggerProductName}</p>
-              </div>
-            )}
-          </div>
-          {eligibleProducts.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">Eligible products ({eligibleProducts.length})</p>
-              <div className="flex flex-wrap gap-1">
-                {eligibleProducts.map(pid => (
-                  <span key={pid} className="px-2 py-0.5 bg-teal-50 text-teal-700 text-xs rounded">
-                    {productNames[pid] || pid.slice(0, 8)}
-                  </span>
-                ))}
-              </div>
+              <p className="text-gray-500">Reward</p>
+              <p className="font-medium">
+                {p.voucher_type === 'fixed' ? `RM ${p.voucher_discount_value.toFixed(2)}` : `${p.voucher_discount_value}%`} off
+              </p>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm">
-          <div>
-            <p className="text-gray-500">Points/trigger</p>
-            <p className="font-medium">{p.points_per_trigger}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">Threshold</p>
-            <p className="font-medium">{p.threshold} pts</p>
-          </div>
-          <div>
-            <p className="text-gray-500">Reward</p>
-            <p className="font-medium">
-              {p.voucher_type === 'fixed' ? `RM ${p.voucher_discount_value.toFixed(2)}` : `${p.voucher_discount_value}%`} off
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-500">Voucher valid</p>
-            <p className="font-medium">{p.voucher_validity_days} days</p>
+            <div>
+              <p className="text-gray-500">Voucher valid</p>
+              <p className="font-medium">{p.voucher_validity_days} days</p>
           </div>
         </div>
       )}
+    </div>
+
+    {editing && (
+      <EditProductsModal
+        programId={p.id}
+        programName={p.name}
+        currentProductIds={eligibleProducts}
+        allProducts={allProducts}
+        onClose={() => setEditing(false)}
+        onSaved={() => { setEditing(false); onProductsUpdated(); }}
+      />
+    )}
+    </>
+  );
+}
+
+function EditProductsModal({ programId, programName, currentProductIds, allProducts, onClose, onSaved }: {
+  programId: string;
+  programName: string;
+  currentProductIds: string[];
+  allProducts: CatalogProduct[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [selected, setSelected] = useState<string[]>(currentProductIds);
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const filtered = allProducts.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  function toggle(id: string) {
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/loyalty/program-products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ program_id: programId, product_ids: selected }),
+      });
+      if (res.ok) {
+        onSaved();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to save');
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const added = selected.filter(id => !currentProductIds.includes(id));
+  const removed = currentProductIds.filter(id => !selected.includes(id));
+  const hasChanges = added.length > 0 || removed.length > 0;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg font-bold mb-1">Edit Eligible Products</h2>
+        <p className="text-sm text-gray-500 mb-4">{programName} — {selected.length} selected</p>
+
+        <div className="relative mb-3">
+          <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm"
+            placeholder="Search products..."
+            autoFocus
+          />
+        </div>
+
+        <div className="border rounded-lg max-h-64 overflow-y-auto mb-4">
+          {filtered.length === 0 ? (
+            <p className="p-3 text-sm text-gray-400 text-center">No products found</p>
+          ) : (
+            filtered.map(p => {
+              const isSelected = selected.includes(p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => toggle(p.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 border-b last:border-b-0 ${
+                    isSelected ? 'bg-teal-50' : ''
+                  }`}
+                >
+                  <span className={isSelected ? 'text-teal-700 font-medium' : 'text-gray-700'}>
+                    {p.name}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-gray-400 text-xs">RM {p.basePrice.toFixed(2)}</span>
+                    {isSelected && <Check className="w-4 h-4 text-teal-600" />}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {selected.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-4">
+            {selected.map(id => {
+              const prod = allProducts.find(x => x.id === id);
+              return (
+                <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-100 text-teal-700 text-xs rounded">
+                  {prod?.name || id.slice(0, 8)}
+                  <button type="button" onClick={() => toggle(id)}>
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2 border rounded-lg hover:bg-gray-50" disabled={saving}>
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !hasChanges}
+            className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : `Save (${selected.length})`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
