@@ -36,6 +36,7 @@ export async function POST(req: Request) {
       voucher_min_order: body.voucher_min_order || null,
       pass_type: isPass ? (body.pass_type || 'use_based') : null,
       pass_product_id: isPass ? (body.pass_product_id || null) : null,
+      pass_daily_limit: isPass ? (body.pass_daily_limit || null) : null,
       is_active: body.is_active ?? true,
       sort_order: body.sort_order ?? 0,
     })

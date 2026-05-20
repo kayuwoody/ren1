@@ -99,10 +99,11 @@ export default function LoyaltyScanListener() {
         }
 
         const applicable = data.applicable_products?.length || 0;
+        const dailyNote = data.pass.daily_limit ? ` (${data.pass.daily_limit}/day)` : '';
         setToast({
           type: 'voucher',
           message: `Pass applied: ${data.pass.program_name}`,
-          sub: `${data.pass.uses_remaining} uses left${applicable > 0 ? ` · ${applicable} item${applicable > 1 ? 's' : ''} eligible` : ''}${data.member ? ` — ${data.member.name || data.member.phone}` : ''}`,
+          sub: `${data.pass.uses_remaining} uses left${dailyNote}${applicable > 0 ? ` · ${applicable} item${applicable > 1 ? 's' : ''} eligible` : ''}${data.member ? ` — ${data.member.name || data.member.phone}` : ''}`,
         });
       } catch {
         setToast({ type: 'error', message: 'Pass validation failed' });

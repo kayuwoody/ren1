@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { todayRangeKL } from '@/lib/dateUtils';
 
 export async function POST(req: Request) {
   const { pass_id, order_id, product_ids } = await req.json();
@@ -10,7 +11,7 @@ export async function POST(req: Request) {
 
   const { data: enrollment, error } = await supabase
     .from('loyalty_member_programs')
-    .select('id, points_balance, is_active, expires_at, program_id')
+    .select('id, points_balance, is_active, expires_at, program_id, loyalty_programs(pass_daily_limit)')
     .eq('id', pass_id)
     .single();
 
@@ -26,6 +27,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Pass has expired' }, { status: 400 });
   }
 
+  const dailyLimit = (enrollment.loyalty_programs as any)?.pass_daily_limit;
+  let maxUsesToday = enrollment.points_balance;
+
+  if (dailyLimit && dailyLimit > 0) {
+    const { start, end } = todayRangeKL();
+    const { count } = await supabase
+      .from('member_pass_usage')
+      .select('id', { count: 'exact', head: true })
+      .eq('enrollment_id', enrollment.id)
+      .gte('used_at', start)
+      .lt('used_at', end);
+
+    const usesToday = count || 0;
+    const dailyRemaining = dailyLimit - usesToday;
+
+    if (dailyRemaining <= 0) {
+      return NextResponse.json({ error: `Daily limit reached (${dailyLimit} per day)` }, { status: 400 });
+    }
+
+    maxUsesToday = Math.min(enrollment.points_balance, dailyRemaining);
+  }
+
   const { data: programProducts } = await supabase
     .from('loyalty_program_products')
     .select('product_id')
@@ -38,7 +61,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No eligible products in this order' }, { status: 400 });
   }
 
-  const usesToDeduct = Math.min(validProductIds.length, enrollment.points_balance);
+  const usesToDeduct = Math.min(validProductIds.length, maxUsesToday);
   const productsToApply = validProductIds.slice(0, usesToDeduct);
   const newBalance = enrollment.points_balance - usesToDeduct;
 

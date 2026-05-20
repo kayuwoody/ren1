@@ -19,6 +19,7 @@ interface LoyaltyProgram {
   voucher_min_order: number | null;
   pass_type: 'use_based' | 'time_based' | null;
   pass_product_id: string | null;
+  pass_daily_limit: number | null;
   is_active: boolean;
   sort_order: number;
 }
@@ -429,6 +430,10 @@ function ProgramCard({ program: p, eligibleProducts, onToggle, onProductsUpdated
                 <p className="text-gray-500">Pass type</p>
                 <p className="font-medium capitalize">{p.pass_type?.replace('_', '-') || '—'}</p>
               </div>
+              <div>
+                <p className="text-gray-500">Daily limit</p>
+                <p className="font-medium">{p.pass_daily_limit ? `${p.pass_daily_limit} per day` : 'None'}</p>
+              </div>
               {triggerProductName && (
                 <div>
                   <p className="text-gray-500">Sold as</p>
@@ -642,6 +647,7 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
     voucher_min_order: '',
     pass_type: 'use_based' as 'use_based' | 'time_based',
     pass_product_id: '',
+    pass_daily_limit: '',
     eligible_product_ids: [] as string[],
   });
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -689,6 +695,7 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
       if (isPass) {
         payload.pass_type = form.pass_type;
         payload.pass_product_id = form.pass_product_id || null;
+        payload.pass_daily_limit = form.pass_daily_limit ? parseInt(form.pass_daily_limit) : null;
         payload.eligible_product_ids = form.eligible_product_ids;
       } else {
         payload.threshold = parseInt(form.threshold) || 10;
@@ -781,6 +788,21 @@ function CreateProgramModal({ onClose, onCreated }: { onClose: () => void; onCre
                     <option value="time_based">Time-based (no top-up while active)</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Daily Limit
+                  <span className="text-gray-400 font-normal ml-1">(leave empty for no daily limit)</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.pass_daily_limit}
+                  onChange={e => setForm({ ...form, pass_daily_limit: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="e.g. 1 for one drink per day"
+                />
               </div>
 
               <div>
