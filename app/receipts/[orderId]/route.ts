@@ -4,9 +4,9 @@ const BUCKET = 'receipts';
 
 export async function GET(
   _req: Request,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
-  const { orderId } = params;
+  const { orderId } = await params;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const filename = `order-${orderId}.html`;
   const storageUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${filename}`;
