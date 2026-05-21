@@ -13,7 +13,7 @@ interface OrderItem {
   product_name: string;
   qty: number;
   unit_price: number;
-  mods: Record<string, string> | null;
+  mods: Record<string, any> | null;
 }
 
 interface OnlineOrder {
@@ -28,6 +28,7 @@ interface OnlineOrder {
   reject_reason: string | null;
   accepted_at: string | null;
   ready_at: string | null;
+  arrived_at: string | null;
   created_at: string;
   updated_at: string;
   online_order_items: OrderItem[];
@@ -51,12 +52,24 @@ function timeAgo(dateStr: string): string {
   return `${hrs}h ${mins % 60}m ago`;
 }
 
-function formatMods(mods: Record<string, string> | null): string {
-  if (!mods) return '';
-  return Object.entries(mods)
-    .filter(([k, v]) => v && k !== 'notes')
-    .map(([, v]) => v)
-    .join(' · ');
+function formatMods(mods: Record<string, any> | null): { simple: string; comboItems: string[] } {
+  if (!mods) return { simple: '', comboItems: [] };
+
+  const simpleParts: string[] = [];
+  const comboItems: string[] = [];
+
+  for (const [key, value] of Object.entries(mods)) {
+    if (key === 'notes') continue;
+    if (key === 'combo_selections' && typeof value === 'object' && value !== null) {
+      for (const [, sel] of Object.entries(value as Record<string, { name?: string }>)) {
+        if (sel?.name) comboItems.push(sel.name);
+      }
+    } else if (typeof value === 'string' && value) {
+      simpleParts.push(value);
+    }
+  }
+
+  return { simple: simpleParts.join(' · '), comboItems };
 }
 
 function playAlertSound() {
@@ -104,6 +117,7 @@ export default function OnlineOrdersPage() {
   const [menuProducts, setMenuProducts] = useState<MenuProduct[]>([]);
   const [togglingProducts, setTogglingProducts] = useState<Set<string>>(new Set());
   const knownOrderIds = useRef<Set<string>>(new Set());
+  const knownArrivedIds = useRef<Set<string>>(new Set());
   const initialLoadDone = useRef(false);
 
   const fetchOrders = useCallback(async () => {
@@ -117,12 +131,16 @@ export default function OnlineOrdersPage() {
           const newPending = fetched.filter(
             o => o.status === 'pending' && !knownOrderIds.current.has(o.id)
           );
-          if (newPending.length > 0) {
+          const newArrivals = fetched.filter(
+            o => o.arrived_at && !knownArrivedIds.current.has(o.id)
+          );
+          if (newPending.length > 0 || newArrivals.length > 0) {
             playAlertSound();
           }
         }
 
         knownOrderIds.current = new Set(fetched.map(o => o.id));
+        knownArrivedIds.current = new Set(fetched.filter(o => o.arrived_at).map(o => o.id));
         initialLoadDone.current = true;
         setOrders(fetched);
       }
@@ -635,19 +653,29 @@ function OrderCard({
     <div
       className="rounded-2xl p-4 shadow-sm border transition"
       style={{
-        backgroundColor: '#FFFFFF',
-        borderColor: isUrgent ? '#C62828' : '#E5DDD0',
-        borderWidth: isUrgent ? 2 : 1,
+        backgroundColor: order.arrived_at ? '#FFF5F5' : '#FFFFFF',
+        borderColor: order.arrived_at ? '#C62828' : isUrgent ? '#C62828' : '#E5DDD0',
+        borderWidth: order.arrived_at || isUrgent ? 2 : 1,
       }}
     >
       <div className="flex items-start justify-between mb-2">
         <div>
-          <span
-            className="text-lg font-extrabold"
-            style={{ color: '#3A2414', fontFamily: "'Baloo 2', sans-serif" }}
-          >
-            {order.id}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className="text-lg font-extrabold"
+              style={{ color: '#3A2414', fontFamily: "'Baloo 2', sans-serif" }}
+            >
+              {order.id}
+            </span>
+            {order.arrived_at && (
+              <span
+                className="px-2 py-0.5 rounded-full text-xs font-bold text-white animate-pulse"
+                style={{ backgroundColor: '#C62828' }}
+              >
+                ARRIVED
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span className="flex items-center gap-1 text-xs" style={{ color: isUrgent ? '#C62828' : '#546E7A' }}>
               <Clock className="w-3.5 h-3.5" />
@@ -681,7 +709,7 @@ function OrderCard({
 
       <div className="space-y-1.5 border-t pt-2" style={{ borderColor: '#F0EBE4' }}>
         {order.online_order_items?.map(item => {
-          const mods = formatMods(item.mods);
+          const { simple, comboItems } = formatMods(item.mods);
           const notes = item.mods?.notes;
           return (
             <div key={item.id}>
@@ -693,9 +721,15 @@ function OrderCard({
                   {item.product_name}
                 </span>
               </div>
-              {mods && (
-                <div className="ml-6 text-xs" style={{ color: '#546E7A' }}>{mods}</div>
+              {simple && (
+                <div className="ml-6 text-xs" style={{ color: '#546E7A' }}>{simple}</div>
               )}
+              {comboItems.length > 0 && comboItems.map((name, idx) => (
+                <div key={idx} className="ml-6 text-xs flex items-start" style={{ color: '#546E7A' }}>
+                  <span className="mr-1">→</span>
+                  <span>{name}</span>
+                </div>
+              ))}
               {notes && (
                 <div className="ml-6 text-xs italic" style={{ color: '#F58220' }}>Note: {notes}</div>
               )}

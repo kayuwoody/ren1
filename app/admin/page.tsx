@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
+import { supabaseBrowser } from '@/lib/supabaseBrowser';
 
 /**
  * Admin Dashboard
@@ -56,6 +57,26 @@ export default function AdminDashboard() {
   const [error, setError] = useState('');
   const [catalogSyncing, setCatalogSyncing] = useState(false);
   const [catalogSyncResult, setCatalogSyncResult] = useState<string | null>(null);
+  const [onlineOrderCount, setOnlineOrderCount] = useState(0);
+  const [hasArrivedCustomer, setHasArrivedCustomer] = useState(false);
+
+  const fetchOnlineOrderCount = useCallback(async () => {
+    try {
+      const [countRes, arrivedRes] = await Promise.all([
+        supabaseBrowser
+          .from('online_orders')
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['pending', 'accepted', 'ready']),
+        supabaseBrowser
+          .from('online_orders')
+          .select('id', { count: 'exact', head: true })
+          .in('status', ['accepted', 'ready'])
+          .not('arrived_at', 'is', null),
+      ]);
+      if (!countRes.error && countRes.count !== null) setOnlineOrderCount(countRes.count);
+      setHasArrivedCustomer((arrivedRes.count ?? 0) > 0);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     // Check if already authenticated
@@ -64,6 +85,7 @@ export default function AdminDashboard() {
       setIsAuthenticated(true);
       fetchLockerStatus();
       fetchDailyStats();
+      fetchOnlineOrderCount();
 
       // Set up auto-refresh for daily stats every 30 seconds
       const statsInterval = setInterval(() => {
@@ -74,14 +96,25 @@ export default function AdminDashboard() {
       const handleVisibilityChange = () => {
         if (document.visibilityState === 'visible') {
           fetchDailyStats();
+          fetchOnlineOrderCount();
         }
       };
       document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      const channel = supabaseBrowser
+        .channel('admin-online-order-count')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'online_orders' },
+          () => fetchOnlineOrderCount()
+        )
+        .subscribe();
 
       // Clean up interval and event listener on unmount
       return () => {
         clearInterval(statsInterval);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
+        supabaseBrowser.removeChannel(channel);
       };
     }
   }, []);
@@ -302,8 +335,18 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <Link
                 href="/admin/online-orders"
-                className="bg-gradient-to-br from-orange-400 to-orange-500 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+                className="bg-gradient-to-br from-orange-400 to-orange-500 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105 relative"
               >
+                {onlineOrderCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-sm font-bold rounded-full min-w-[28px] h-7 flex items-center justify-center px-2 shadow-lg animate-pulse">
+                    {hasArrivedCustomer && '! '}{onlineOrderCount}
+                  </span>
+                )}
+                {hasArrivedCustomer && onlineOrderCount === 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-sm font-bold rounded-full w-7 h-7 flex items-center justify-center shadow-lg animate-pulse">
+                    !
+                  </span>
+                )}
                 <div className="flex items-center gap-3 mb-2">
                   <Globe className="w-6 h-6 text-white" />
                   <h2 className="text-xl font-semibold">Online Orders</h2>

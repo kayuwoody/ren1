@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Star, Gift, Clock, Plus, Minus, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Star, Gift, Clock, Plus, Minus, ChevronRight, Ticket, ChevronDown } from 'lucide-react';
 
 interface Member {
   id: string;
@@ -18,11 +18,24 @@ interface Balance {
   program_id: string;
   points_balance: number;
   total_earned: number;
+  code: string | null;
+  expires_at: string | null;
+  is_active: boolean;
+  enrolled_at: string;
   loyalty_programs: {
     name: string;
     threshold: number;
     trigger_type: string;
+    pass_type: 'use_based' | 'time_based' | null;
   } | null;
+}
+
+interface PassUsage {
+  id: string;
+  enrollment_id: string;
+  order_id: string;
+  product_id: string;
+  used_at: string;
 }
 
 interface Transaction {
@@ -69,6 +82,10 @@ export default function MemberDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showAdjust, setShowAdjust] = useState(false);
   const [programs, setPrograms] = useState<Program[]>([]);
+  const [expandedPass, setExpandedPass] = useState<string | null>(null);
+  const [passUsage, setPassUsage] = useState<Record<string, PassUsage[]>>({});
+  const [loadingUsage, setLoadingUsage] = useState<string | null>(null);
+  const [productNames, setProductNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchMember();
@@ -98,6 +115,46 @@ export default function MemberDetailPage() {
     if (res.ok) {
       const data = await res.json();
       setPrograms(data.programs);
+    }
+  }
+
+  async function togglePassUsage(enrollmentId: string) {
+    if (expandedPass === enrollmentId) {
+      setExpandedPass(null);
+      return;
+    }
+    setExpandedPass(enrollmentId);
+    if (passUsage[enrollmentId]) return;
+
+    setLoadingUsage(enrollmentId);
+    try {
+      const res = await fetch(`/api/loyalty/pass-usage/${enrollmentId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const usage: PassUsage[] = data.usage || [];
+        setPassUsage(prev => ({ ...prev, [enrollmentId]: usage }));
+
+        const newProductIds = usage
+          .map((u: PassUsage) => u.product_id)
+          .filter((pid: string) => !productNames[pid]);
+        const uniqueIds = [...new Set(newProductIds)];
+        if (uniqueIds.length > 0) {
+          const prodRes = await fetch('/api/products');
+          if (prodRes.ok) {
+            const products = await prodRes.json();
+            const arr = Array.isArray(products) ? products : (products.products || []);
+            const nameMap: Record<string, string> = {};
+            for (const p of arr) {
+              if (uniqueIds.includes(String(p.id))) {
+                nameMap[String(p.id)] = p.name;
+              }
+            }
+            setProductNames(prev => ({ ...prev, ...nameMap }));
+          }
+        }
+      }
+    } finally {
+      setLoadingUsage(null);
     }
   }
 
@@ -139,47 +196,158 @@ export default function MemberDetailPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {/* Program Balances */}
-        <div>
-          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <Star className="w-5 h-5 text-yellow-500" />
-            Program Balances
-          </h2>
-          {balances.length === 0 ? (
-            <p className="text-sm text-gray-500 bg-white rounded-lg shadow p-4">No program enrollments yet.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {balances.map(b => {
-                const threshold = b.loyalty_programs?.threshold || 1;
-                const progress = Math.min((b.points_balance / threshold) * 100, 100);
-                return (
-                  <div key={b.id} className="bg-white rounded-lg shadow p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-medium text-sm">{b.loyalty_programs?.name || 'Unknown'}</h3>
-                      <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded capitalize">
-                        {b.loyalty_programs?.trigger_type}
-                      </span>
-                    </div>
-                    <div className="text-3xl font-bold text-yellow-600">{b.points_balance}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {threshold - b.points_balance} more to next voucher · {b.total_earned} lifetime
-                    </div>
-                    <div className="mt-3 bg-gray-100 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-yellow-500 h-full rounded-full transition-all"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-400 mt-1">
-                      <span>0</span>
-                      <span>{threshold}</span>
-                    </div>
-                  </div>
-                );
-              })}
+        {/* Program Balances (non-pass) */}
+        {(() => {
+          const regularBalances = balances.filter(b => b.loyalty_programs?.trigger_type !== 'pass');
+          return (
+            <div>
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Star className="w-5 h-5 text-yellow-500" />
+                Program Balances
+              </h2>
+              {regularBalances.length === 0 ? (
+                <p className="text-sm text-gray-500 bg-white rounded-lg shadow p-4">No program enrollments yet.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {regularBalances.map(b => {
+                    const threshold = b.loyalty_programs?.threshold || 1;
+                    const progress = Math.min((b.points_balance / threshold) * 100, 100);
+                    return (
+                      <div key={b.id} className="bg-white rounded-lg shadow p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-medium text-sm">{b.loyalty_programs?.name || 'Unknown'}</h3>
+                          <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded capitalize">
+                            {b.loyalty_programs?.trigger_type}
+                          </span>
+                        </div>
+                        <div className="text-3xl font-bold text-yellow-600">{b.points_balance}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {threshold - b.points_balance} more to next voucher · {b.total_earned} lifetime
+                        </div>
+                        <div className="mt-3 bg-gray-100 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="bg-yellow-500 h-full rounded-full transition-all"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400 mt-1">
+                          <span>0</span>
+                          <span>{threshold}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()}
+
+        {/* Passes */}
+        {(() => {
+          const passes = balances.filter(b => b.loyalty_programs?.trigger_type === 'pass');
+          if (passes.length === 0) return null;
+          return (
+            <div>
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Ticket className="w-5 h-5 text-teal-500" />
+                Passes ({passes.length})
+              </h2>
+              <div className="space-y-3">
+                {passes.map(p => {
+                  const isExpanded = expandedPass === p.id;
+                  const expired = p.expires_at && new Date(p.expires_at) < new Date();
+                  const depleted = p.points_balance <= 0;
+                  const inactive = !p.is_active || expired || depleted;
+                  const usesUsed = p.total_earned - p.points_balance;
+                  const usageList = passUsage[p.id] || [];
+
+                  let statusText = 'Active';
+                  let statusColor = 'bg-teal-100 text-teal-700';
+                  if (!p.is_active || depleted) { statusText = 'Used up'; statusColor = 'bg-gray-100 text-gray-500'; }
+                  else if (expired) { statusText = 'Expired'; statusColor = 'bg-red-100 text-red-600'; }
+
+                  return (
+                    <div key={p.id} className={`bg-white rounded-lg shadow overflow-hidden ${inactive ? 'opacity-70' : ''}`}>
+                      <button
+                        onClick={() => togglePassUsage(p.id)}
+                        className="w-full text-left p-4 hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-sm">{p.loyalty_programs?.name || 'Pass'}</h3>
+                              <span className={`text-xs px-2 py-0.5 rounded ${statusColor}`}>{statusText}</span>
+                              {p.loyalty_programs?.pass_type === 'time_based' && (
+                                <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded">Time-based</span>
+                              )}
+                            </div>
+                            {p.code && (
+                              <p className="text-xs font-mono text-gray-500 mb-1">{p.code}</p>
+                            )}
+                            <div className="flex items-center gap-4 text-sm">
+                              <span className="text-teal-700 font-bold">{p.points_balance} uses left</span>
+                              <span className="text-gray-400">·</span>
+                              <span className="text-gray-500">{usesUsed} / {p.total_earned} used</span>
+                              {p.expires_at && (
+                                <>
+                                  <span className="text-gray-400">·</span>
+                                  <span className={`text-xs ${expired ? 'text-red-500' : 'text-gray-500'}`}>
+                                    {expired ? 'Expired' : 'Expires'} {new Date(p.expires_at).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            {p.total_earned > 0 && (
+                              <div className="mt-2 bg-gray-100 rounded-full h-2 overflow-hidden max-w-xs">
+                                <div
+                                  className="bg-teal-500 h-full rounded-full transition-all"
+                                  style={{ width: `${Math.min((usesUsed / p.total_earned) * 100, 100)}%` }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t bg-gray-50 px-4 py-3">
+                          <p className="text-xs font-semibold text-gray-600 mb-2">Usage History</p>
+                          {loadingUsage === p.id ? (
+                            <p className="text-xs text-gray-400 py-2">Loading...</p>
+                          ) : usageList.length === 0 ? (
+                            <p className="text-xs text-gray-400 py-2">No usage recorded yet.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {usageList.map(u => (
+                                <div key={u.id} className="flex items-center justify-between text-xs bg-white rounded px-3 py-2">
+                                  <div>
+                                    <span className="font-medium text-gray-700">
+                                      {productNames[u.product_id] || u.product_id}
+                                    </span>
+                                    {u.order_id && (
+                                      <span className="text-gray-400 ml-2">Order #{u.order_id}</span>
+                                    )}
+                                  </div>
+                                  <span className="text-gray-500">
+                                    {new Date(u.used_at).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })}
+                                    {' '}
+                                    {new Date(u.used_at).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Vouchers */}
         <div>

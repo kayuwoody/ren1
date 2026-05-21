@@ -45,7 +45,7 @@ export async function GET(req: Request) {
         .from('online_orders')
         .select(`
           id, status, pickup_type, customer_name,
-          total_paid, created_at,
+          total_paid, created_at, arrived_at,
           online_order_items ( id, product_id, product_name, qty, unit_price, mods )
         `)
         .eq('outlet_id', 'main')
@@ -64,15 +64,24 @@ export async function GET(req: Request) {
             source: 'online' as const,
             pickup_type: order.pickup_type,
             customer_name: order.customer_name,
+            arrived_at: order.arrived_at,
             line_items: items.map(item => {
-              const modsEntries = item.mods
-                ? Object.entries(item.mods as Record<string, string>)
-                    .filter(([k, v]) => v && k !== 'notes')
-                    .map(([key, value]) => ({ key, value: String(value) }))
-                : [];
-              const notes = item.mods?.notes;
-              if (notes) {
-                modsEntries.push({ key: 'Notes', value: notes });
+              const modsEntries: { key: string; value: string }[] = [];
+              if (item.mods) {
+                const mods = item.mods as Record<string, any>;
+                for (const [key, value] of Object.entries(mods)) {
+                  if (key === 'notes') continue;
+                  if (key === 'combo_selections' && typeof value === 'object' && value !== null) {
+                    for (const [, sel] of Object.entries(value as Record<string, { name?: string }>)) {
+                      if (sel?.name) modsEntries.push({ key: 'Selection', value: sel.name });
+                    }
+                  } else if (typeof value === 'string' && value) {
+                    modsEntries.push({ key, value });
+                  }
+                }
+                if (mods.notes) {
+                  modsEntries.push({ key: 'Notes', value: mods.notes });
+                }
               }
               return {
                 id: item.id,

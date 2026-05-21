@@ -1,19 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { upsertMember, awardPoints } from '@/lib/loyaltyService';
-
-function todayRangeKL() {
-  const now = new Date();
-  const kl = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
-  const startOfDay = new Date(kl.getFullYear(), kl.getMonth(), kl.getDate());
-  const endOfDay = new Date(startOfDay.getTime() + 86_400_000);
-
-  const offset = now.getTime() - kl.getTime();
-  return {
-    start: new Date(startOfDay.getTime() + offset).toISOString(),
-    end: new Date(endOfDay.getTime() + offset).toISOString(),
-  };
-}
+import { todayRangeKL } from '@/lib/dateUtils';
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -38,13 +26,18 @@ export async function POST(req: Request) {
   const now = new Date().toISOString();
 
   const { start, end } = todayRangeKL();
-  const { data: todayScans } = await supabase
+  console.log(`🔍 Dedup check: member=${member.id}, range=${start} to ${end}`);
+
+  const { data: todayScans, error: scanQueryErr } = await supabase
     .from('loyalty_transactions')
     .select('program_id')
     .eq('member_id', member.id)
     .eq('type', 'earn')
     .gte('created_at', start)
     .lt('created_at', end);
+
+  if (scanQueryErr) console.error('❌ Dedup query error:', scanQueryErr);
+  console.log(`🔍 Found ${todayScans?.length || 0} existing scans today:`, todayScans?.map(t => t.program_id));
 
   const scannedProgramIds = new Set((todayScans || []).map(t => t.program_id));
 

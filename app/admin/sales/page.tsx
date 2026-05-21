@@ -29,17 +29,18 @@ export default function SalesReportPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [hideStaffMeals, setHideStaffMeals] = useState(true);
+  const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
 
   useEffect(() => {
     fetchSalesReport();
-  }, [dateRange, startDate, endDate, hideStaffMeals]);
+  }, [dateRange, startDate, endDate, hideStaffMeals, source]);
 
   const fetchSalesReport = async () => {
     setLoading(true);
     try {
-      let url = `/api/admin/sales?range=${dateRange}&hideStaffMeals=${hideStaffMeals}`;
+      let url = `/api/admin/sales?range=${dateRange}&hideStaffMeals=${hideStaffMeals}&source=${source}`;
       if (startDate && endDate) {
-        url = `/api/admin/sales?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}`;
+        url = `/api/admin/sales?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}&source=${source}`;
       }
 
       const res = await branchFetch(url);
@@ -199,6 +200,22 @@ export default function SalesReportPage() {
             >
               {hideStaffMeals ? '✓ Staff Meals Hidden' : 'Show Staff Meals'}
             </button>
+
+            <div className="flex rounded-lg overflow-hidden border border-gray-300">
+              {(['all', 'pos', 'online'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSource(s)}
+                  className={`px-3 py-2 text-sm font-medium transition ${
+                    source === s
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {s === 'all' ? 'All' : s === 'pos' ? 'POS' : 'Online'}
+                </button>
+              ))}
+            </div>
 
             <button
               onClick={exportToCSV}

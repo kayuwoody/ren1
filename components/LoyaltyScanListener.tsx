@@ -6,7 +6,7 @@ import { useCart } from '@/context/cartContext';
 import { Check, AlertCircle, Star, Gift } from 'lucide-react';
 
 export default function LoyaltyScanListener() {
-  const { setCustomer, setVoucher, voucher: currentVoucher, cartItems } = useCart();
+  const { setCustomer, setVoucher, setPass, cartItems } = useCart();
   const [toast, setToast] = useState<{
     type: 'success' | 'info' | 'error' | 'voucher';
     message: string;
@@ -35,16 +35,26 @@ export default function LoyaltyScanListener() {
         const data = await res.json();
         if (!res.ok) {
           setToast({ type: 'error', message: data.error || 'Scan failed' });
-        } else if (data.already_scanned_today) {
-          const name = data.member?.name || cleaned;
-          setToast({ type: 'info', message: `${name} already scanned today` });
         } else {
-          const name = data.member?.name || cleaned;
-          const earned = data.results?.filter((r: any) => !r.skipped) || [];
-          const vouchers = earned.flatMap((r: any) => r.vouchers_issued || []);
-          let sub = earned.map((r: any) => `${r.program_name}: +${r.points_added}`).join(', ');
-          if (vouchers.length > 0) sub += ` | ${vouchers.length} voucher${vouchers.length > 1 ? 's' : ''} issued!`;
-          setToast({ type: 'success', message: `${name} — stamp recorded`, sub });
+          if (data.member) {
+            setCustomer({
+              member_id: data.member.id,
+              phone: data.member.phone,
+              name: data.member.name,
+            });
+          }
+
+          if (data.already_scanned_today) {
+            const name = data.member?.name || cleaned;
+            setToast({ type: 'info', message: `${name} already scanned today` });
+          } else {
+            const name = data.member?.name || cleaned;
+            const earned = data.results?.filter((r: any) => !r.skipped) || [];
+            const vouchers = earned.flatMap((r: any) => r.vouchers_issued || []);
+            let sub = earned.map((r: any) => `${r.program_name}: +${r.points_added}`).join(', ');
+            if (vouchers.length > 0) sub += ` | ${vouchers.length} voucher${vouchers.length > 1 ? 's' : ''} issued!`;
+            setToast({ type: 'success', message: `${name} — stamp recorded`, sub });
+          }
         }
       } catch {
         setToast({ type: 'error', message: 'Scan failed — network error' });
@@ -57,6 +67,55 @@ export default function LoyaltyScanListener() {
 
     cooldown.current = true;
     setTimeout(() => { cooldown.current = false; }, 2000);
+
+    if (code.startsWith('PASS-')) {
+      try {
+        const productIds = cartItems.map(item => String(item.productId));
+        const res = await fetch('/api/passes/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, product_ids: productIds }),
+        });
+        const data = await res.json();
+        if (!data.valid) {
+          setToast({ type: 'error', message: data.reason || 'Invalid pass' });
+          return;
+        }
+
+        setPass({
+          id: data.pass.id,
+          code: data.pass.code,
+          program_name: data.pass.program_name,
+          uses_remaining: data.pass.uses_remaining,
+          eligible_product_ids: data.eligible_product_ids,
+        });
+
+        if (data.member) {
+          setCustomer({
+            member_id: data.member.id,
+            phone: data.member.phone,
+            name: data.member.name,
+          });
+
+          fetch('/api/loyalty/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: data.member.phone }),
+          }).catch(() => {});
+        }
+
+        const applicable = data.applicable_products?.length || 0;
+        const dailyNote = data.pass.daily_limit ? ` (${data.pass.daily_limit}/day)` : '';
+        setToast({
+          type: 'voucher',
+          message: `Pass applied: ${data.pass.program_name}`,
+          sub: `${data.pass.uses_remaining} uses left${dailyNote}${applicable > 0 ? ` · ${applicable} item${applicable > 1 ? 's' : ''} eligible` : ''}${data.member ? ` — ${data.member.name || data.member.phone}` : ''}`,
+        });
+      } catch {
+        setToast({ type: 'error', message: 'Pass validation failed' });
+      }
+      return;
+    }
 
     try {
       const res = await fetch('/api/vouchers/validate', {
@@ -78,6 +137,12 @@ export default function LoyaltyScanListener() {
           phone: data.member.phone,
           name: data.member.name,
         });
+
+        fetch('/api/loyalty/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: data.member.phone }),
+        }).catch(() => {});
       }
 
       const discountLabel = data.voucher.type === 'fixed'
@@ -92,7 +157,7 @@ export default function LoyaltyScanListener() {
     } catch {
       setToast({ type: 'error', message: 'Voucher validation failed' });
     }
-  }, [itemFinalTotal, setCustomer, setVoucher]);
+  }, [itemFinalTotal, cartItems, setCustomer, setVoucher, setPass]);
 
   useScanDetector(handleScan);
 

@@ -25,11 +25,12 @@ interface OrderItem {
 }
 
 interface Order {
-  id: number;
+  id: number | string;
   orderNumber: string;
   dateCreated: string;
   status: string;
   customerName: string;
+  source?: 'pos' | 'online';
   items: OrderItem[];
   retailTotal: number;
   finalTotal: number;
@@ -58,7 +59,8 @@ export default function DailySalesDetailPage() {
   const [data, setData] = useState<DailySalesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState('');
-  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+  const [expandedOrders, setExpandedOrders] = useState<Set<number | string>>(new Set());
+  const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
 
   useEffect(() => {
     // Set default date to today in UTC+8
@@ -73,19 +75,19 @@ export default function DailySalesDetailPage() {
     if (selectedDate) {
       fetchDailySales();
     }
-  }, [selectedDate]);
+  }, [selectedDate, source]);
 
   const fetchDailySales = async () => {
     setLoading(true);
     try {
-      const url = `/api/admin/sales/daily?date=${selectedDate}`;
+      const url = `/api/admin/sales/daily?date=${selectedDate}&source=${source}`;
       const res = await branchFetch(url);
       if (res.ok) {
         const data = await res.json();
         setData(data);
 
         // Expand all orders by default
-        const allOrderIds = new Set<number>(data.orders.map((order: Order) => order.id));
+        const allOrderIds = new Set<number | string>(data.orders.map((order: Order) => order.id));
         setExpandedOrders(allOrderIds);
       }
     } catch (err) {
@@ -95,7 +97,7 @@ export default function DailySalesDetailPage() {
     }
   };
 
-  const toggleOrderExpand = (orderId: number) => {
+  const toggleOrderExpand = (orderId: number | string) => {
     const newExpanded = new Set(expandedOrders);
     if (newExpanded.has(orderId)) {
       newExpanded.delete(orderId);
@@ -167,6 +169,22 @@ export default function DailySalesDetailPage() {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 w-full"
               />
+            </div>
+
+            <div className="flex rounded-lg overflow-hidden border border-gray-300">
+              {(['all', 'pos', 'online'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSource(s)}
+                  className={`px-3 py-2 text-sm font-medium transition ${
+                    source === s
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {s === 'all' ? 'All' : s === 'pos' ? 'POS' : 'Online'}
+                </button>
+              ))}
             </div>
 
             <div className="flex gap-2">
@@ -268,8 +286,14 @@ export default function DailySalesDetailPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-4 mb-2">
                           <h3 className="text-lg font-bold">Order #{order.orderNumber}</h3>
+                          {order.source === 'online' && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
+                              ONLINE
+                            </span>
+                          )}
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${
                             order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            order.status === 'collected' ? 'bg-green-100 text-green-800' :
                             order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
                             'bg-yellow-100 text-yellow-800'
                           }`}>

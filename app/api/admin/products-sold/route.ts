@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getSaleOrders, parseItemVariations } from '@/lib/db/orderService';
+import { getSaleOrders, parseItemVariations, buildDateFilter } from '@/lib/db/orderService';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
+import { getCollectedOnlineOrders } from '@/lib/db/onlineOrderService';
 import { handleApiError } from '@/lib/api/error-handler';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
@@ -37,14 +38,17 @@ export async function GET(req: Request) {
     const startDateParam = searchParams.get('start');
     const endDateParam = searchParams.get('end');
     const hideStaffMeals = searchParams.get('hideStaffMeals') === 'true';
+    const source = searchParams.get('source') || 'all';
 
-    const orders = getSaleOrders({
-      branchId,
-      range,
-      startDate: startDateParam,
-      endDate: endDateParam,
-      hideStaffMeals,
-    });
+    const { startDate, endDate } = buildDateFilter(range, startDateParam, endDateParam);
+
+    const posOrders = source !== 'online'
+      ? getSaleOrders({ branchId, range, startDate: startDateParam, endDate: endDateParam, hideStaffMeals })
+      : [];
+
+    const onlineOrders = source !== 'pos'
+      ? await getCollectedOnlineOrders({ startDate, endDate })
+      : [];
 
     const productStats: Record<string, ProductData> = {};
     let totalRevenue = 0;
@@ -53,7 +57,8 @@ export async function GET(req: Request) {
     let totalItemsSold = 0;
     let totalDiscounts = 0;
 
-    for (const order of orders) {
+    // Process POS orders
+    for (const order of posOrders) {
       const orderDiscount = order.items.reduce(
         (s, it) => s + (it.discountApplied || 0) * it.quantity,
         0,
@@ -89,17 +94,8 @@ export async function GET(req: Request) {
 
         if (!productStats[productName]) {
           productStats[productName] = {
-            name: productName,
-            quantity: 0,
-            revenue: 0,
-            cogs: 0,
-            profit: 0,
-            margin: 0,
-            avgPrice: 0,
-            avgCogs: 0,
-            avgProfit: 0,
-            discountTotal: 0,
-            sales: [],
+            name: productName, quantity: 0, revenue: 0, cogs: 0, profit: 0,
+            margin: 0, avgPrice: 0, avgCogs: 0, avgProfit: 0, discountTotal: 0, sales: [],
           };
         }
 
@@ -123,6 +119,49 @@ export async function GET(req: Request) {
         totalProfit += itemRevenue - itemCOGS;
         totalItemsSold += item.quantity;
         totalDiscounts += itemDiscountShare;
+      }
+    }
+
+    // Process online orders
+    for (const order of onlineOrders) {
+      let orderConsumptions: any[] = [];
+      try {
+        orderConsumptions = getOrderConsumptions(order.id);
+      } catch {}
+
+      for (const item of order.items) {
+        const itemRevenue = item.finalPrice * item.quantity;
+        const itemConsumptions = orderConsumptions.filter(
+          (c: any) => String(c.orderItemId) === String(item.id),
+        );
+        const itemCOGS = itemConsumptions.reduce((sum: number, c: any) => sum + c.totalCost, 0);
+        const productName = item.productName;
+
+        if (!productStats[productName]) {
+          productStats[productName] = {
+            name: productName, quantity: 0, revenue: 0, cogs: 0, profit: 0,
+            margin: 0, avgPrice: 0, avgCogs: 0, avgProfit: 0, discountTotal: 0, sales: [],
+          };
+        }
+
+        productStats[productName].quantity += item.quantity;
+        productStats[productName].revenue += itemRevenue;
+        productStats[productName].cogs += itemCOGS;
+        productStats[productName].profit += itemRevenue - itemCOGS;
+
+        productStats[productName].sales.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          date: order.createdAt,
+          quantity: item.quantity,
+          price: item.finalPrice,
+          cogs: item.quantity > 0 ? itemCOGS / item.quantity : 0,
+        });
+
+        totalRevenue += itemRevenue;
+        totalCOGS += itemCOGS;
+        totalProfit += itemRevenue - itemCOGS;
+        totalItemsSold += item.quantity;
       }
     }
 

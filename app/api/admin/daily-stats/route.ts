@@ -1,23 +1,24 @@
 import { NextResponse } from 'next/server';
 import { getDailyStats } from '@/lib/db/orderService';
+import { getOnlineDailyStats } from '@/lib/db/onlineOrderService';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Admin Daily Stats API
- *
- * Returns today's operational statistics from local SQLite:
- * - Total orders today
- * - Total revenue today
- * - Items sold today
- * - Pending orders
- */
 export async function GET(req: Request) {
   try {
     const branchId = getBranchIdFromRequest(req);
-    const stats = getDailyStats(branchId);
-    return NextResponse.json(stats);
+    const [posStats, onlineStats] = await Promise.all([
+      Promise.resolve(getDailyStats(branchId)),
+      getOnlineDailyStats('main'),
+    ]);
+
+    return NextResponse.json({
+      todayOrders: posStats.todayOrders + onlineStats.orderCount,
+      todayRevenue: posStats.todayRevenue + onlineStats.revenue,
+      itemsSold: posStats.itemsSold + onlineStats.itemsSold,
+      pendingOrders: posStats.pendingOrders + onlineStats.pendingCount,
+    });
   } catch (error) {
     console.error('Failed to fetch daily stats:', error);
     return NextResponse.json({

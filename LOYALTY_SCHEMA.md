@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS loyalty_programs (
   name TEXT NOT NULL,
   description TEXT,
   trigger_type TEXT NOT NULL
-    CHECK (trigger_type IN ('scan', 'purchase', 'manual')),
+    CHECK (trigger_type IN ('scan', 'purchase', 'manual', 'pass')),
   points_per_trigger INTEGER NOT NULL DEFAULT 1,
   points_per_rm NUMERIC,
   threshold INTEGER NOT NULL,
@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS loyalty_programs (
   voucher_discount_value NUMERIC NOT NULL,
   voucher_validity_days INTEGER NOT NULL DEFAULT 90,
   voucher_min_order NUMERIC,
+  pass_type TEXT CHECK (pass_type IN ('use_based', 'time_based')),
+  pass_product_id TEXT,                       -- local product UUID that triggers pass creation on purchase
+  pass_daily_limit INTEGER,                   -- max uses per day (null = unlimited)
   is_active BOOLEAN NOT NULL DEFAULT true,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -36,13 +39,18 @@ CREATE TABLE IF NOT EXISTS loyalty_members (
 
 CREATE INDEX IF NOT EXISTS idx_loyalty_phone ON loyalty_members(phone);
 
--- Per-member per-program balances
+-- Per-member per-program balances (also used for pass enrollments)
+-- For stamp/purchase programs: points_balance = accumulated points, total_earned = lifetime total
+-- For pass programs: points_balance = uses remaining, total_earned = total uses ever loaded
 CREATE TABLE IF NOT EXISTS loyalty_member_programs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id UUID NOT NULL REFERENCES loyalty_members(id) ON DELETE CASCADE,
   program_id UUID NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
   points_balance INTEGER NOT NULL DEFAULT 0,
   total_earned INTEGER NOT NULL DEFAULT 0,
+  code TEXT UNIQUE,                              -- PASS-... QR code (null for non-pass programs)
+  expires_at TIMESTAMPTZ,                        -- pass expiry (null = no expiry)
+  is_active BOOLEAN NOT NULL DEFAULT true,       -- false when pass fully used or manually deactivated
   enrolled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(member_id, program_id)
@@ -50,6 +58,7 @@ CREATE TABLE IF NOT EXISTS loyalty_member_programs (
 
 CREATE INDEX IF NOT EXISTS idx_lmp_member ON loyalty_member_programs(member_id);
 CREATE INDEX IF NOT EXISTS idx_lmp_program ON loyalty_member_programs(program_id);
+CREATE INDEX IF NOT EXISTS idx_lmp_code ON loyalty_member_programs(code);
 
 -- Loyalty point transactions (audit log)
 CREATE TABLE IF NOT EXISTS loyalty_transactions (
@@ -60,6 +69,7 @@ CREATE TABLE IF NOT EXISTS loyalty_transactions (
   points INTEGER NOT NULL,        -- positive = earn, negative = redeem/expire
   description TEXT,
   reference_id TEXT,
+  source TEXT NOT NULL DEFAULT 'pos',  -- 'pos' | 'online' | 'system'
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -85,6 +95,28 @@ CREATE TABLE IF NOT EXISTS vouchers (
 
 CREATE INDEX IF NOT EXISTS idx_vouchers_member ON vouchers(member_id);
 CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);
+
+-- Links loyalty programs to eligible products (for pass programs)
+CREATE TABLE IF NOT EXISTS loyalty_program_products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id UUID NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL,
+  UNIQUE(program_id, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lpp_program ON loyalty_program_products(program_id);
+
+-- Pass usage audit log (one row per product per use)
+CREATE TABLE IF NOT EXISTS member_pass_usage (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  enrollment_id UUID NOT NULL REFERENCES loyalty_member_programs(id) ON DELETE CASCADE,
+  order_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  used_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mpu_enrollment ON member_pass_usage(enrollment_id);
+CREATE INDEX IF NOT EXISTS idx_mpu_order ON member_pass_usage(order_id);
 ```
 
 ## Increment Voucher Usage RPC
@@ -96,6 +128,28 @@ BEGIN
   UPDATE vouchers SET times_used = times_used + 1 WHERE code = voucher_code;
 END;
 $$;
+```
+
+## Migrate Existing Tables (run once)
+
+```sql
+-- Add 'pass' to trigger_type constraint
+ALTER TABLE loyalty_programs DROP CONSTRAINT IF EXISTS loyalty_programs_trigger_type_check;
+ALTER TABLE loyalty_programs ADD CONSTRAINT loyalty_programs_trigger_type_check
+  CHECK (trigger_type IN ('scan', 'purchase', 'manual', 'pass'));
+
+-- Add pass fields to loyalty_programs
+ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS pass_type TEXT
+  CHECK (pass_type IN ('use_based', 'time_based'));
+ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS pass_product_id TEXT;
+ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS pass_daily_limit INTEGER;
+
+-- Add pass fields to loyalty_member_programs
+ALTER TABLE loyalty_member_programs ADD COLUMN IF NOT EXISTS code TEXT UNIQUE;
+ALTER TABLE loyalty_member_programs ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE loyalty_member_programs ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
+
+CREATE INDEX IF NOT EXISTS idx_lmp_code ON loyalty_member_programs(code);
 ```
 
 ## Seed Example Programs
@@ -116,6 +170,17 @@ INSERT INTO loyalty_programs
 VALUES
   ('Purchase Rewards', 'Earn 1 point per order. 10 orders = RM5 off.',
    'purchase', 1, 10, 'fixed', 5.00, 90, 2);
+
+-- Example drink pass: 5 uses, no expiry (use_based)
+-- INSERT INTO loyalty_programs
+--   (name, description, trigger_type, points_per_trigger, threshold,
+--    voucher_type, voucher_discount_value, pass_type, sort_order)
+-- VALUES
+--   ('5 Drink Pass', 'Redeem 5 drinks from eligible menu.',
+--    'pass', 5, 1, 'fixed', 0, 'use_based', 3);
+-- Then link eligible products:
+-- INSERT INTO loyalty_program_products (program_id, product_id)
+-- VALUES ('<program-uuid>', '<product-uuid>');
 ```
 
 ## Enable Realtime (optional)

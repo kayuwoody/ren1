@@ -4,6 +4,9 @@ import { db } from "@/lib/db/init";
 import { v4 as uuidv4 } from "uuid";
 import { getProduct, getProductByWcId } from "@/lib/db/productService";
 import { calculateProductCOGS, recordProductSale } from "@/lib/db/inventoryConsumptionService";
+import { supabase } from "@/lib/supabase";
+import { upsertMember, createOrTopUpPass } from "@/lib/loyaltyService";
+import { syncPosOrder } from "@/lib/orderSync";
 
 /**
  * POST /api/orders/create-with-payment
@@ -220,6 +223,79 @@ export async function POST(req: Request) {
     } catch (consumptionErr) {
       console.error('⚠️ Error recording consumption (order still created):', consumptionErr);
     }
+
+    // Auto-create pass enrollments if purchased products match a pass program
+    try {
+      const purchasedProductIds = itemRows.map(item => item.productId);
+      console.log(`🎟️ Checking pass programs for products:`, purchasedProductIds);
+      console.log(`🎟️ Order meta_data:`, meta_data);
+
+      const { data: passPrograms, error: passQueryErr } = await supabase
+        .from('loyalty_programs')
+        .select('*')
+        .eq('trigger_type', 'pass')
+        .eq('is_active', true)
+        .in('pass_product_id', purchasedProductIds);
+
+      if (passQueryErr) console.error('❌ Pass program query error:', passQueryErr);
+      console.log(`🎟️ Matching pass programs:`, passPrograms?.length || 0, passPrograms?.map(p => p.name));
+
+      if (passPrograms && passPrograms.length > 0) {
+        const getMeta = (key: string) =>
+          meta_data?.find((m: any) => m.key === key)?.value;
+        const memberId = getMeta('_loyalty_member_id');
+        const memberPhone = getMeta('_loyalty_member_phone');
+
+        if (memberPhone) {
+          const member = await upsertMember(memberPhone, getMeta('_loyalty_member_name') || undefined);
+
+          for (const program of passPrograms) {
+            const matchingItem = itemRows.find(item => item.productId === program.pass_product_id);
+            const qty = matchingItem?.quantity || 1;
+            const usesPerPass = program.points_per_trigger || 1;
+            const totalUses = usesPerPass * qty;
+
+            const result = await createOrTopUpPass(member, program, { uses: totalUses });
+            console.log(`🎟️ Pass ${result.is_new ? 'created' : 'topped up'}: ${program.name} — ${result.uses_remaining} uses, code: ${result.code}`);
+          }
+        } else {
+          console.log('⚠️ Pass product purchased but no member linked — pass not auto-created');
+        }
+      }
+    } catch (passErr) {
+      console.error('⚠️ Error auto-creating pass (order still created):', passErr);
+    }
+
+    // Sync order to Supabase (fire-and-forget)
+    const getOrderMeta = (key: string) =>
+      meta_data?.find((m: any) => m.key === key)?.value;
+    syncPosOrder({
+      id: orderId,
+      orderNumber,
+      status: 'processing',
+      customerName: billing?.first_name || 'Walk-in',
+      customerPhone: billing?.phone || null,
+      subtotal,
+      total: subtotal,
+      totalCost,
+      totalProfit,
+      paymentMethod: paymentMethod || 'cash',
+      branchId,
+      loyaltyMemberId: getOrderMeta('_loyalty_member_id') || null,
+      loyaltyMemberPhone: getOrderMeta('_loyalty_member_phone') || null,
+      createdAt: now,
+      items: itemRows.map(item => ({
+        id: item.id,
+        productId: item.productId,
+        productName: item.productName,
+        category: item.category,
+        quantity: item.quantity,
+        basePrice: item.basePrice,
+        unitPrice: item.unitPrice,
+        subtotal: item.subtotal,
+        discountApplied: item.discountApplied,
+      })),
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

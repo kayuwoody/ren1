@@ -420,7 +420,7 @@ export default function OrderDetailPage() {
         {/* View Receipt Button */}
         {!isPending && (
           <a
-            href={`https://${process.env.NEXT_PUBLIC_RECEIPT_DOMAIN || 'coffee-oasis.com.my'}/receipts/order-${orderId}.html`}
+            href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/order-${orderId}.html`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition"

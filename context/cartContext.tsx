@@ -39,10 +39,19 @@ export interface CartVoucher {
   discount_amount: number;
 }
 
+export interface CartPass {
+  id: string;
+  code: string;
+  program_name: string;
+  uses_remaining: number;
+  eligible_product_ids: string[];
+}
+
 interface CartContextType {
   cartItems: CartItem[];
   customer: CartCustomer | null;
   voucher: CartVoucher | null;
+  pass: CartPass | null;
   addToCart: (item: Omit<CartItem, 'finalPrice'>) => void;
   removeFromCart: (index: number) => void;
   updateQuantity: (index: number, quantity: number) => void;
@@ -54,6 +63,7 @@ interface CartContextType {
   updateItemSurcharge: (index: number, amount: number, reason?: string) => void;
   setCustomer: (customer: CartCustomer | null) => void;
   setVoucher: (voucher: CartVoucher | null) => void;
+  setPass: (pass: CartPass | null) => void;
   clearCart: () => void;
   loadCart: (items: CartItem[]) => void;
 }
@@ -104,6 +114,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [customer, setCustomerState] = useState<CartCustomer | null>(null);
   const [voucher, setVoucherState] = useState<CartVoucher | null>(null);
+  const [pass, setPassState] = useState<CartPass | null>(null);
 
   // Load cart from localStorage on mount (for persistence across page refreshes)
   useEffect(() => {
@@ -112,6 +123,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       if (savedCustomer) setCustomerState(JSON.parse(savedCustomer));
       const savedVoucher = localStorage.getItem('cart_voucher');
       if (savedVoucher) setVoucherState(JSON.parse(savedVoucher));
+      const savedPass = localStorage.getItem('cart_pass');
+      if (savedPass) setPassState(JSON.parse(savedPass));
     } catch {}
 
     const saved = localStorage.getItem('cart');
@@ -164,12 +177,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     fetch('/api/cart/current', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cart: cartItems, voucher: voucher })
+      body: JSON.stringify({ cart: cartItems, voucher: voucher, pass: pass })
     }).catch(err => console.error('Failed to sync cart to server:', err));
 
     // Dispatch custom event for same-tab updates
     window.dispatchEvent(new CustomEvent('cart-updated', { detail: cartItems }));
-  }, [cartItems, voucher]);
+  }, [cartItems, voucher, pass]);
 
   // Listen for storage changes from other tabs/windows (for customer display)
   useEffect(() => {
@@ -302,11 +315,18 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     else localStorage.removeItem('cart_voucher');
   };
 
+  const setPass = (p: CartPass | null) => {
+    setPassState(p);
+    if (p) localStorage.setItem('cart_pass', JSON.stringify(p));
+    else localStorage.removeItem('cart_pass');
+  };
+
   const clearCart = () => {
     console.log('🗑️ Clearing cart');
     setCartItems([]);
     setCustomer(null);
     setVoucher(null);
+    setPass(null);
     localStorage.removeItem('cart');
   };
 
@@ -317,7 +337,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <CartContext.Provider value={{ cartItems, customer, voucher, addToCart, removeFromCart, updateQuantity, updateItemDiscount, updateItemSurcharge, setCustomer, setVoucher, clearCart, loadCart }}>
+    <CartContext.Provider value={{ cartItems, customer, voucher, pass, addToCart, removeFromCart, updateQuantity, updateItemDiscount, updateItemSurcharge, setCustomer, setVoucher, setPass, clearCart, loadCart }}>
       {children}
     </CartContext.Provider>
   );

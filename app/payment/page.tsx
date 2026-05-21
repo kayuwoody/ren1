@@ -9,19 +9,55 @@ import { Gift, X } from "lucide-react";
 
 export default function PaymentPage() {
   const router = useRouter();
-  const { cartItems, clearCart, customer, voucher, setVoucher } = useCart();
+  const { cartItems, clearCart, customer, voucher, pass, setVoucher } = useCart();
   const { branchFetch } = useBranch();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_qr" | null>(null);
+  const [passProductNames, setPassProductNames] = useState<string[]>([]);
+
+  // Check if cart contains pass products that require a customer
+  useEffect(() => {
+    if (cartItems.length === 0) return;
+    const productIds = cartItems.map(item => String(item.productId));
+    fetch('/api/loyalty/config')
+      .then(r => r.json())
+      .then(data => {
+        const passPrograms = (data.programs || []).filter(
+          (p: any) => p.trigger_type === 'pass' && p.is_active && p.pass_product_id && productIds.includes(p.pass_product_id)
+        );
+        setPassProductNames(passPrograms.map((p: any) => p.name));
+      })
+      .catch(() => {});
+  }, [cartItems]);
+
+  const hasPassProductWithoutCustomer = passProductNames.length > 0 && !customer;
 
   const retailTotal = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
   const itemFinalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
   const itemDiscount = retailTotal - itemFinalTotal;
   const voucherAmount = voucher?.discount_amount ?? 0;
-  const finalTotal = Math.max(0, itemFinalTotal - voucherAmount);
-  const hasDiscount = itemDiscount > 0 || voucherAmount > 0;
+
+  let passDiscount = 0;
+  const passAppliedProductIds: string[] = [];
+  if (pass) {
+    let usesLeft = pass.uses_remaining;
+    for (const item of cartItems) {
+      if (usesLeft <= 0) break;
+      if (pass.eligible_product_ids.includes(String(item.productId))) {
+        const usesForItem = Math.min(item.quantity, usesLeft);
+        passDiscount += item.finalPrice * usesForItem;
+        for (let i = 0; i < usesForItem; i++) {
+          passAppliedProductIds.push(String(item.productId));
+        }
+        usesLeft -= usesForItem;
+      }
+    }
+  }
+
+  const finalTotal = Math.max(0, itemFinalTotal - voucherAmount - passDiscount);
+  const hasDiscount = itemDiscount > 0 || voucherAmount > 0 || passDiscount > 0;
 
   useEffect(() => {
     if (cartItems.length > 0) {
@@ -32,6 +68,8 @@ export default function PaymentPage() {
           setPendingOrder: true,
           orderId: order?.id || 'pending',
           items: cartItems,
+          voucher: voucher,
+          pass: pass,
         }),
       }).catch(err => console.error('Failed to set pending order:', err));
     }
@@ -58,6 +96,13 @@ export default function PaymentPage() {
         orderMetaData.push(
           { key: "_voucher_code", value: voucher.code },
           { key: "_voucher_discount", value: voucherAmount.toFixed(2) },
+        );
+      }
+      if (pass && passAppliedProductIds.length > 0) {
+        orderMetaData.push(
+          { key: "_pass_id", value: pass.id },
+          { key: "_pass_code", value: pass.code },
+          { key: "_pass_discount", value: passDiscount.toFixed(2) },
         );
       }
       if (customer) {
@@ -142,6 +187,8 @@ export default function PaymentPage() {
           setPendingOrder: true,
           orderId: data.order.id,
           items: cartItems,
+          voucher: voucher,
+          pass: pass,
         }),
       });
     } catch (err: any) {
@@ -158,6 +205,8 @@ export default function PaymentPage() {
     const orderTotal = finalTotal;
     const currentCustomer = customer;
     const currentVoucher = voucher;
+    const currentPass = pass;
+    const currentPassProductIds = [...passAppliedProductIds];
 
     clearCart();
 
@@ -186,6 +235,18 @@ export default function PaymentPage() {
           member_id: currentCustomer.member_id,
           order_total: orderTotal,
           order_id: orderId,
+        }),
+      }).catch(() => {});
+    }
+
+    if (currentPass && currentPassProductIds.length > 0) {
+      fetch("/api/passes/use", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pass_id: currentPass.id,
+          order_id: orderId,
+          product_ids: currentPassProductIds,
         }),
       }).catch(() => {});
     }
@@ -270,6 +331,11 @@ export default function PaymentPage() {
               Voucher ({voucher.code}): -RM {voucherAmount.toFixed(2)}
             </p>
           )}
+          {passDiscount > 0 && (
+            <p className="text-sm text-teal-600 font-medium mt-1">
+              Pass ({pass?.program_name}): -RM {passDiscount.toFixed(2)}
+            </p>
+          )}
           <p className="text-sm text-gray-600 mt-2">{cartItems.length} item(s)</p>
         </div>
 
@@ -295,6 +361,17 @@ export default function PaymentPage() {
           </div>
         )}
 
+        {/* Pass product without customer warning */}
+        {hasPassProductWithoutCustomer && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-6">
+            <p className="text-red-800 font-semibold text-sm">Customer scan required</p>
+            <p className="text-red-700 text-sm mt-1">
+              This order contains a pass product ({passProductNames.join(', ')}). The customer must scan their QR code before payment so the pass can be linked to their account.
+            </p>
+            <p className="text-red-600 text-xs mt-2">Scan the customer&apos;s phone QR to continue.</p>
+          </div>
+        )}
+
         {/* Error Display */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
@@ -306,13 +383,18 @@ export default function PaymentPage() {
         <div className="space-y-3">
           <button
             onClick={() => handlePaymentMethodSelect("cash")}
-            className="w-full p-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-between"
+            disabled={hasPassProductWithoutCustomer}
+            className={`w-full p-4 text-white rounded-lg transition-colors flex items-center justify-between ${
+              hasPassProductWithoutCustomer
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700'
+            }`}
           >
             <span className="flex items-center gap-3">
               <span className="text-2xl">💵</span>
               <div className="text-left">
                 <p className="font-semibold">Cash Payment</p>
-                <p className="text-sm text-green-100">Accept cash and give change</p>
+                <p className="text-sm opacity-75">Accept cash and give change</p>
               </div>
             </span>
             <span className="text-2xl">→</span>
@@ -320,13 +402,18 @@ export default function PaymentPage() {
 
           <button
             onClick={() => handlePaymentMethodSelect("bank_qr")}
-            className="w-full p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-between"
+            disabled={hasPassProductWithoutCustomer}
+            className={`w-full p-4 text-white rounded-lg transition-colors flex items-center justify-between ${
+              hasPassProductWithoutCustomer
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             <span className="flex items-center gap-3">
               <span className="text-2xl">📱</span>
               <div className="text-left">
                 <p className="font-semibold">Bank QR Code</p>
-                <p className="text-sm text-blue-100">Customer scans your QR</p>
+                <p className="text-sm opacity-75">Customer scans your QR</p>
               </div>
             </span>
             <span className="text-2xl">→</span>

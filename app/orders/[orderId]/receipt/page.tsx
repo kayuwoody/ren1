@@ -6,8 +6,7 @@ import { useParams } from 'next/navigation';
 /**
  * Receipt Display Page
  *
- * Fetches and displays the hosted online receipt.
- * Receipts are generated via /api/receipts/generate and uploaded to FTP.
+ * Fetches and displays the hosted online receipt from Supabase Storage.
  */
 export default function ReceiptPage() {
   const { orderId } = useParams<{ orderId: string }>();
@@ -23,9 +22,7 @@ export default function ReceiptPage() {
         setLoading(true);
         setError('');
 
-        // Fetch hosted online receipt
-        const receiptDomain = process.env.NEXT_PUBLIC_RECEIPT_DOMAIN || 'coffee-oasis.com.my';
-        const onlineReceiptUrl = `https://${receiptDomain}/receipts/order-${orderId}.html`;
+        const onlineReceiptUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/order-${orderId}.html`;
 
         console.log(`📄 Fetching online receipt: ${onlineReceiptUrl}`);
 

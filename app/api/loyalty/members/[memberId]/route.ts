@@ -19,7 +19,7 @@ export async function GET(
 
   const { data: balances } = await supabase
     .from('loyalty_member_programs')
-    .select('*, loyalty_programs(name, threshold, trigger_type)')
+    .select('*, loyalty_programs(name, threshold, trigger_type, pass_type)')
     .eq('member_id', memberId);
 
   const { data: transactions } = await supabase

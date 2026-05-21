@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDayOrders, parseItemVariations } from '@/lib/db/orderService';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
+import { getCollectedOnlineOrders } from '@/lib/db/onlineOrderService';
 import { handleApiError } from '@/lib/api/error-handler';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
@@ -11,6 +12,7 @@ export async function GET(req: Request) {
     const branchId = getBranchIdFromRequest(req);
     const { searchParams } = new URL(req.url);
     const dateParam = searchParams.get('date');
+    const source = searchParams.get('source') || 'all';
 
     let year: number, month: number, day: number;
     if (dateParam) {
@@ -27,11 +29,24 @@ export async function GET(req: Request) {
     }
     const displayDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-    const orders = getDayOrders({ branchId, date: dateParam || undefined });
+    const startUTC = new Date(Date.UTC(year, month, day, 0, 0, 0, 0) - (8 * 60 * 60 * 1000));
+    const endUTC = new Date(Date.UTC(year, month, day, 23, 59, 59, 999) - (8 * 60 * 60 * 1000));
 
-    console.log(`📦 Found ${orders.length} local orders for ${displayDate}`);
+    // Fetch POS and online orders
+    const posOrders = source !== 'online'
+      ? getDayOrders({ branchId, date: dateParam || undefined })
+      : [];
 
-    const detailedOrders = orders.map((order) => {
+    const onlineOrders = source !== 'pos'
+      ? await getCollectedOnlineOrders({ startDate: startUTC.toISOString(), endDate: endUTC.toISOString() })
+      : [];
+
+    console.log(`📦 Daily: ${posOrders.length} POS + ${onlineOrders.length} online for ${displayDate}`);
+
+    const detailedOrders: any[] = [];
+
+    // Process POS orders
+    for (const order of posOrders) {
       const finalTotal = order.total;
       const totalDiscount = order.items.reduce((s, it) => s + (it.discountApplied || 0) * it.quantity, 0);
 
@@ -98,12 +113,13 @@ export async function GET(req: Request) {
 
       const retailTotal = items.reduce((sum, it) => sum + it.retailPrice * it.quantity, 0);
 
-      return {
+      detailedOrders.push({
         id: order.wcId ?? order.id,
         orderNumber: order.orderNumber,
         dateCreated: order.createdAt,
         status: order.status,
         customerName: order.customerName || 'Guest',
+        source: 'pos',
         items,
         retailTotal,
         finalTotal,
@@ -111,12 +127,68 @@ export async function GET(req: Request) {
         orderCOGS,
         profit,
         margin,
-        _debug: {
-          consumptionCount,
-          hasCOGS: orderCOGS > 0,
-        },
-      };
-    });
+      });
+    }
+
+    // Process online orders
+    for (const order of onlineOrders) {
+      const finalTotal = order.total;
+
+      let orderCOGS = 0;
+      let orderConsumptions: any[] = [];
+      try {
+        orderConsumptions = getOrderConsumptions(order.id);
+        orderCOGS = orderConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
+      } catch {}
+
+      const profit = finalTotal - orderCOGS;
+      const margin = finalTotal > 0 ? (profit / finalTotal) * 100 : 0;
+
+      const items = order.items.map(item => {
+        const itemRevenue = item.finalPrice * item.quantity;
+        const itemConsumptions = orderConsumptions.filter(
+          (c: any) => String(c.orderItemId) === String(item.id),
+        );
+        const itemCOGS = itemConsumptions.reduce((sum: number, c: any) => sum + c.totalCost, 0);
+        const itemProfit = itemRevenue - itemCOGS;
+        const itemMargin = itemRevenue > 0 ? (itemProfit / itemRevenue) * 100 : 0;
+
+        return {
+          id: item.id,
+          name: item.productName,
+          quantity: item.quantity,
+          retailPrice: item.unitPrice,
+          finalPrice: item.finalPrice,
+          discountReason: undefined,
+          itemTotal: itemRevenue,
+          itemCOGS,
+          itemProfit,
+          itemMargin,
+          isBundle: false,
+          baseProductName: undefined,
+          components: undefined,
+        };
+      });
+
+      detailedOrders.push({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        dateCreated: order.createdAt,
+        status: 'collected',
+        customerName: order.customerName,
+        source: 'online',
+        items,
+        retailTotal: finalTotal,
+        finalTotal,
+        totalDiscount: 0,
+        orderCOGS,
+        profit,
+        margin,
+      });
+    }
+
+    // Sort by date descending
+    detailedOrders.sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime());
 
     const summary: {
       totalOrders: number;

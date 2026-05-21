@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { recordProductSale } from '@/lib/db/inventoryConsumptionService';
+import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending: ['accepted', 'rejected'],
@@ -22,7 +24,7 @@ export async function PATCH(
 
     const { data: existing, error: fetchErr } = await supabase
       .from('online_orders')
-      .select('id, status, online_order_items ( id, product_id, qty )')
+      .select('id, status, outlet_id, online_order_items ( id, product_id, product_name, qty, mods )')
       .eq('id', orderId)
       .single();
 
@@ -59,13 +61,50 @@ export async function PATCH(
     }
 
     if (newStatus === 'accepted' && existing.online_order_items) {
+      const branchId = 'branch-main';
+
+      // Check if consumption already recorded (guard against double-accept)
+      const existingConsumptions = getOrderConsumptions(orderId);
+
       for (const item of existing.online_order_items as any[]) {
-        if (item.product_id) {
-          await supabase.rpc('decrement_stock', {
-            p_product_id: item.product_id,
-            p_outlet_id: 'main',
-            p_qty: item.qty,
-          });
+        if (!item.product_id) continue;
+
+        await supabase.rpc('decrement_stock', {
+          p_product_id: item.product_id,
+          p_outlet_id: 'main',
+          p_qty: item.qty,
+        });
+
+        // Record COGS consumption in SQLite (skip if already recorded)
+        if (existingConsumptions.length === 0) {
+          let bundleSelection: { selectedMandatory: Record<string, string>; selectedOptional: string[] } | undefined;
+          if (item.mods?.combo_selections) {
+            const comboSels = item.mods.combo_selections as Record<string, { id?: string; name?: string }>;
+            const selectedMandatory: Record<string, string> = {};
+            for (const [groupKey, sel] of Object.entries(comboSels)) {
+              if (sel?.id) {
+                selectedMandatory[groupKey] = sel.id;
+              }
+            }
+            if (Object.keys(selectedMandatory).length > 0) {
+              bundleSelection = { selectedMandatory, selectedOptional: [] };
+            }
+          }
+
+          try {
+            await recordProductSale({
+              orderId,
+              wcProductId: item.product_id,
+              productName: item.product_name || 'Unknown',
+              quantitySold: item.qty,
+              orderItemId: item.id,
+              bundleSelection,
+              branchId,
+            });
+            console.log(`📦 Recorded COGS for online item: ${item.product_name} x${item.qty}`);
+          } catch (err) {
+            console.error(`Failed to record COGS for online item ${item.id}:`, err);
+          }
         }
       }
     }
