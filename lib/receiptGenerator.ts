@@ -1,9 +1,8 @@
 /**
  * Static Receipt HTML Generator
  *
- * Generates self-contained HTML files for receipts that can be uploaded to static hosting.
+ * Generates self-contained HTML files for receipts that can be uploaded to Supabase Storage.
  * No JavaScript, no external dependencies - just pure HTML/CSS.
- * Images use relative paths (./mascot.jpg) - upload mascot.jpg to the same directory on Hostinger.
  */
 
 export interface BranchInfo {
@@ -13,7 +12,7 @@ export interface BranchInfo {
   code?: string;
 }
 
-export function generateReceiptHTML(order: any, branch?: BranchInfo): string {
+export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?: string): string {
   const getItemMeta = (item: any, key: string) => {
     return item.meta_data?.find((m: any) => m.key === key)?.value;
   };
@@ -247,7 +246,7 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo): string {
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <img src="./mascot.jpg" alt="Coffee Oasis Logo" class="logo" />
+      ${mascotUrl ? `<img src="${mascotUrl}" alt="Coffee Oasis Logo" class="logo" />` : ''}
       <h1>Coffee Oasis</h1>
       <p class="subtitle">${branch?.name || 'Your friendly local Coffee Shop'}</p>
       <p class="location">${branch?.address ? `📍 ${branch.address}` : '📍 9ine'} | 🌐 coffee-oasis.com.my${branch?.phone ? ` | 📞 ${branch.phone}` : ''}</p>
