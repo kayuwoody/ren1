@@ -96,6 +96,12 @@ export default function LoyaltyScanListener() {
             phone: data.member.phone,
             name: data.member.name,
           });
+
+          fetch('/api/loyalty/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: data.member.phone }),
+          }).catch(() => {});
         }
 
         const applicable = data.applicable_products?.length || 0;
