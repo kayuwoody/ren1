@@ -20,27 +20,32 @@ export function getReceiptPublicUrl(orderId: string | number): string {
 
 export async function uploadReceiptHTML(orderId: string | number, htmlContent: string): Promise<string> {
   const filename = `order-${orderId}.html`;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  // Delete first to ensure content type is set fresh (upsert can preserve old MIME type)
-  await supabase.storage.from(BUCKET).remove([filename]);
+  // Use REST API directly — the JS client ignores contentType and serves as text/plain
+  const res = await fetch(
+    `${supabaseUrl}/storage/v1/object/${BUCKET}/${filename}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'Content-Type': 'text/html; charset=utf-8',
+        'x-upsert': 'true',
+      },
+      body: htmlContent,
+    }
+  );
 
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(filename, Buffer.from(htmlContent, 'utf-8'), {
-      contentType: 'text/html; charset=utf-8',
-    });
-
-  if (error) {
-    console.error('❌ Supabase Storage upload failed:', error);
-    throw new Error(`Failed to upload receipt: ${error.message}`);
+  if (!res.ok) {
+    const errBody = await res.text();
+    console.error('❌ Supabase Storage upload failed:', errBody);
+    throw new Error(`Failed to upload receipt: ${res.status} ${errBody}`);
   }
 
-  const { data: urlData } = supabase.storage
-    .from(BUCKET)
-    .getPublicUrl(filename);
-
-  console.log(`✅ Receipt uploaded: ${urlData.publicUrl}`);
-  return urlData.publicUrl;
+  const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${filename}`;
+  console.log(`✅ Receipt uploaded: ${publicUrl}`);
+  return publicUrl;
 }
 
 export async function getReceiptUrl(orderId: string | number): Promise<string> {
