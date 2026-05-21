@@ -6,6 +6,7 @@ import { getProduct, getProductByWcId } from "@/lib/db/productService";
 import { calculateProductCOGS, recordProductSale } from "@/lib/db/inventoryConsumptionService";
 import { supabase } from "@/lib/supabase";
 import { upsertMember, createOrTopUpPass } from "@/lib/loyaltyService";
+import { syncPosOrder } from "@/lib/orderSync";
 
 /**
  * POST /api/orders/create-with-payment
@@ -264,6 +265,37 @@ export async function POST(req: Request) {
     } catch (passErr) {
       console.error('⚠️ Error auto-creating pass (order still created):', passErr);
     }
+
+    // Sync order to Supabase (fire-and-forget)
+    const getOrderMeta = (key: string) =>
+      meta_data?.find((m: any) => m.key === key)?.value;
+    syncPosOrder({
+      id: orderId,
+      orderNumber,
+      status: 'processing',
+      customerName: billing?.first_name || 'Walk-in',
+      customerPhone: billing?.phone || null,
+      subtotal,
+      total: subtotal,
+      totalCost,
+      totalProfit,
+      paymentMethod: paymentMethod || 'cash',
+      branchId,
+      loyaltyMemberId: getOrderMeta('_loyalty_member_id') || null,
+      loyaltyMemberPhone: getOrderMeta('_loyalty_member_phone') || null,
+      createdAt: now,
+      items: itemRows.map(item => ({
+        id: item.id,
+        productId: item.productId,
+        productName: item.productName,
+        category: item.category,
+        quantity: item.quantity,
+        basePrice: item.basePrice,
+        unitPrice: item.unitPrice,
+        subtotal: item.subtotal,
+        discountApplied: item.discountApplied,
+      })),
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

@@ -193,3 +193,40 @@ CREATE POLICY "Members read own" ON loyalty_members
 The exact RLS approach depends on how bubu1 authenticates users (Supabase Auth, custom JWT, etc.). If using Supabase Auth with phone auth, the JWT `sub` or a custom claim can carry the phone number.
 
 Alternatively, if bubu1 uses a service role for API routes (server-side), RLS isn't needed — filter by phone/member_id in your queries.
+
+## Order History
+
+Customers have two sources of orders:
+
+### Online orders (placed via bubu1)
+
+```typescript
+const { data: onlineOrders } = await supabase
+  .from('online_orders')
+  .select('*, online_order_items(*)')
+  .eq('customer_phone', userPhone)
+  .order('created_at', { ascending: false });
+```
+
+### In-person POS orders (synced from the shop)
+
+POS orders sync to Supabase after each sale. Only orders where the customer scanned their QR have a phone number attached.
+
+```typescript
+const { data: posOrders } = await supabase
+  .from('pos_orders')
+  .select('*, pos_order_items(*)')
+  .eq('loyalty_member_phone', userPhone)
+  .order('created_at', { ascending: false });
+```
+
+### Merge for unified history
+
+```typescript
+const allOrders = [
+  ...(onlineOrders || []).map(o => ({ ...o, source: 'online' as const })),
+  ...(posOrders || []).map(o => ({ ...o, source: 'pos' as const })),
+].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+```
+
+See `POS_ORDERS_SCHEMA.md` for the full table schema.
