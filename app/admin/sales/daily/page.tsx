@@ -195,19 +195,17 @@ export default function DailySalesDetailPage() {
             </div>
 
             <div className="flex gap-2">
-              {(data.summary.totalVoucherDiscount > 0 || data.summary.totalPassDiscount > 0) && (
-                <button
-                  onClick={() => setShowActualRevenue(!showActualRevenue)}
-                  className={`px-4 py-2 text-sm rounded-lg transition flex items-center gap-1.5 ${
-                    showActualRevenue
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-white text-purple-700 border border-purple-300 hover:bg-purple-50'
-                  }`}
-                >
-                  <Ticket className="w-4 h-4" />
-                  Actual Revenue
-                </button>
-              )}
+              <button
+                onClick={() => setShowActualRevenue(!showActualRevenue)}
+                className={`px-4 py-2 text-sm rounded-lg transition flex items-center gap-1.5 ${
+                  showActualRevenue
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white text-purple-700 border border-purple-300 hover:bg-purple-50'
+                }`}
+              >
+                <Ticket className="w-4 h-4" />
+                Actual Revenue
+              </button>
               <button
                 onClick={expandAll}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
