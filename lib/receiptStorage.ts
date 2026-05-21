@@ -21,11 +21,13 @@ export function getReceiptPublicUrl(orderId: string | number): string {
 export async function uploadReceiptHTML(orderId: string | number, htmlContent: string): Promise<string> {
   const filename = `order-${orderId}.html`;
 
+  // Delete first to ensure content type is set fresh (upsert can preserve old MIME type)
+  await supabase.storage.from(BUCKET).remove([filename]);
+
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(filename, Buffer.from(htmlContent, 'utf-8'), {
       contentType: 'text/html; charset=utf-8',
-      upsert: true,
     });
 
   if (error) {
