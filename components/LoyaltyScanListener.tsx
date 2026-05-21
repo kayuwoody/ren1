@@ -137,6 +137,12 @@ export default function LoyaltyScanListener() {
           phone: data.member.phone,
           name: data.member.name,
         });
+
+        fetch('/api/loyalty/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: data.member.phone }),
+        }).catch(() => {});
       }
 
       const discountLabel = data.voucher.type === 'fixed'
