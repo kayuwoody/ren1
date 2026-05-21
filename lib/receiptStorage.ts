@@ -23,8 +23,8 @@ export async function uploadReceiptHTML(orderId: string | number, htmlContent: s
 
   const { error } = await supabase.storage
     .from(BUCKET)
-    .upload(filename, htmlContent, {
-      contentType: 'text/html',
+    .upload(filename, Buffer.from(htmlContent, 'utf-8'), {
+      contentType: 'text/html; charset=utf-8',
       upsert: true,
     });
 
