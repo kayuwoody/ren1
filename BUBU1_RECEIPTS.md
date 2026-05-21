@@ -1,6 +1,6 @@
 # Bubu1 Receipt Generation — Integration Guide
 
-POS currently generates HTML receipts and uploads them to Supabase Storage. Bubu1 (customer app) needs to generate receipts for online orders using the same approach.
+POS generates HTML receipts and uploads them to Supabase Storage. Bubu1 (customer app) needs to generate receipts for online orders and **serve all receipts via a proxy route** (Supabase Storage serves `.html` as `text/plain`).
 
 ## Storage Setup
 
@@ -11,65 +11,92 @@ Receipts live in a **public** Supabase Storage bucket called `receipts`.
 - File pattern: `order-{orderId}.html` for POS orders
 - Mascot image: `mascot.jpg` in the bucket root
 
-### Public URL format
+**Important:** Supabase Storage serves `.html` files with `Content-Type: text/plain`, so browsers display raw HTML source instead of rendering it. All receipt links must go through a proxy route (see below).
+
+## Receipt Proxy Route (Required)
+
+POS receipt QR codes and all receipt links point to:
 
 ```
-{SUPABASE_URL}/storage/v1/object/public/receipts/order-{orderId}.html
+https://www.coffee-oasis.com/receipts/{orderId}
 ```
 
-Example:
+Bubu1 **must** add this route to serve receipts with the correct content type. Create `app/receipts/[orderId]/route.ts`:
+
+```typescript
+import { NextResponse } from 'next/server';
+
+const BUCKET = 'receipts';
+
+export async function GET(
+  _req: Request,
+  { params }: { params: { orderId: string } }
+) {
+  const { orderId } = params;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const filename = `order-${orderId}.html`;
+  const storageUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${filename}`;
+
+  const res = await fetch(storageUrl, { cache: 'no-store' });
+
+  if (!res.ok) {
+    return new NextResponse('Receipt not found', { status: 404 });
+  }
+
+  const html = await res.text();
+
+  return new NextResponse(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400',
+    },
+  });
+}
 ```
-https://xxx.supabase.co/storage/v1/object/public/receipts/order-42.html
-```
+
+For online order receipts, add a similar route at `app/receipts/online/[orderId]/route.ts` using the `online-order-{orderId}.html` filename pattern.
 
 ## What POS Does
 
 1. After payment, POS calls `/api/receipts/generate` with the order ID
 2. The API generates a self-contained HTML file (no JS, no external CSS)
-3. Uploads it to Supabase Storage via the service role client
-4. The receipt URL is printed as a QR code on the thermal receipt
+3. Uploads it to Supabase Storage via the REST API (direct PUT with service role key)
+4. The receipt QR code on the thermal receipt points to `https://www.coffee-oasis.com/receipts/{orderId}`
 
 The HTML generator is at `lib/receiptGenerator.ts`. It takes an order object and branch info, returns a complete HTML string.
 
 ## What Bubu1 Needs To Do
 
-### 1. Generate receipts for online orders
+### 1. Add the receipt proxy route (above)
 
-After an online order is paid (Fiuu payment confirmed), generate and upload a receipt. You can either:
+This is the highest priority — without it, existing POS receipts show as raw text.
 
-**Option A: Call the POS receipt API** (if the POS is running and online order is synced to SQLite)
-```typescript
-await fetch('https://pos-url/api/receipts/generate', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ orderId }),
-});
-```
+### 2. Generate receipts for online orders
 
-**Option B: Generate and upload directly from bubu1** (recommended — no POS dependency)
+After an online order is paid (Fiuu payment confirmed), generate and upload a receipt.
 
-Upload HTML to Supabase Storage using the service role or anon key (bucket is public for reads, you need auth for writes):
+Upload HTML to Supabase Storage using the REST API (the JS client ignores content type):
 
 ```typescript
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-// Use a different prefix to avoid collisions with POS order IDs
 const filename = `online-order-${orderId}.html`;
+const supabaseUrl = process.env.SUPABASE_URL;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-await supabase.storage
-  .from('receipts')
-  .upload(filename, htmlContent, {
-    contentType: 'text/html',
-    upsert: true,
-  });
-
-// Public URL
-const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/receipts/${filename}`;
+const res = await fetch(
+  `${supabaseUrl}/storage/v1/object/receipts/${filename}`,
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${serviceKey}`,
+      'Content-Type': 'text/html; charset=utf-8',
+      'x-upsert': 'true',
+    },
+    body: htmlContent,
+  }
+);
 ```
 
-### 2. Receipt HTML structure
+### 3. Receipt HTML structure
 
 You can reuse the same HTML template style as the POS (`lib/receiptGenerator.ts`), or build your own. Key points:
 
@@ -78,27 +105,22 @@ You can reuse the same HTML template style as the POS (`lib/receiptGenerator.ts`
 - Use absolute URLs for images (not relative paths)
 - Keep it mobile-friendly (max-width ~28rem)
 
-### 3. Display receipts to customers
+### 4. Display receipts to customers
 
-To show a receipt in the app:
+Link to the proxy route, not the raw Supabase URL:
 
 ```typescript
-// Construct the URL
-const receiptUrl = `${SUPABASE_URL}/storage/v1/object/public/receipts/online-order-${orderId}.html`;
+// POS order receipt
+const receiptUrl = `https://www.coffee-oasis.com/receipts/${orderId}`;
 
-// Option 1: Link to it
-<a href={receiptUrl} target="_blank">View Receipt</a>
-
-// Option 2: Fetch and embed
-const res = await fetch(receiptUrl);
-const html = await res.text();
-// Render in an iframe or dangerouslySetInnerHTML
+// Online order receipt
+const receiptUrl = `https://www.coffee-oasis.com/receipts/online/${orderId}`;
 ```
 
-### 4. Naming convention
+### 5. Naming convention
 
 To avoid ID collisions between POS and online orders:
-- POS receipts: `order-{orderId}.html` (orderId is a sequential number from SQLite)
+- POS receipts: `order-{orderId}.html` (orderId is a UUID)
 - Online receipts: `online-order-{orderId}.html` (orderId is the Supabase `online_orders.id` UUID)
 
 ## Mascot Image

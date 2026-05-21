@@ -253,7 +253,7 @@ export class ThermalPrinter {
     await this.sendCommand(encoder.encode('Scan QR code to view your\n'));
     await this.sendCommand(encoder.encode('receipt online\n\n'));
 
-    const receiptUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/order-${order.id}.html`;
+    const receiptUrl = `https://www.coffee-oasis.com/receipts/${order.id}`;
     const qrData = receiptUrl;
 
     // Center align for QR code

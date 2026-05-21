@@ -22,7 +22,7 @@ export default function ReceiptPage() {
         setLoading(true);
         setError('');
 
-        const onlineReceiptUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/receipts/order-${orderId}.html`;
+        const onlineReceiptUrl = `https://www.coffee-oasis.com/receipts/${orderId}`;
 
         console.log(`📄 Fetching online receipt: ${onlineReceiptUrl}`);
 

@@ -14,8 +14,7 @@ import { supabase } from '@/lib/supabase';
 const BUCKET = 'receipts';
 
 export function getReceiptPublicUrl(orderId: string | number): string {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  return `${supabaseUrl}/storage/v1/object/public/${BUCKET}/order-${orderId}.html`;
+  return `https://www.coffee-oasis.com/receipts/${orderId}`;
 }
 
 export async function uploadReceiptHTML(orderId: string | number, htmlContent: string): Promise<string> {
