@@ -562,10 +562,10 @@ export function initDatabase() {
       if (!has('billingPhone'))   db.exec(`ALTER TABLE "Order" ADD COLUMN billingPhone TEXT`);
       if (!has('billingEmail'))   db.exec(`ALTER TABLE "Order" ADD COLUMN billingEmail TEXT`);
       if (!has('billingAddress')) db.exec(`ALTER TABLE "Order" ADD COLUMN billingAddress TEXT`);
-      if (!has('voucherCode'))    db.exec(`ALTER TABLE "Order" ADD COLUMN voucherCode TEXT`);
-      if (!has('voucherDiscount')) db.exec(`ALTER TABLE "Order" ADD COLUMN voucherDiscount REAL NOT NULL DEFAULT 0`);
-      if (!has('passCode'))       db.exec(`ALTER TABLE "Order" ADD COLUMN passCode TEXT`);
-      if (!has('passDiscount'))   db.exec(`ALTER TABLE "Order" ADD COLUMN passDiscount REAL NOT NULL DEFAULT 0`);
+      try { if (!has('voucherCode'))    db.exec(`ALTER TABLE "Order" ADD COLUMN voucherCode TEXT`); } catch {}
+      try { if (!has('voucherDiscount')) db.exec(`ALTER TABLE "Order" ADD COLUMN voucherDiscount REAL NOT NULL DEFAULT 0`); } catch {}
+      try { if (!has('passCode'))       db.exec(`ALTER TABLE "Order" ADD COLUMN passCode TEXT`); } catch {}
+      try { if (!has('passDiscount'))   db.exec(`ALTER TABLE "Order" ADD COLUMN passDiscount REAL NOT NULL DEFAULT 0`); } catch {}
     }
   }
 
