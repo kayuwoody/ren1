@@ -65,7 +65,7 @@ function buildPayload(poiMethod: string, amount?: number): string {
 }
 
 export function generateDuitNowQR(amount: number): string {
-  return buildPayload('12', amount);
+  return buildPayload('11', amount);
 }
 
 export function generateStaticDuitNowQR(): string {
