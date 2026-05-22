@@ -38,22 +38,25 @@ function crc16CcittFalse(data: string): string {
   return crc.toString(16).toUpperCase().padStart(4, '0');
 }
 
-export function generateDuitNowQR(amount: number): string {
+// Field order matches TNG's actual QR layout (non-standard but required by their app)
+function buildPayload(poiMethod: string, amount?: number): string {
   const merchantAccount =
     tlv('00', MERCHANT_ACCOUNT.aid) +
     tlv('01', MERCHANT_ACCOUNT.proxyType) +
     tlv('02', MERCHANT_ACCOUNT.proxyValue);
 
   let payload = '';
-  payload += tlv('00', '01');
-  payload += tlv('01', '12');
-  payload += tlv('26', merchantAccount);
+  payload += tlv('00', '02');
+  payload += tlv('01', poiMethod);
   payload += tlv('52', MERCHANT_INFO.mcc);
   payload += tlv('53', MERCHANT_INFO.currency);
-  payload += tlv('54', amount.toFixed(2));
+  if (amount !== undefined) {
+    payload += tlv('54', amount.toFixed(2));
+  }
   payload += tlv('58', MERCHANT_INFO.country);
   payload += tlv('59', MERCHANT_INFO.name);
   payload += tlv('60', MERCHANT_INFO.city);
+  payload += tlv('26', merchantAccount);
   payload += tlv('62', tlv('08', '01'));
   payload += '6304';
   payload += crc16CcittFalse(payload);
@@ -61,24 +64,10 @@ export function generateDuitNowQR(amount: number): string {
   return payload;
 }
 
+export function generateDuitNowQR(amount: number): string {
+  return buildPayload('12', amount);
+}
+
 export function generateStaticDuitNowQR(): string {
-  const merchantAccount =
-    tlv('00', MERCHANT_ACCOUNT.aid) +
-    tlv('01', MERCHANT_ACCOUNT.proxyType) +
-    tlv('02', MERCHANT_ACCOUNT.proxyValue);
-
-  let payload = '';
-  payload += tlv('00', '01');
-  payload += tlv('01', '11');
-  payload += tlv('26', merchantAccount);
-  payload += tlv('52', MERCHANT_INFO.mcc);
-  payload += tlv('53', MERCHANT_INFO.currency);
-  payload += tlv('58', MERCHANT_INFO.country);
-  payload += tlv('59', MERCHANT_INFO.name);
-  payload += tlv('60', MERCHANT_INFO.city);
-  payload += tlv('62', tlv('08', '01'));
-  payload += '6304';
-  payload += crc16CcittFalse(payload);
-
-  return payload;
+  return buildPayload('11');
 }
