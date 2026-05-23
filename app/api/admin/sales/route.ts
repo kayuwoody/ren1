@@ -34,10 +34,12 @@ export async function GET(req: Request) {
     // Calculate statistics
     let totalRevenue = 0;
     let totalDiscounts = 0;
+    let totalVoucherDiscount = 0;
+    let totalPassDiscount = 0;
     let totalCOGS = 0;
     let totalItemsSold = 0;
     let totalOrderCount = 0;
-    const revenueByDay: Record<string, { revenue: number; orders: number; discounts: number; cogs: number; profit: number }> = {};
+    const revenueByDay: Record<string, { revenue: number; orders: number; discounts: number; voucherDiscount: number; passDiscount: number; cogs: number; profit: number }> = {};
     const productStats: Record<string, { quantity: number; revenue: number; cogs: number; profit: number }> = {};
     const ordersByStatus: Record<string, number> = {};
 
@@ -58,18 +60,25 @@ export async function GET(req: Request) {
         console.warn(`⚠️  Could not fetch COGS for order ${order.id}`);
       }
 
+      const orderVoucherDiscount = order.voucherDiscount || 0;
+      const orderPassDiscount = order.passDiscount || 0;
+
       totalRevenue += finalTotal;
       totalDiscounts += discount;
+      totalVoucherDiscount += orderVoucherDiscount;
+      totalPassDiscount += orderPassDiscount;
       totalCOGS += orderCOGS;
       totalOrderCount++;
 
       const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
-        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, cogs: 0, profit: 0 };
+        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
       }
       revenueByDay[orderDate].revenue += finalTotal;
       revenueByDay[orderDate].orders += 1;
       revenueByDay[orderDate].discounts += discount;
+      revenueByDay[orderDate].voucherDiscount += orderVoucherDiscount;
+      revenueByDay[orderDate].passDiscount += orderPassDiscount;
       revenueByDay[orderDate].cogs += orderCOGS;
       revenueByDay[orderDate].profit += (finalTotal - orderCOGS);
 
@@ -115,7 +124,7 @@ export async function GET(req: Request) {
 
       const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
-        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, cogs: 0, profit: 0 };
+        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
       }
       revenueByDay[orderDate].revenue += finalTotal;
       revenueByDay[orderDate].orders += 1;
@@ -151,6 +160,8 @@ export async function GET(req: Request) {
         revenue: data.revenue,
         orders: data.orders,
         discounts: data.discounts,
+        voucherDiscount: data.voucherDiscount,
+        passDiscount: data.passDiscount,
         cogs: data.cogs,
         profit: data.profit,
         margin: data.revenue > 0 ? (data.profit / data.revenue) * 100 : 0,
@@ -186,6 +197,8 @@ export async function GET(req: Request) {
       totalOrders: totalOrderCount,
       averageOrderValue: totalOrderCount > 0 ? totalRevenue / totalOrderCount : 0,
       totalDiscounts,
+      totalVoucherDiscount,
+      totalPassDiscount,
       totalCOGS,
       totalProfit,
       overallMargin,

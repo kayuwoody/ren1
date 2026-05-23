@@ -31,8 +31,13 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
   });
 
   const totalDiscount = parseFloat(getOrderMeta('_total_discount') || '0');
+  const voucherCode = getOrderMeta('_voucher_code');
+  const voucherDiscount = parseFloat(getOrderMeta('_voucher_discount') || '0');
+  const passCode = getOrderMeta('_pass_code');
+  const passDiscount = parseFloat(getOrderMeta('_pass_discount') || '0');
   const finalTotal = parseFloat(order.total);
-  const retailTotal = finalTotal + totalDiscount;
+  const totalSavings = totalDiscount + voucherDiscount + passDiscount;
+  const retailTotal = finalTotal + totalSavings;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -195,6 +200,42 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
       font-weight: 600;
       font-size: 0.875rem;
     }
+    .loyalty-badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.375rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-top: 0.25rem;
+    }
+    .badge-voucher {
+      background: #fce7f3;
+      color: #9d174d;
+    }
+    .badge-pass {
+      background: #ede9fe;
+      color: #5b21b6;
+    }
+    .total-row.voucher {
+      background: #fce7f3;
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+    }
+    .total-row.voucher .total-label,
+    .total-row.voucher .total-value {
+      color: #9d174d;
+      font-weight: 600;
+    }
+    .total-row.pass {
+      background: #ede9fe;
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+    }
+    .total-row.pass .total-label,
+    .total-row.pass .total-value {
+      color: #5b21b6;
+      font-weight: 600;
+    }
     .payment-status {
       margin-top: 1.5rem;
       padding-top: 1rem;
@@ -320,14 +361,28 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
 
     <!-- Totals -->
     <div class="totals">
-      ${totalDiscount > 0 ? `
+      ${totalSavings > 0 ? `
         <div class="total-row">
           <span class="total-label">Retail Total:</span>
           <span class="total-value" style="text-decoration: line-through; color: #9ca3af;">RM ${retailTotal.toFixed(2)}</span>
         </div>
+      ` : ''}
+      ${totalDiscount > 0 ? `
         <div class="total-row discount">
-          <span class="total-label">Discount:</span>
+          <span class="total-label">Item Discount:</span>
           <span class="total-value">-RM ${totalDiscount.toFixed(2)}</span>
+        </div>
+      ` : ''}
+      ${voucherDiscount > 0 ? `
+        <div class="total-row voucher">
+          <span class="total-label">Voucher (${voucherCode}):</span>
+          <span class="total-value">-RM ${voucherDiscount.toFixed(2)}</span>
+        </div>
+      ` : ''}
+      ${passDiscount > 0 ? `
+        <div class="total-row pass">
+          <span class="total-label">Pass (${passCode}):</span>
+          <span class="total-value">-RM ${passDiscount.toFixed(2)}</span>
         </div>
       ` : ''}
       <div class="total-row">
@@ -342,9 +397,9 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
         <span class="total-label">Total Paid:</span>
         <span class="total-value">RM ${finalTotal.toFixed(2)}</span>
       </div>
-      ${totalDiscount > 0 ? `
+      ${totalSavings > 0 ? `
         <div class="savings-banner">
-          <p class="savings-text">🎉 You saved RM ${totalDiscount.toFixed(2)}!</p>
+          <p class="savings-text">🎉 You saved RM ${totalSavings.toFixed(2)}!</p>
         </div>
       ` : ''}
     </div>

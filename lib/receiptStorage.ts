@@ -14,31 +14,37 @@ import { supabase } from '@/lib/supabase';
 const BUCKET = 'receipts';
 
 export function getReceiptPublicUrl(orderId: string | number): string {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  return `${supabaseUrl}/storage/v1/object/public/${BUCKET}/order-${orderId}.html`;
+  return `https://www.coffee-oasis.com/receipts/${orderId}`;
 }
 
 export async function uploadReceiptHTML(orderId: string | number, htmlContent: string): Promise<string> {
   const filename = `order-${orderId}.html`;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(filename, Buffer.from(htmlContent, 'utf-8'), {
-      contentType: 'text/html; charset=utf-8',
-      upsert: true,
-    });
+  // Use REST API directly — the JS client ignores contentType and serves as text/plain
+  const res = await fetch(
+    `${supabaseUrl}/storage/v1/object/${BUCKET}/${filename}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'Content-Type': 'text/html; charset=utf-8',
+        'x-upsert': 'true',
+      },
+      body: htmlContent,
+    }
+  );
 
-  if (error) {
-    console.error('❌ Supabase Storage upload failed:', error);
-    throw new Error(`Failed to upload receipt: ${error.message}`);
+  if (!res.ok) {
+    const errBody = await res.text();
+    console.error('❌ Supabase Storage upload failed:', errBody);
+    throw new Error(`Failed to upload receipt: ${res.status} ${errBody}`);
   }
 
-  const { data: urlData } = supabase.storage
-    .from(BUCKET)
-    .getPublicUrl(filename);
-
-  console.log(`✅ Receipt uploaded: ${urlData.publicUrl}`);
-  return urlData.publicUrl;
+  const publicUrl = `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${filename}`;
+  console.log(`✅ Receipt uploaded: ${publicUrl}`);
+  return publicUrl;
 }
 
 export async function getReceiptUrl(orderId: string | number): Promise<string> {

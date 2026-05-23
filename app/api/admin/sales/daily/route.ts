@@ -124,6 +124,10 @@ export async function GET(req: Request) {
         retailTotal,
         finalTotal,
         totalDiscount,
+        voucherCode: order.voucherCode || null,
+        voucherDiscount: order.voucherDiscount || 0,
+        passCode: order.passCode || null,
+        passDiscount: order.passDiscount || 0,
         orderCOGS,
         profit,
         margin,
@@ -190,21 +194,19 @@ export async function GET(req: Request) {
     // Sort by date descending
     detailedOrders.sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime());
 
-    const summary: {
-      totalOrders: number;
-      totalRevenue: number;
-      totalRetail: number;
-      totalDiscounts: number;
-      totalCOGS: number;
-      totalProfit: number;
-      overallMargin?: number;
-    } = {
+    const totalVoucherDiscount = detailedOrders.reduce((sum, o) => sum + (o.voucherDiscount || 0), 0);
+    const totalPassDiscount = detailedOrders.reduce((sum, o) => sum + (o.passDiscount || 0), 0);
+
+    const summary = {
       totalOrders: detailedOrders.length,
       totalRevenue: detailedOrders.reduce((sum, o) => sum + o.finalTotal, 0),
       totalRetail: detailedOrders.reduce((sum, o) => sum + o.retailTotal, 0),
       totalDiscounts: detailedOrders.reduce((sum, o) => sum + o.totalDiscount, 0),
+      totalVoucherDiscount,
+      totalPassDiscount,
       totalCOGS: detailedOrders.reduce((sum, o) => sum + o.orderCOGS, 0),
       totalProfit: detailedOrders.reduce((sum, o) => sum + o.profit, 0),
+      overallMargin: 0,
     };
     summary.overallMargin = summary.totalRevenue > 0
       ? (summary.totalProfit / summary.totalRevenue) * 100

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import QRCode from "react-qr-code";
+import { generateDuitNowQR } from "@/lib/duitnowQR";
 
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -367,6 +369,30 @@ export default function CustomerDisplayPage() {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* DuitNow QR Payment */}
+      {cartItems.length > 0 && finalTotal > 0 && (
+        <div className="mt-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-4 border border-purple-200 shadow-md">
+          <p className="text-center text-sm font-semibold text-purple-800 mb-2">
+            Scan to pay with DuitNow / TNG
+          </p>
+          <div className="flex items-center justify-center gap-6">
+            <div className="bg-white p-3 rounded-lg shadow-sm">
+              <QRCode
+                value={generateDuitNowQR()}
+                size={160}
+                level="M"
+              />
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-gray-500 mb-1">Amount to pay</p>
+              <p className="text-4xl font-bold text-purple-700">
+                RM {finalTotal.toFixed(2)}
+              </p>
+            </div>
           </div>
         </div>
       )}

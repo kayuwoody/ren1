@@ -129,13 +129,23 @@ export async function POST(req: Request) {
     const totalProfit = subtotal - totalCost;
     const overallMargin = subtotal > 0 ? (totalProfit / subtotal) * 100 : 0;
 
+    const getMetaValue = (key: string) =>
+      meta_data?.find((m: any) => m.key === key)?.value;
+
+    const voucherCode = getMetaValue('_voucher_code') || null;
+    const voucherDiscount = parseFloat(getMetaValue('_voucher_discount') || '0');
+    const passCode = getMetaValue('_pass_code') || null;
+    const passDiscount = parseFloat(getMetaValue('_pass_discount') || '0');
+
     const insertAll = db.transaction(() => {
       console.log(`📝 Inserting Order: ${orderId}, branch: ${branchId}`);
       db.prepare(`
         INSERT INTO "Order" (id, orderNumber, status, customerName, customerPhone,
                              subtotal, tax, total, totalCost, totalProfit, overallMargin,
-                             paymentMethod, branchId, customerId, guestId, createdAt, updatedAt)
-        VALUES (?, ?, 'processing', ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             paymentMethod, branchId, customerId, guestId,
+                             voucherCode, voucherDiscount, passCode, passDiscount,
+                             createdAt, updatedAt)
+        VALUES (?, ?, 'processing', ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         orderId, orderNumber,
         billing?.first_name || 'Walk-in',
@@ -143,6 +153,7 @@ export async function POST(req: Request) {
         subtotal, subtotal, totalCost, totalProfit, overallMargin,
         paymentMethod || 'cash',
         branchId, userId || null, guestId || null,
+        voucherCode, voucherDiscount, passCode, passDiscount,
         now, now,
       );
       console.log(`✅ Order row inserted`);

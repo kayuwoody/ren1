@@ -28,6 +28,10 @@ export interface LocalOrder {
   paymentMethod?: string;
   notes?: string;
   branchId: string;
+  voucherCode?: string;
+  voucherDiscount: number;
+  passCode?: string;
+  passDiscount: number;
   createdAt: string;
   updatedAt: string;
 }
