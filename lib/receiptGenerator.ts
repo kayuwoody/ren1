@@ -44,7 +44,7 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Coffee Oasis Receipt #${order.id}</title>
+  <title>Coffee Oasis Receipt #${order.number || order.id}</title>
   <style>
     * {
       margin: 0;
@@ -297,7 +297,7 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
     <div class="order-info">
       <div class="info-row">
         <span class="info-label">Order Number:</span>
-        <span class="info-value">#${order.id}</span>
+        <span class="info-value">#${order.number || order.id}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Date:</span>

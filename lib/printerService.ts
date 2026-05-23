@@ -147,7 +147,7 @@ export class ThermalPrinter {
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
 
     await this.sendCommand(encoder.encode('COFFEE OASIS\n'));
-    await this.sendCommand(encoder.encode(`Receipt #${order.id}\n`));
+    await this.sendCommand(encoder.encode(`Receipt #${order.number || order.id}\n`));
     await this.sendCommand(encoder.encode(`${new Date(order.date_created).toLocaleString('en-MY')}\n\n`));
 
     // Regular + Left
@@ -331,7 +331,7 @@ export class ThermalPrinter {
     await this.sendCommand(new Uint8Array([0x1B, 0x61, 0x01])); // Center
 
     // Header
-    await this.sendCommand(encoder.encode(`ORDER #${order.id}\n`));
+    await this.sendCommand(encoder.encode(`ORDER #${order.number || order.id}\n`));
     await this.sendCommand(encoder.encode(`${new Date(order.date_created).toLocaleTimeString('en-MY')}\n\n`));
 
     // Regular + Left

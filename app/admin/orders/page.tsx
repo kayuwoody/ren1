@@ -15,6 +15,7 @@ interface Customer {
 
 interface Order {
   id: number;
+  number?: string;
   status: string;
   total: string;
   date_created: string;
@@ -95,7 +96,7 @@ export default function AdminOrdersPage() {
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter(order =>
-        order.id.toString().includes(searchTerm) ||
+        (order.number || order.id.toString()).includes(searchTerm) ||
         order.line_items.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
@@ -386,7 +387,7 @@ export default function AdminOrdersPage() {
                   filteredOrders.map(order => (
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
-                        <span className="font-mono font-semibold">#{order.id}</span>
+                        <span className="font-mono font-semibold">#{order.number || order.id}</span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {new Date(order.date_created).toLocaleDateString()}
