@@ -140,6 +140,12 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
       color: #6b7280;
       margin-top: 0.125rem;
     }
+    .item-component {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 0.125rem;
+      padding-left: 0.75rem;
+    }
     .discount-label {
       font-size: 0.75rem;
       color: #059669;
@@ -329,11 +335,20 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
           const bundleBaseName = getItemMeta(item, '_bundle_base_product_name');
           const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
 
+          let bundleComponents: Array<{ productName: string; quantity: number }> = [];
+          if (isBundle) {
+            try {
+              const raw = getItemMeta(item, '_bundle_components');
+              if (raw) bundleComponents = JSON.parse(raw);
+            } catch {}
+          }
+
           return `
         <tr>
           <td>
             <div class="item-name">${displayName}</div>
             ${isBundle && bundleBaseName ? `<div class="item-base">Base: ${bundleBaseName}</div>` : ''}
+            ${bundleComponents.map(c => `<div class="item-component">→ ${c.productName}${c.quantity > 1 ? ` × ${c.quantity}` : ''}</div>`).join('')}
             ${discountReason ? `<div class="discount-label">• ${discountReason}</div>` : ''}
           </td>
           <td class="center">${item.quantity}</td>
