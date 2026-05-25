@@ -153,7 +153,7 @@ export default function OrderDetailPage() {
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Order #{order.id}</h1>
+      <h1 className="text-2xl font-bold">Order #{order.number || order.id}</h1>
       <p><strong>Status:</strong> {order.status}</p>
 
       {isPending && (

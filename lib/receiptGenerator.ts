@@ -44,7 +44,7 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Coffee Oasis Receipt #${order.id}</title>
+  <title>Coffee Oasis Receipt #${order.number || order.id}</title>
   <style>
     * {
       margin: 0;
@@ -139,6 +139,12 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
       font-size: 0.75rem;
       color: #6b7280;
       margin-top: 0.125rem;
+    }
+    .item-component {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 0.125rem;
+      padding-left: 0.75rem;
     }
     .discount-label {
       font-size: 0.75rem;
@@ -297,7 +303,7 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
     <div class="order-info">
       <div class="info-row">
         <span class="info-label">Order Number:</span>
-        <span class="info-value">#${order.id}</span>
+        <span class="info-value">#${order.number || order.id}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Date:</span>
@@ -329,11 +335,20 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
           const bundleBaseName = getItemMeta(item, '_bundle_base_product_name');
           const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
 
+          let bundleComponents: Array<{ productName: string; quantity: number }> = [];
+          if (isBundle) {
+            try {
+              const raw = getItemMeta(item, '_bundle_components');
+              if (raw) bundleComponents = JSON.parse(raw);
+            } catch {}
+          }
+
           return `
         <tr>
           <td>
             <div class="item-name">${displayName}</div>
             ${isBundle && bundleBaseName ? `<div class="item-base">Base: ${bundleBaseName}</div>` : ''}
+            ${bundleComponents.map(c => `<div class="item-component">→ ${c.productName}${c.quantity > 1 ? ` × ${c.quantity}` : ''}</div>`).join('')}
             ${discountReason ? `<div class="discount-label">• ${discountReason}</div>` : ''}
           </td>
           <td class="center">${item.quantity}</td>
