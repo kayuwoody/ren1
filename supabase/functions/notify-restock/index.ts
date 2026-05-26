@@ -79,9 +79,9 @@ Deno.serve(async (req) => {
   const productIds = [...new Set(pending.map((n: StockNotification) => n.product_id))];
   const { data: products } = await supabase
     .from("products")
-    .select("id, stock_quantity")
+    .select("id")
     .in("id", productIds)
-    .gt("stock_quantity", 0);
+    .eq("in_stock", true);
 
   const inStockIds = new Set((products || []).map((p: { id: string }) => p.id));
 
