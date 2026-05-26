@@ -17,6 +17,7 @@ interface StockNotification {
 }
 
 async function sendEmail(to: string, productName: string): Promise<boolean> {
+  console.log(`Sending email: from=${FROM_EMAIL}, to=${to}, key=${RESEND_API_KEY ? "set (" + RESEND_API_KEY.substring(0, 6) + "...)" : "MISSING"}`);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -45,6 +46,10 @@ async function sendEmail(to: string, productName: string): Promise<boolean> {
       `,
     }),
   });
+  if (!res.ok) {
+    const errBody = await res.text();
+    console.error(`Resend error (${res.status}):`, errBody);
+  }
   return res.ok;
 }
 
