@@ -77,13 +77,22 @@ Deno.serve(async (req) => {
 
   // Get distinct product IDs and check which are in stock
   const productIds = [...new Set(pending.map((n: StockNotification) => n.product_id))];
-  const { data: products } = await supabase
+  const { data: products, error: prodError } = await supabase
     .from("products")
-    .select("id")
-    .in("id", productIds)
-    .eq("in_stock", true);
+    .select("id, in_stock, stock_quantity")
+    .in("id", productIds);
 
-  const inStockIds = new Set((products || []).map((p: { id: string }) => p.id));
+  console.log("Product IDs to check:", productIds);
+  console.log("Products found:", JSON.stringify(products));
+  if (prodError) console.error("Product query error:", prodError);
+
+  const inStockIds = new Set(
+    (products || [])
+      .filter((p: any) => p.in_stock === true || Number(p.stock_quantity) > 0)
+      .map((p: { id: string }) => p.id)
+  );
+
+  console.log("In stock IDs:", [...inStockIds]);
 
   if (inStockIds.size === 0) {
     return Response.json({ message: "No restocked products", sent: 0 });
