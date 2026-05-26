@@ -6,7 +6,7 @@ const supabase = createClient(
 );
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") || "Coffee Oasis <noreply@coffee-oasis.com.my>";
+const FROM_EMAIL = Deno.env.get("FROM_EMAIL") || "Coffee Oasis <noreply@coffee-oasis.com>";
 
 interface StockNotification {
   id: string;
@@ -17,7 +17,6 @@ interface StockNotification {
 }
 
 async function sendEmail(to: string, productName: string): Promise<boolean> {
-  console.log(`Sending email: from=${FROM_EMAIL}, to=${to}, key=${RESEND_API_KEY ? "set (" + RESEND_API_KEY.substring(0, 6) + "...)" : "MISSING"}`);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -55,17 +54,14 @@ async function sendEmail(to: string, productName: string): Promise<boolean> {
 
 // Stub: plug in WhatsApp provider (Twilio, Fonnte, etc.) when ready
 async function sendWhatsApp(_phone: string, _productName: string): Promise<boolean> {
-  console.log(`[WhatsApp stub] Would notify ${_phone} about ${_productName}`);
   return false;
 }
 
 Deno.serve(async (req) => {
-  // Allow cron or manual trigger via POST/GET
   if (req.method !== "POST" && req.method !== "GET") {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Find unnotified subscriptions where product is back in stock
   const { data: pending, error } = await supabase
     .from("stock_notifications")
     .select("id, product_id, product_name, phone, email")
@@ -80,16 +76,11 @@ Deno.serve(async (req) => {
     return Response.json({ message: "No pending notifications", sent: 0 });
   }
 
-  // Get distinct product IDs and check which are in stock
   const productIds = [...new Set(pending.map((n: StockNotification) => n.product_id))];
-  const { data: products, error: prodError } = await supabase
+  const { data: products } = await supabase
     .from("products")
     .select("id, in_stock, stock_quantity")
     .in("id", productIds);
-
-  console.log("Product IDs to check:", productIds);
-  console.log("Products found:", JSON.stringify(products));
-  if (prodError) console.error("Product query error:", prodError);
 
   const inStockIds = new Set(
     (products || [])
@@ -97,13 +88,10 @@ Deno.serve(async (req) => {
       .map((p: { id: string }) => p.id)
   );
 
-  console.log("In stock IDs:", [...inStockIds]);
-
   if (inStockIds.size === 0) {
     return Response.json({ message: "No restocked products", sent: 0 });
   }
 
-  // Filter to notifications for restocked products
   const toNotify = pending.filter((n: StockNotification) => inStockIds.has(n.product_id));
   const results = { emailSent: 0, whatsappSent: 0, failed: 0 };
   const notifiedIds: string[] = [];
@@ -117,7 +105,7 @@ Deno.serve(async (req) => {
         results.emailSent++;
         sent = true;
       } else {
-        console.error(`Email failed for ${notification.email}`);
+        results.failed++;
       }
     }
 
@@ -131,13 +119,9 @@ Deno.serve(async (req) => {
 
     if (sent) {
       notifiedIds.push(notification.id);
-    } else if (!notification.phone) {
-      // Email-only notification that failed — don't mark as notified so we retry
-      results.failed++;
     }
   }
 
-  // Mark successfully notified
   if (notifiedIds.length > 0) {
     await supabase
       .from("stock_notifications")
@@ -145,7 +129,6 @@ Deno.serve(async (req) => {
       .in("id", notifiedIds);
   }
 
-  console.log(`Restock notifications: ${JSON.stringify(results)}`);
   return Response.json({
     message: "Done",
     pending: toNotify.length,
