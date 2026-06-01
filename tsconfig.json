@@ -39,6 +39,7 @@
   ],
   "exclude": [
     "node_modules",
-    "fiuu-node"
+    "fiuu-node",
+    "supabase"
   ]
 }
