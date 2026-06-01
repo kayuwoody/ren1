@@ -110,6 +110,17 @@ export default function CustomerDisplayPage() {
     };
   }, []);
 
+  const [slideIndex, setSlideIndex] = useState(0);
+
+  // Rotate loyalty slides when cart is empty
+  useEffect(() => {
+    if (cartItems.length > 0) return;
+    const timer = setInterval(() => {
+      setSlideIndex(prev => (prev + 1) % 4);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [cartItems.length]);
+
   // Calculate totals
   const retailTotal = cartItems.reduce((sum, item) => sum + item.retailPrice * item.quantity, 0);
   const itemFinalTotal = cartItems.reduce((sum, item) => sum + item.finalPrice * item.quantity, 0);
@@ -191,23 +202,76 @@ export default function CustomerDisplayPage() {
       <div className="flex-1 mb-4">
         {cartItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full">
-            <div className="text-center">
-              <div className="relative w-72 h-72 mx-auto mb-4">
-                <Image
-                  src="/circle mascot2.jfif"
-                  alt="Coffee Oasis Mascot"
-                  fill
-                  className="object-contain mix-blend-multiply"
-                  style={{ backgroundColor: 'transparent' }}
-                  priority
-                />
+            {/* Loyalty Slides */}
+            <div className="w-full max-w-md mx-auto">
+              <div className="relative overflow-hidden rounded-2xl shadow-lg" style={{ minHeight: '320px' }}>
+                {/* Slide 0: Welcome + Mascot */}
+                <div className={`absolute inset-0 flex flex-col items-center justify-center p-8 bg-gradient-to-br from-amber-50 to-orange-50 transition-opacity duration-700 ${slideIndex === 0 ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className="relative w-48 h-48 mb-4">
+                    <Image
+                      src="/circle mascot2.jfif"
+                      alt="Coffee Oasis Mascot"
+                      fill
+                      className="object-contain mix-blend-multiply"
+                      style={{ backgroundColor: 'transparent' }}
+                      priority
+                    />
+                  </div>
+                  <p className="text-2xl font-bold text-amber-900">Welcome to Coffee Oasis</p>
+                  <p className="text-sm text-amber-700 mt-1">Join our rewards program and start saving!</p>
+                  <p className="text-xs text-amber-600 mt-3 font-medium">www.coffee-oasis.com</p>
+                </div>
+
+                {/* Slide 1: Daily Check-in */}
+                <div className={`absolute inset-0 flex flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-50 to-indigo-50 transition-opacity duration-700 ${slideIndex === 1 ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className="text-6xl mb-4">📱</div>
+                  <p className="text-2xl font-bold text-blue-900">Daily Check-in</p>
+                  <p className="text-base text-blue-700 mt-2 text-center">
+                    Scan your QR code every visit to collect stamps
+                  </p>
+                  <div className="mt-4 bg-blue-100 border border-blue-200 rounded-xl px-6 py-3">
+                    {/* UPDATE: Set your actual threshold */}
+                    <p className="text-lg font-bold text-blue-800">10 stamps = FREE voucher!</p>
+                  </div>
+                </div>
+
+                {/* Slide 2: Earn Points */}
+                <div className={`absolute inset-0 flex flex-col items-center justify-center p-8 bg-gradient-to-br from-green-50 to-emerald-50 transition-opacity duration-700 ${slideIndex === 2 ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className="text-6xl mb-4">💰</div>
+                  <p className="text-2xl font-bold text-green-900">Earn Points</p>
+                  <p className="text-base text-green-700 mt-2 text-center">
+                    Every ringgit you spend earns you points
+                  </p>
+                  <div className="mt-4 bg-green-100 border border-green-200 rounded-xl px-6 py-3">
+                    {/* UPDATE: Set your actual rate */}
+                    <p className="text-lg font-bold text-green-800">RM1 spent = 1 point</p>
+                  </div>
+                </div>
+
+                {/* Slide 3: Order Online */}
+                <div className={`absolute inset-0 flex flex-col items-center justify-center p-8 bg-gradient-to-br from-purple-50 to-pink-50 transition-opacity duration-700 ${slideIndex === 3 ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className="text-6xl mb-4">🌐</div>
+                  <p className="text-2xl font-bold text-purple-900">Order Online</p>
+                  <p className="text-base text-purple-700 mt-2 text-center">
+                    Skip the queue! Order ahead and pick up when ready
+                  </p>
+                  <div className="mt-4 bg-purple-100 border border-purple-200 rounded-xl px-6 py-3">
+                    <p className="text-lg font-bold text-purple-800">www.coffee-oasis.com</p>
+                  </div>
+                </div>
               </div>
-              <p className="text-2xl font-light text-gray-600">
-                Your cart is empty
-              </p>
-              <p className="text-sm text-gray-400 mt-2">
-                Items will appear here as they are added
-              </p>
+
+              {/* Slide indicators */}
+              <div className="flex justify-center gap-2 mt-4">
+                {[0, 1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      slideIndex === i ? 'bg-amber-500 w-6' : 'bg-gray-300'
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         ) : (
