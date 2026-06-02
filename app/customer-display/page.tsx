@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import QRCode from "react-qr-code";
-import { generateTngWalletQR } from "@/lib/duitnowQR";
+import { generateTngWalletStaticQR } from "@/lib/duitnowQR";
 
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -143,10 +143,7 @@ export default function CustomerDisplayPage() {
   const finalTotal = Math.max(0, itemFinalTotal - voucherAmount - passDiscount);
   const totalDiscount = retailTotal - finalTotal;
 
-  const qrPayload = useMemo(
-    () => finalTotal > 0 ? generateTngWalletQR(finalTotal) : '',
-    [finalTotal]
-  );
+  const qrPayload = useMemo(() => generateTngWalletStaticQR(), []);
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const hasDiscount = totalDiscount > 0;
 
@@ -446,7 +443,7 @@ export default function CustomerDisplayPage() {
       {cartItems.length > 0 && finalTotal > 0 && (
         <div className="mt-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-4 border border-purple-200 shadow-md">
           <p className="text-center text-sm font-semibold text-purple-800 mb-2">
-            Scan to pay with DuitNow / TNG
+            Scan & enter amount below
           </p>
           <div className="flex items-center justify-center gap-6">
             <div className="bg-white p-3 rounded-lg shadow-sm">
@@ -461,6 +458,7 @@ export default function CustomerDisplayPage() {
               <p className="text-4xl font-bold text-purple-700">
                 RM {finalTotal.toFixed(2)}
               </p>
+              <p className="text-xs text-gray-400 mt-1">TNG / DuitNow</p>
             </div>
           </div>
         </div>
