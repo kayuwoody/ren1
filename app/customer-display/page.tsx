@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import QRCode from "react-qr-code";
 import { generateTngWalletQR } from "@/lib/duitnowQR";
@@ -142,6 +142,11 @@ export default function CustomerDisplayPage() {
 
   const finalTotal = Math.max(0, itemFinalTotal - voucherAmount - passDiscount);
   const totalDiscount = retailTotal - finalTotal;
+
+  const qrPayload = useMemo(
+    () => finalTotal > 0 ? generateTngWalletQR(finalTotal) : '',
+    [finalTotal]
+  );
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const hasDiscount = totalDiscount > 0;
 
@@ -446,7 +451,7 @@ export default function CustomerDisplayPage() {
           <div className="flex items-center justify-center gap-6">
             <div className="bg-white p-3 rounded-lg shadow-sm">
               <QRCode
-                value={generateTngWalletQR(finalTotal)}
+                value={qrPayload}
                 size={160}
                 level="M"
               />
