@@ -1,22 +1,30 @@
 /**
- * DuitNow Dynamic QR Generator
+ * DuitNow QR Generator
  *
- * Generates EMVCo-compliant DuitNow QR payloads with a pre-filled payment amount.
- * Based on Coffee Oasis's static TNG merchant QR.
+ * Generates EMVCo-compliant DuitNow QR payloads.
+ * Supports two providers:
+ *   - Hong Leong merchant QR (static only — dynamic rejected by acquirer)
+ *   - TNG eWallet QR (supports dynamic with pre-filled amount)
  */
 
-const MERCHANT_ACCOUNT = {
+// Hong Leong DuitNow merchant account
+const HONG_LEONG = {
   aid: 'A0000006150001',
   proxyType: '588830',
   proxyValue: '0MYM2609241727325406698',
+  mcc: '5812',
+  name: 'COFFEE OASIS',
+  terminalId: '01',
 };
 
-const MERCHANT_INFO = {
-  mcc: '5812',
-  currency: '458',
-  country: 'MY',
-  name: 'COFFEE OASIS',
-  city: 'MY',
+// TNG eWallet account
+const TNG_WALLET = {
+  aid: 'A0000006150001',
+  proxyType: '890053',
+  proxyValue: '140504204365',
+  mcc: '0000',
+  name: 'DANNYLIMTHIAMEE',
+  terminalId: '687047754',
 };
 
 function tlv(tag: string, value: string): string {
@@ -38,36 +46,66 @@ function crc16CcittFalse(data: string): string {
   return crc.toString(16).toUpperCase().padStart(4, '0');
 }
 
-// Field order matches TNG's actual QR layout (non-standard but required by their app)
-function buildPayload(poiMethod: string, amount?: number): string {
+function generateReference(): string {
+  let ref = '';
+  for (let i = 0; i < 25; i++) {
+    ref += Math.floor(Math.random() * 10).toString();
+  }
+  return ref;
+}
+
+function buildPayload(
+  account: typeof HONG_LEONG,
+  poiMethod: string,
+  amount?: number,
+): string {
   const merchantAccount =
-    tlv('00', MERCHANT_ACCOUNT.aid) +
-    tlv('01', MERCHANT_ACCOUNT.proxyType) +
-    tlv('02', MERCHANT_ACCOUNT.proxyValue);
+    tlv('00', account.aid) +
+    tlv('01', account.proxyType) +
+    tlv('02', account.proxyValue);
+
+  let additionalData: string;
+  if (poiMethod === '12' && amount !== undefined) {
+    additionalData = tlv('05', generateReference()) + tlv('06', account.terminalId);
+  } else {
+    additionalData = tlv('06', account.terminalId);
+  }
 
   let payload = '';
   payload += tlv('00', '02');
   payload += tlv('01', poiMethod);
-  payload += tlv('52', MERCHANT_INFO.mcc);
-  payload += tlv('53', MERCHANT_INFO.currency);
+  payload += tlv('26', merchantAccount);
+  payload += tlv('52', account.mcc);
+  payload += tlv('53', '458');
   if (amount !== undefined) {
     payload += tlv('54', amount.toFixed(2));
   }
-  payload += tlv('58', MERCHANT_INFO.country);
-  payload += tlv('59', MERCHANT_INFO.name);
-  payload += tlv('60', MERCHANT_INFO.city);
-  payload += tlv('26', merchantAccount);
-  payload += tlv('62', tlv('08', '01'));
+  payload += tlv('58', 'MY');
+  payload += tlv('59', account.name);
+  payload += tlv('60', 'MY');
+  payload += tlv('62', additionalData);
   payload += '6304';
   payload += crc16CcittFalse(payload);
 
   return payload;
 }
 
-export function generateDuitNowQR(): string {
-  return buildPayload('11');
+/** TNG eWallet dynamic QR with pre-filled amount */
+export function generateTngWalletQR(amount: number): string {
+  return buildPayload(TNG_WALLET, '12', amount);
 }
 
+/** TNG eWallet static QR (no amount) */
+export function generateTngWalletStaticQR(): string {
+  return buildPayload(TNG_WALLET, '11');
+}
+
+/** Hong Leong DuitNow static QR (dynamic not supported by acquirer) */
+export function generateDuitNowQR(): string {
+  return buildPayload(HONG_LEONG, '11');
+}
+
+/** Hong Leong DuitNow static QR */
 export function generateStaticDuitNowQR(): string {
-  return buildPayload('11');
+  return buildPayload(HONG_LEONG, '11');
 }

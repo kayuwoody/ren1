@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import QRCode from "react-qr-code";
-import { generateDuitNowQR } from "@/lib/duitnowQR";
+import { generateTngWalletQR } from "@/lib/duitnowQR";
 
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -446,7 +446,7 @@ export default function CustomerDisplayPage() {
           <div className="flex items-center justify-center gap-6">
             <div className="bg-white p-3 rounded-lg shadow-sm">
               <QRCode
-                value={generateDuitNowQR()}
+                value={generateTngWalletQR(finalTotal)}
                 size={160}
                 level="M"
               />
