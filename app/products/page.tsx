@@ -10,6 +10,7 @@ interface Product {
   wcId?: number;
   name: string;
   price: string;
+  staff_price: number | null;
   images: { src: string }[];
   categories: { id: number; name: string; slug: string }[];
   stock_quantity: number | null;
@@ -70,6 +71,7 @@ const ProductListPage: React.FC = () => {
           productId: product.id,
           name: product.name,
           retailPrice: parseFloat(product.price),
+          staffPrice: product.staff_price ?? undefined,
           quantity: 1
         });
 
@@ -83,6 +85,7 @@ const ProductListPage: React.FC = () => {
         productId: product.id,
         name: product.name,
         retailPrice: parseFloat(product.price),
+        staffPrice: product.staff_price ?? undefined,
         quantity: 1
       });
 
@@ -135,10 +138,12 @@ const ProductListPage: React.FC = () => {
       console.log(`➡️  Not a combo - skipping component fetch`);
     }
 
+    const matchedProduct = products.find(p => p.id === bundle.baseProduct.id);
     addToCart({
       productId: bundle.baseProduct.id,
       name: bundle.displayName,
       retailPrice: bundle.totalPrice,
+      staffPrice: matchedProduct?.staff_price ?? undefined,
       quantity: 1,
       bundle: {
         baseProductId: bundle.baseProduct.id,
@@ -146,7 +151,7 @@ const ProductListPage: React.FC = () => {
         selectedMandatory: bundle.selectedMandatory,
         selectedOptional: bundle.selectedOptional,
       },
-      components, // Store components in cart item (only for combos)
+      components,
     });
 
     setToast(`Added ${bundle.displayName} to cart`);

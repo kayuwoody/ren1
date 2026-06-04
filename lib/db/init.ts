@@ -305,6 +305,26 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Migration: Add supplierProductName column to Product table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const has = tableInfo.some((col: any) => col.name === 'supplierProductName');
+    if (tableInfo.length > 0 && !has) {
+      db.exec(`ALTER TABLE Product ADD COLUMN supplierProductName TEXT`);
+      console.log('✅ supplierProductName column added');
+    }
+  } catch (e) {}
+
+  // Migration: Add staffPrice column to Product table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const has = tableInfo.some((col: any) => col.name === 'staffPrice');
+    if (tableInfo.length > 0 && !has) {
+      db.exec(`ALTER TABLE Product ADD COLUMN staffPrice REAL`);
+      console.log('✅ staffPrice column added');
+    }
+  } catch (e) {}
+
   // Migration: Add availableOnline column to Product table if it doesn't exist
   try {
     const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];

@@ -22,6 +22,7 @@ export async function GET(req: Request) {
       sku: product.sku,
       price: product.basePrice.toString(),
       regular_price: product.basePrice.toString(),
+      staff_price: product.staffPrice ?? null,
       stock_quantity: getBranchStock(branchId, 'product', product.id),
       manage_stock: product.manageStock,
       images: product.imageUrl ? [{ src: product.imageUrl }] : [],

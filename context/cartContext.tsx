@@ -5,6 +5,7 @@ export interface CartItem {
   productId: number | string;
   name: string;               // Display name (e.g., "Hot Latte" for bundles)
   retailPrice: number;        // Original catalog price
+  staffPrice?: number;        // Staff discount price (set in product admin)
   discountPercent?: number;   // Discount as percentage (0-100)
   discountAmount?: number;    // Discount as fixed amount
   discountReason?: string;    // Why discount was applied

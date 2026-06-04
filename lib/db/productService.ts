@@ -17,6 +17,8 @@ export interface Product {
   availableOnline: boolean;
   comboPriceOverride?: number;
   supplier?: string;
+  supplierProductName?: string;
+  staffPrice?: number;
   quantityPerCarton?: number;
   imageUrl?: string;
   createdAt: string;
@@ -98,7 +100,8 @@ export function upsertProduct(
       UPDATE Product
       SET wcId = ?, name = ?, sku = ?, category = ?, basePrice = ?,
           supplierCost = ?, unitCost = ?, manageStock = ?, availableOnline = ?,
-          supplier = ?, quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
+          supplier = ?, supplierProductName = ?, staffPrice = ?,
+          quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
       WHERE id = ?
     `);
 
@@ -113,6 +116,8 @@ export function upsertProduct(
       product.manageStock ? 1 : 0,
       product.availableOnline ? 1 : 0,
       product.supplier || null,
+      product.supplierProductName || null,
+      product.staffPrice ?? null,
       product.quantityPerCarton || null,
       product.imageUrl || null,
       now,
@@ -122,8 +127,9 @@ export function upsertProduct(
     // Insert new product — stockQuantity defaults to 0 (real stock lives in BranchStock)
     const stmt = db.prepare(`
       INSERT INTO Product (id, wcId, name, sku, category, basePrice, supplierCost, unitCost,
-                          stockQuantity, manageStock, availableOnline, supplier, quantityPerCarton, imageUrl, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+                          stockQuantity, manageStock, availableOnline, supplier, supplierProductName, staffPrice,
+                          quantityPerCarton, imageUrl, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -138,6 +144,8 @@ export function upsertProduct(
       product.manageStock ? 1 : 0,
       product.availableOnline ? 1 : 0,
       product.supplier || null,
+      product.supplierProductName || null,
+      product.staffPrice ?? null,
       product.quantityPerCarton || null,
       product.imageUrl || null,
       now,
@@ -184,8 +192,10 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
 
   const supplierCost = existing?.supplierCost ?? 0;
   const unitCost = existing?.unitCost ?? 0;
-  const supplier = existing?.supplier ?? undefined; // Preserve supplier
-  const quantityPerCarton = existing?.quantityPerCarton ?? undefined; // Preserve carton quantity
+  const supplier = existing?.supplier ?? undefined;
+  const supplierProductName = existing?.supplierProductName ?? undefined;
+  const staffPrice = existing?.staffPrice ?? undefined;
+  const quantityPerCarton = existing?.quantityPerCarton ?? undefined;
 
   // Debug logging for supplier sync
   if (existing?.supplier) {
@@ -220,8 +230,10 @@ export function syncProductFromWooCommerce(wcProduct: any): Product {
     stockQuantity, // Preserve existing stock (BranchStock is source of truth)
     manageStock: wcProduct.manage_stock ?? false, // Store whether WooCommerce tracks inventory
     availableOnline: existing?.availableOnline ?? true,
-    supplier, // Preserve existing supplier (local field)
-    quantityPerCarton, // Preserve existing carton quantity (local field)
+    supplier,
+    supplierProductName,
+    staffPrice,
+    quantityPerCarton,
     imageUrl: wcProduct.images?.[0]?.src,
   });
 

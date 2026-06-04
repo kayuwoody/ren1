@@ -73,8 +73,8 @@ export function createPurchaseOrder(input: CreatePurchaseOrderInput): PurchaseOr
       const material = db.prepare('SELECT name FROM Material WHERE id = ?').get(itemInput.materialId) as { name: string } | undefined;
       materialName = material?.name;
     } else if (itemInput.itemType === 'product' && itemInput.productId) {
-      const product = db.prepare('SELECT name, sku FROM Product WHERE id = ?').get(itemInput.productId) as { name: string; sku: string } | undefined;
-      productName = product?.name;
+      const product = db.prepare('SELECT name, supplierProductName, sku FROM Product WHERE id = ?').get(itemInput.productId) as { name: string; supplierProductName?: string; sku: string } | undefined;
+      productName = product?.supplierProductName || product?.name;
       sku = product?.sku;
     }
 

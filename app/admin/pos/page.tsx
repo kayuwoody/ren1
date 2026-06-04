@@ -472,6 +472,14 @@ export default function POSPage() {
                           >
                             +RM2
                           </button>
+                          {item.staffPrice != null && item.staffPrice < item.retailPrice && (
+                            <button
+                              onClick={() => updateItemDiscount(index, { type: 'override', value: item.staffPrice!, reason: 'Staff price' })}
+                              className="px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded-lg text-xs font-bold hover:bg-yellow-200 transition"
+                            >
+                              Staff RM{item.staffPrice.toFixed(2)}
+                            </button>
+                          )}
                           <button
                             onClick={() => applyQuickDiscount(index, 100, "Unicorns")}
                             className="px-3 py-1.5 bg-pink-100 text-pink-700 rounded-lg text-xs font-medium hover:bg-pink-200 transition"
