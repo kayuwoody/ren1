@@ -3,6 +3,7 @@ import { CartProvider } from "@/context/cartContext";
 import { BranchProvider } from "@/context/branchContext";
 import HeaderNav from "@/components/HeaderNav";
 import LoyaltyScanListener from "@/components/LoyaltyScanListener";
+import OnlineOrderNotifier from "@/components/OnlineOrderNotifier";
 
 export const metadata = {
   title: "Coffee POS",
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <HeaderNav />
             {children}
             <LoyaltyScanListener />
+            <OnlineOrderNotifier />
           </CartProvider>
         </BranchProvider>
       </body>
