@@ -280,9 +280,23 @@ export default function OnlineOrdersPage() {
   }, []);
 
   useEffect(() => {
-    if (urgentOrders.length > 0 && soundEnabled) {
-      playUrgentAlertSound();
-      urgentAlertInterval.current = setInterval(playUrgentAlertSound, 3000);
+    if (urgentOrders.length > 0) {
+      sendDesktopNotification(
+        'URGENT: Unacknowledged Orders!',
+        `${urgentOrders.length} order(s) waiting over 2 minutes — open POS now`
+      );
+      if (soundEnabledRef.current) {
+        playUrgentAlertSound();
+      }
+      urgentAlertInterval.current = setInterval(() => {
+        sendDesktopNotification(
+          'URGENT: Unacknowledged Orders!',
+          `${urgentOrders.length} order(s) still waiting — open POS now`
+        );
+        if (soundEnabledRef.current) {
+          playUrgentAlertSound();
+        }
+      }, 15000);
     } else {
       if (urgentAlertInterval.current) {
         clearInterval(urgentAlertInterval.current);
@@ -295,7 +309,7 @@ export default function OnlineOrdersPage() {
         urgentAlertInterval.current = null;
       }
     };
-  }, [urgentOrders.length, soundEnabled]);
+  }, [urgentOrders.length]);
 
   const acknowledgeUrgent = useCallback(() => {
     for (const order of urgentOrders) {
