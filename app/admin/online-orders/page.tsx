@@ -159,6 +159,7 @@ export default function OnlineOrdersPage() {
         const fetched: OnlineOrder[] = data.orders ?? [];
 
         if (initialLoadDone.current) {
+          // Detect genuinely new orders for sound + desktop notification
           const newPending = fetched.filter(
             o => o.status === 'pending' && !knownOrderIds.current.has(o.id)
           );
@@ -173,36 +174,28 @@ export default function OnlineOrdersPage() {
               'New Online Order!',
               `${order.customer_name || 'Guest'} — RM ${Number(order.total_paid).toFixed(2)}`
             );
-            if (!escalationTimers.current.has(order.id)) {
-              const timer = setTimeout(() => {
-                if (!acknowledgedIds.current.has(order.id)) {
-                  setUrgentOrders(prev => {
-                    if (prev.some(o => o.id === order.id)) return prev;
-                    return [...prev, order];
-                  });
-                }
-              }, 120000);
-              escalationTimers.current.set(order.id, timer);
-            }
           }
         } else {
-          // First load: start escalation timers for any existing pending orders
+          // First load: alert if there are existing pending orders
           const existingPending = fetched.filter(o => o.status === 'pending');
           if (existingPending.length > 0 && soundEnabledRef.current) {
             playAlertSound();
           }
-          for (const order of existingPending) {
-            if (!escalationTimers.current.has(order.id)) {
-              const timer = setTimeout(() => {
-                if (!acknowledgedIds.current.has(order.id)) {
-                  setUrgentOrders(prev => {
-                    if (prev.some(o => o.id === order.id)) return prev;
-                    return [...prev, order];
-                  });
-                }
-              }, 120000);
-              escalationTimers.current.set(order.id, timer);
-            }
+        }
+
+        // Always ensure every pending order has an escalation timer
+        const allPending = fetched.filter(o => o.status === 'pending');
+        for (const order of allPending) {
+          if (!escalationTimers.current.has(order.id) && !acknowledgedIds.current.has(order.id)) {
+            const timer = setTimeout(() => {
+              if (!acknowledgedIds.current.has(order.id)) {
+                setUrgentOrders(prev => {
+                  if (prev.some(o => o.id === order.id)) return prev;
+                  return [...prev, order];
+                });
+              }
+            }, 120000);
+            escalationTimers.current.set(order.id, timer);
           }
         }
 
