@@ -75,45 +75,49 @@ function formatMods(mods: Record<string, any> | null): { simple: string; comboIt
 function playAlertSound() {
   try {
     const ctx = new AudioContext();
-    const playBeep = (freq: number, delay: number) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      osc.type = 'sine';
-      gain.gain.value = 0.4;
-      osc.start(ctx.currentTime + delay);
-      gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
-      osc.stop(ctx.currentTime + delay + 0.3);
-    };
-    playBeep(880, 0);
-    playBeep(1100, 0.15);
-    playBeep(880, 0.3);
-    playBeep(1100, 0.45);
+    ctx.resume().then(() => {
+      const playBeep = (freq: number, delay: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'sine';
+        gain.gain.value = 0.4;
+        osc.start(ctx.currentTime + delay);
+        gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
+        osc.stop(ctx.currentTime + delay + 0.3);
+      };
+      playBeep(880, 0);
+      playBeep(1100, 0.15);
+      playBeep(880, 0.3);
+      playBeep(1100, 0.45);
+    });
   } catch {}
 }
 
 function playUrgentAlertSound() {
   try {
     const ctx = new AudioContext();
-    const playBeep = (freq: number, delay: number) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      osc.type = 'square';
-      gain.gain.value = 0.5;
-      osc.start(ctx.currentTime + delay);
-      gain.gain.setValueAtTime(0.5, ctx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.2);
-      osc.stop(ctx.currentTime + delay + 0.2);
-    };
-    for (let i = 0; i < 6; i++) {
-      playBeep(i % 2 === 0 ? 1200 : 900, i * 0.15);
-    }
+    ctx.resume().then(() => {
+      const playBeep = (freq: number, delay: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'square';
+        gain.gain.value = 0.5;
+        osc.start(ctx.currentTime + delay);
+        gain.gain.setValueAtTime(0.5, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.2);
+        osc.stop(ctx.currentTime + delay + 0.2);
+      };
+      for (let i = 0; i < 6; i++) {
+        playBeep(i % 2 === 0 ? 1200 : 900, i * 0.15);
+      }
+    });
   } catch {}
 }
 
@@ -139,10 +143,13 @@ export default function OnlineOrdersPage() {
   const knownOrderIds = useRef<Set<string>>(new Set());
   const knownArrivedIds = useRef<Set<string>>(new Set());
   const initialLoadDone = useRef(false);
+  const soundEnabledRef = useRef(soundEnabled);
   const acknowledgedIds = useRef<Set<string>>(new Set());
   const escalationTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const urgentAlertInterval = useRef<NodeJS.Timeout | null>(null);
   const [urgentOrders, setUrgentOrders] = useState<OnlineOrder[]>([]);
+
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -151,14 +158,14 @@ export default function OnlineOrdersPage() {
         const data = await res.json();
         const fetched: OnlineOrder[] = data.orders ?? [];
 
-        if (initialLoadDone.current && soundEnabled) {
+        if (initialLoadDone.current) {
           const newPending = fetched.filter(
             o => o.status === 'pending' && !knownOrderIds.current.has(o.id)
           );
           const newArrivals = fetched.filter(
             o => o.arrived_at && !knownArrivedIds.current.has(o.id)
           );
-          if (newPending.length > 0 || newArrivals.length > 0) {
+          if ((newPending.length > 0 || newArrivals.length > 0) && soundEnabledRef.current) {
             playAlertSound();
           }
           for (const order of newPending) {
@@ -166,6 +173,25 @@ export default function OnlineOrdersPage() {
               'New Online Order!',
               `${order.customer_name || 'Guest'} — RM ${Number(order.total_paid).toFixed(2)}`
             );
+            if (!escalationTimers.current.has(order.id)) {
+              const timer = setTimeout(() => {
+                if (!acknowledgedIds.current.has(order.id)) {
+                  setUrgentOrders(prev => {
+                    if (prev.some(o => o.id === order.id)) return prev;
+                    return [...prev, order];
+                  });
+                }
+              }, 120000);
+              escalationTimers.current.set(order.id, timer);
+            }
+          }
+        } else {
+          // First load: start escalation timers for any existing pending orders
+          const existingPending = fetched.filter(o => o.status === 'pending');
+          if (existingPending.length > 0 && soundEnabledRef.current) {
+            playAlertSound();
+          }
+          for (const order of existingPending) {
             if (!escalationTimers.current.has(order.id)) {
               const timer = setTimeout(() => {
                 if (!acknowledgedIds.current.has(order.id)) {
@@ -201,7 +227,7 @@ export default function OnlineOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [soundEnabled]);
+  }, []);
 
   const fetchIntakeStatus = useCallback(async () => {
     try {
