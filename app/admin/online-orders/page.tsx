@@ -5,7 +5,7 @@ import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import {
   Clock, User, Car, MapPin, Volume2, VolumeX,
   Check, X, ChefHat, Package, AlertTriangle, Pause, Play,
-  Store, Coffee, UtensilsCrossed, Layers,
+  Store, Coffee, UtensilsCrossed, Layers, Bell,
 } from 'lucide-react';
 
 interface OrderItem {
@@ -75,31 +75,51 @@ function formatMods(mods: Record<string, any> | null): { simple: string; comboIt
 function playAlertSound() {
   try {
     const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    osc.type = 'sine';
-    gain.gain.value = 0.3;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    osc.stop(ctx.currentTime + 0.5);
+    const playBeep = (freq: number, delay: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.value = 0.4;
+      osc.start(ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
+      osc.stop(ctx.currentTime + delay + 0.3);
+    };
+    playBeep(880, 0);
+    playBeep(1100, 0.15);
+    playBeep(880, 0.3);
+    playBeep(1100, 0.45);
+  } catch {}
+}
 
-    setTimeout(() => {
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.frequency.value = 1100;
-      osc2.type = 'sine';
-      gain2.gain.value = 0.3;
-      osc2.start();
-      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1);
-      osc2.stop(ctx.currentTime + 1);
-    }, 200);
-  } catch {
-    // Audio not available
+function playUrgentAlertSound() {
+  try {
+    const ctx = new AudioContext();
+    const playBeep = (freq: number, delay: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'square';
+      gain.gain.value = 0.5;
+      osc.start(ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0.5, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.2);
+      osc.stop(ctx.currentTime + delay + 0.2);
+    };
+    for (let i = 0; i < 6; i++) {
+      playBeep(i % 2 === 0 ? 1200 : 900, i * 0.15);
+    }
+  } catch {}
+}
+
+function sendDesktopNotification(title: string, body: string) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/circle mascot2.jfif', requireInteraction: true });
   }
 }
 
@@ -119,6 +139,10 @@ export default function OnlineOrdersPage() {
   const knownOrderIds = useRef<Set<string>>(new Set());
   const knownArrivedIds = useRef<Set<string>>(new Set());
   const initialLoadDone = useRef(false);
+  const acknowledgedIds = useRef<Set<string>>(new Set());
+  const escalationTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const urgentAlertInterval = useRef<NodeJS.Timeout | null>(null);
+  const [urgentOrders, setUrgentOrders] = useState<OnlineOrder[]>([]);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -136,6 +160,34 @@ export default function OnlineOrdersPage() {
           );
           if (newPending.length > 0 || newArrivals.length > 0) {
             playAlertSound();
+          }
+          for (const order of newPending) {
+            sendDesktopNotification(
+              'New Online Order!',
+              `${order.customer_name || 'Guest'} — RM ${Number(order.total_paid).toFixed(2)}`
+            );
+            if (!escalationTimers.current.has(order.id)) {
+              const timer = setTimeout(() => {
+                if (!acknowledgedIds.current.has(order.id)) {
+                  setUrgentOrders(prev => {
+                    if (prev.some(o => o.id === order.id)) return prev;
+                    return [...prev, order];
+                  });
+                }
+              }, 120000);
+              escalationTimers.current.set(order.id, timer);
+            }
+          }
+        }
+
+        // Clear escalation for orders no longer pending
+        for (const [id, timer] of escalationTimers.current) {
+          const order = fetched.find(o => o.id === id);
+          if (!order || order.status !== 'pending') {
+            clearTimeout(timer);
+            escalationTimers.current.delete(id);
+            acknowledgedIds.current.add(id);
+            setUrgentOrders(prev => prev.filter(o => o.id !== id));
           }
         }
 
@@ -203,6 +255,41 @@ export default function OnlineOrdersPage() {
   };
 
   useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (urgentOrders.length > 0 && soundEnabled) {
+      playUrgentAlertSound();
+      urgentAlertInterval.current = setInterval(playUrgentAlertSound, 3000);
+    } else {
+      if (urgentAlertInterval.current) {
+        clearInterval(urgentAlertInterval.current);
+        urgentAlertInterval.current = null;
+      }
+    }
+    return () => {
+      if (urgentAlertInterval.current) {
+        clearInterval(urgentAlertInterval.current);
+        urgentAlertInterval.current = null;
+      }
+    };
+  }, [urgentOrders.length, soundEnabled]);
+
+  const acknowledgeUrgent = useCallback(() => {
+    for (const order of urgentOrders) {
+      acknowledgedIds.current.add(order.id);
+    }
+    setUrgentOrders([]);
+    if (urgentAlertInterval.current) {
+      clearInterval(urgentAlertInterval.current);
+      urgentAlertInterval.current = null;
+    }
+  }, [urgentOrders]);
+
+  useEffect(() => {
     fetchOrders();
     fetchIntakeStatus();
     fetchAvgWait();
@@ -229,6 +316,13 @@ export default function OnlineOrdersPage() {
       clearInterval(pollInterval);
       clearInterval(tickInterval);
       supabaseBrowser.removeChannel(channel);
+      for (const timer of escalationTimers.current.values()) {
+        clearTimeout(timer);
+      }
+      escalationTimers.current.clear();
+      if (urgentAlertInterval.current) {
+        clearInterval(urgentAlertInterval.current);
+      }
     };
   }, [fetchOrders, fetchIntakeStatus, fetchAvgWait]);
 
@@ -514,6 +608,52 @@ export default function OnlineOrdersPage() {
           )}
         />
       </div>
+
+      {urgentOrders.length > 0 && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(198, 40, 40, 0.85)' }}>
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full mx-4 text-center animate-pulse">
+            <div className="flex justify-center mb-4">
+              <Bell className="w-16 h-16" style={{ color: '#C62828' }} />
+            </div>
+            <h2 className="text-2xl font-extrabold mb-2" style={{ color: '#C62828' }}>
+              Unacknowledged Orders!
+            </h2>
+            <p className="text-sm mb-6" style={{ color: '#546E7A' }}>
+              {urgentOrders.length === 1
+                ? 'An order has been waiting for over 2 minutes'
+                : `${urgentOrders.length} orders have been waiting for over 2 minutes`}
+            </p>
+            <div className="space-y-3 mb-6 max-h-60 overflow-y-auto">
+              {urgentOrders.map(order => (
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between px-4 py-3 rounded-xl"
+                  style={{ backgroundColor: '#FFF6E8', border: '1px solid #E5DDD0' }}
+                >
+                  <div className="text-left">
+                    <div className="text-sm font-bold" style={{ color: '#3A2414' }}>
+                      {order.customer_name || 'Guest'}
+                    </div>
+                    <div className="text-xs" style={{ color: '#546E7A' }}>
+                      {order.online_order_items?.length || 0} items · {timeAgo(order.created_at)}
+                    </div>
+                  </div>
+                  <div className="text-base font-bold" style={{ color: '#3A2414' }}>
+                    RM {Number(order.total_paid).toFixed(2)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={acknowledgeUrgent}
+              className="w-full py-4 rounded-2xl font-bold text-lg text-white transition"
+              style={{ backgroundColor: '#F58220' }}
+            >
+              Got it — I&apos;ll handle these now
+            </button>
+          </div>
+        </div>
+      )}
 
       {showMenu && (
         <>
