@@ -226,6 +226,14 @@ export default function SalesReportPage() {
             </button>
 
             <Link
+              href="/admin/sales/patterns"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+            >
+              <TrendingUp className="w-4 h-4" />
+              Patterns
+            </Link>
+
+            <Link
               href="/admin/sales/daily"
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
             >
