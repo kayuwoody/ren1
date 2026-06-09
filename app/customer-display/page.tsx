@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
-import QRCode from "react-qr-code";
-import { generateDuitNowQR } from "@/lib/duitnowQR";
 
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -132,7 +130,6 @@ export default function CustomerDisplayPage() {
   const finalTotal = Math.max(0, itemFinalTotal - voucherAmount - passDiscount);
   const totalDiscount = retailTotal - finalTotal;
 
-  const qrPayload = useMemo(() => generateDuitNowQR(), []);
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const hasDiscount = totalDiscount > 0;
 
@@ -382,25 +379,22 @@ export default function CustomerDisplayPage() {
 
       {/* DuitNow QR Payment */}
       {cartItems.length > 0 && finalTotal > 0 && (
-        <div className="mt-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-4 border border-purple-200 shadow-md">
-          <p className="text-center text-sm font-semibold text-purple-800 mb-2">
-            Scan & enter amount below
-          </p>
-          <div className="flex items-center justify-center gap-6">
-            <div className="bg-white p-3 rounded-lg shadow-sm">
-              <QRCode
-                value={qrPayload}
-                size={160}
-                level="M"
-              />
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-500 mb-1">Amount to pay</p>
-              <p className="text-4xl font-bold text-purple-700">
-                RM {finalTotal.toFixed(2)}
-              </p>
-              <p className="text-xs text-gray-400 mt-1">TNG / DuitNow</p>
-            </div>
+        <div className="mt-4 flex items-center justify-center gap-6">
+          <div className="rounded-xl overflow-hidden shadow-md" style={{ width: 200 }}>
+            <Image
+              src="/duitnow-qr.png"
+              alt="DuitNow QR - Scan to Pay"
+              width={400}
+              height={400}
+              className="w-full h-auto"
+            />
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-500 mb-1">Amount to pay</p>
+            <p className="text-4xl font-bold text-rose-600">
+              RM {finalTotal.toFixed(2)}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Scan with any bank or e-wallet</p>
           </div>
         </div>
       )}
