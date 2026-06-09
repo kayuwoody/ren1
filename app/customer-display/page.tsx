@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import QRCode from "react-qr-code";
-import { generateTngWalletStaticQR } from "@/lib/duitnowQR";
+import { generateDuitNowQR } from "@/lib/duitnowQR";
 
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -132,7 +132,7 @@ export default function CustomerDisplayPage() {
   const finalTotal = Math.max(0, itemFinalTotal - voucherAmount - passDiscount);
   const totalDiscount = retailTotal - finalTotal;
 
-  const qrPayload = useMemo(() => generateTngWalletStaticQR(), []);
+  const qrPayload = useMemo(() => generateDuitNowQR(), []);
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const hasDiscount = totalDiscount > 0;
 
