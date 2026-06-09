@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import QRCode from "react-qr-code";
 
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
