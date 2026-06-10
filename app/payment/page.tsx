@@ -12,7 +12,6 @@ export default function PaymentPage() {
   const { cartItems, clearCart, customer, voucher, pass, setVoucher } = useCart();
   const { branchFetch } = useBranch();
   const [order, setOrder] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_qr" | null>(null);
   const [passProductNames, setPassProductNames] = useState<string[]>([]);
@@ -75,129 +74,124 @@ export default function PaymentPage() {
     }
   }, [cartItems, order]);
 
-  const handlePaymentMethodSelect = async (method: "cash" | "bank_qr") => {
+  const handlePaymentMethodSelect = (method: "cash" | "bank_qr") => {
     setPaymentMethod(method);
-    setLoading(true);
-    setError(null);
+  };
 
-    try {
-      const totalDiscount = cartItems.reduce((sum, item) => {
-        if (item.discountReason) {
-          return sum + ((item.retailPrice - item.finalPrice) * item.quantity);
-        }
-        return sum;
-      }, 0);
-
-      const orderMetaData: Array<{ key: string; value: string }> = [];
-      if (totalDiscount > 0) {
-        orderMetaData.push({ key: "_total_discount", value: totalDiscount.toFixed(2) });
+  const createOrder = async (): Promise<any> => {
+    const totalDiscount = cartItems.reduce((sum, item) => {
+      if (item.discountReason) {
+        return sum + ((item.retailPrice - item.finalPrice) * item.quantity);
       }
-      if (voucher) {
-        orderMetaData.push(
-          { key: "_voucher_code", value: voucher.code },
-          { key: "_voucher_discount", value: voucherAmount.toFixed(2) },
-        );
-      }
-      if (pass && passAppliedProductIds.length > 0) {
-        orderMetaData.push(
-          { key: "_pass_id", value: pass.id },
-          { key: "_pass_code", value: pass.code },
-          { key: "_pass_discount", value: passDiscount.toFixed(2) },
-        );
-      }
-      if (customer) {
-        orderMetaData.push(
-          { key: "_loyalty_member_id", value: customer.member_id },
-          { key: "_loyalty_member_phone", value: customer.phone },
-        );
-        if (customer.name) {
-          orderMetaData.push({ key: "_loyalty_member_name", value: customer.name });
-        }
-      }
+      return sum;
+    }, 0);
 
-      const response = await branchFetch("/api/orders/create-with-payment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          line_items: cartItems.map((item) => {
-            const meta_data: Array<{ key: string; value: string }> = [];
-
-            if (item.discountReason) {
-              meta_data.push(
-                { key: "_discount_reason", value: item.discountReason },
-                { key: "_retail_price", value: item.retailPrice.toString() },
-                { key: "_discount_amount", value: (item.retailPrice - item.finalPrice).toString() }
-              );
-            }
-
-            if (item.surchargeAmount && item.surchargeAmount > 0) {
-              meta_data.push(
-                { key: "_surcharge_amount", value: item.surchargeAmount.toString() },
-                { key: "_surcharge_reason", value: item.surchargeReason || 'Upgrade' }
-              );
-            }
-
-            meta_data.push({ key: "_final_price", value: item.finalPrice.toString() });
-
-            if (item.bundle) {
-              meta_data.push(
-                { key: "_is_bundle", value: "true" },
-                { key: "_bundle_display_name", value: item.name },
-                { key: "_bundle_base_product_name", value: item.bundle.baseProductName },
-                { key: "_bundle_mandatory", value: JSON.stringify(item.bundle.selectedMandatory) },
-                { key: "_bundle_optional", value: JSON.stringify(item.bundle.selectedOptional) }
-              );
-
-              if (item.components) {
-                meta_data.push(
-                  { key: "_bundle_components", value: JSON.stringify(item.components) }
-                );
-              }
-            }
-
-            return {
-              product_id: item.productId,
-              quantity: item.quantity,
-              subtotal: (item.finalPrice * item.quantity).toString(),
-              total: (item.finalPrice * item.quantity).toString(),
-              meta_data,
-            };
-          }),
-          meta_data: orderMetaData.length > 0 ? orderMetaData : [],
-          billing: {
-            first_name: customer?.name || "Walk-in Customer",
-            phone: customer?.phone || null,
-            email: "pos@coffee-oasis.com.my",
-          },
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || "Failed to create order");
-      }
-
-      setOrder(data.order);
-
-      await fetch('/api/cart/current', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          setPendingOrder: true,
-          orderId: data.order.id,
-          items: cartItems,
-          voucher: voucher,
-          pass: pass,
-        }),
-      });
-    } catch (err: any) {
-      console.error("Order creation error:", err);
-      setError(err.message);
-      setPaymentMethod(null);
-    } finally {
-      setLoading(false);
+    const orderMetaData: Array<{ key: string; value: string }> = [];
+    if (totalDiscount > 0) {
+      orderMetaData.push({ key: "_total_discount", value: totalDiscount.toFixed(2) });
     }
+    if (voucher) {
+      orderMetaData.push(
+        { key: "_voucher_code", value: voucher.code },
+        { key: "_voucher_discount", value: voucherAmount.toFixed(2) },
+      );
+    }
+    if (pass && passAppliedProductIds.length > 0) {
+      orderMetaData.push(
+        { key: "_pass_id", value: pass.id },
+        { key: "_pass_code", value: pass.code },
+        { key: "_pass_discount", value: passDiscount.toFixed(2) },
+      );
+    }
+    if (customer) {
+      orderMetaData.push(
+        { key: "_loyalty_member_id", value: customer.member_id },
+        { key: "_loyalty_member_phone", value: customer.phone },
+      );
+      if (customer.name) {
+        orderMetaData.push({ key: "_loyalty_member_name", value: customer.name });
+      }
+    }
+
+    const response = await branchFetch("/api/orders/create-with-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        line_items: cartItems.map((item) => {
+          const meta_data: Array<{ key: string; value: string }> = [];
+
+          if (item.discountReason) {
+            meta_data.push(
+              { key: "_discount_reason", value: item.discountReason },
+              { key: "_retail_price", value: item.retailPrice.toString() },
+              { key: "_discount_amount", value: (item.retailPrice - item.finalPrice).toString() }
+            );
+          }
+
+          if (item.surchargeAmount && item.surchargeAmount > 0) {
+            meta_data.push(
+              { key: "_surcharge_amount", value: item.surchargeAmount.toString() },
+              { key: "_surcharge_reason", value: item.surchargeReason || 'Upgrade' }
+            );
+          }
+
+          meta_data.push({ key: "_final_price", value: item.finalPrice.toString() });
+
+          if (item.bundle) {
+            meta_data.push(
+              { key: "_is_bundle", value: "true" },
+              { key: "_bundle_display_name", value: item.name },
+              { key: "_bundle_base_product_name", value: item.bundle.baseProductName },
+              { key: "_bundle_mandatory", value: JSON.stringify(item.bundle.selectedMandatory) },
+              { key: "_bundle_optional", value: JSON.stringify(item.bundle.selectedOptional) }
+            );
+
+            if (item.components) {
+              meta_data.push(
+                { key: "_bundle_components", value: JSON.stringify(item.components) }
+              );
+            }
+          }
+
+          return {
+            product_id: item.productId,
+            quantity: item.quantity,
+            subtotal: (item.finalPrice * item.quantity).toString(),
+            total: (item.finalPrice * item.quantity).toString(),
+            meta_data,
+          };
+        }),
+        meta_data: orderMetaData.length > 0 ? orderMetaData : [],
+        paymentMethod: paymentMethod,
+        billing: {
+          first_name: customer?.name || "Walk-in Customer",
+          phone: customer?.phone || null,
+          email: "pos@coffee-oasis.com.my",
+        },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || "Failed to create order");
+    }
+
+    setOrder(data.order);
+
+    await fetch('/api/cart/current', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        setPendingOrder: true,
+        orderId: data.order.id,
+        items: cartItems,
+        voucher: voucher,
+        pass: pass,
+      }),
+    });
+
+    return data.order;
   };
 
   const handlePaymentSuccess = async () => {
@@ -274,24 +268,14 @@ export default function PaymentPage() {
     }
   }, [cartItems, order, router]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
-          <p className="text-gray-700">Creating order...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (order && paymentMethod) {
+  if (paymentMethod) {
     return (
       <div className="min-h-screen bg-gray-100 p-4">
         <CashPayment
-          orderID={order.id}
+          orderID={order?.id}
           amount={finalTotal.toFixed(2)}
           paymentMethod={paymentMethod}
+          onConfirmPayment={createOrder}
           onSuccess={handlePaymentSuccess}
           onCancel={handleCancel}
         />

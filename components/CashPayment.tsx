@@ -7,10 +7,11 @@ import { printerManager } from "@/lib/printerService";
 import { labelPrinter } from "@/lib/labelPrinterService";
 
 interface CashPaymentProps {
-  orderID: number;
+  orderID?: number | string;
   amount: string;
   currency?: string;
   paymentMethod?: "cash" | "bank_qr";
+  onConfirmPayment?: () => Promise<any>;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -36,6 +37,7 @@ export default function CashPayment({
   amount,
   currency = "MYR",
   paymentMethod = "cash",
+  onConfirmPayment,
   onSuccess,
   onCancel,
 }: CashPaymentProps) {
@@ -56,8 +58,18 @@ export default function CashPayment({
     setError(null);
 
     try {
-      // Update order status to processing (payment received)
-      const response = await fetch(`/api/orders/${orderID}`, {
+      let createdOrder: any = null;
+
+      if (onConfirmPayment) {
+        createdOrder = await onConfirmPayment();
+      }
+
+      const activeOrderId = createdOrder?.id || orderID;
+      if (!activeOrderId) {
+        throw new Error("Failed to create order");
+      }
+
+      const response = await fetch(`/api/orders/${activeOrderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -78,11 +90,10 @@ export default function CashPayment({
       setOrder(updatedOrder);
       setPaymentConfirmed(true);
 
-      // Generate static receipt and upload to hosting
       fetch('/api/receipts/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: orderID }),
+        body: JSON.stringify({ orderId: activeOrderId }),
       })
         .then(res => res.json())
         .then(data => {
@@ -92,7 +103,7 @@ export default function CashPayment({
         })
         .catch(err => console.error('Failed to generate static receipt:', err));
 
-      console.log(`✅ Order #${orderID} marked as paid (${paymentMethod})`);
+      console.log(`✅ Order #${activeOrderId} marked as paid (${paymentMethod})`);
     } catch (err: any) {
       console.error("Failed to confirm payment:", err);
       setError(err.message || "Failed to confirm payment");
@@ -304,7 +315,7 @@ export default function CashPayment({
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
           {paymentMethod === "cash" ? "💵 Cash Payment" : "📱 Bank QR Payment"}
         </h2>
-        <p className="text-gray-600">Order #{orderID}</p>
+        {orderID && <p className="text-gray-600">Order #{orderID}</p>}
       </div>
 
       {/* Amount */}
