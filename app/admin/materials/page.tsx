@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Edit2, Trash2, Package, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, Package, AlertCircle, PackagePlus } from 'lucide-react';
 import { useBranch } from '@/context/branchContext';
 
 interface Material {
@@ -27,6 +27,7 @@ export default function MaterialsPage() {
   const [filterCategory, setFilterCategory] = useState<'all' | 'ingredient' | 'packaging' | 'consumable'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
+  const [addStockMaterial, setAddStockMaterial] = useState<Material | null>(null);
 
   useEffect(() => {
     fetchMaterials();
@@ -202,6 +203,13 @@ export default function MaterialsPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
                       <button
+                        onClick={() => setAddStockMaterial(material)}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded"
+                        title="Add Stock"
+                      >
+                        <PackagePlus className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => {
                           setEditingMaterial(material);
                           setShowAddModal(true);
@@ -245,6 +253,18 @@ export default function MaterialsPage() {
           onSave={() => {
             setShowAddModal(false);
             setEditingMaterial(null);
+            fetchMaterials();
+          }}
+        />
+      )}
+
+      {/* Add Stock Modal */}
+      {addStockMaterial && (
+        <AddStockModal
+          material={addStockMaterial}
+          onClose={() => setAddStockMaterial(null)}
+          onSave={() => {
+            setAddStockMaterial(null);
             fetchMaterials();
           }}
         />
@@ -472,6 +492,155 @@ function MaterialModal({
               disabled={saving}
             >
               {saving ? 'Saving...' : (material ? 'Update Material' : 'Add Material')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function AddStockModal({
+  material,
+  onClose,
+  onSave,
+}: {
+  material: Material;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const { branchFetch } = useBranch();
+  const [quantity, setQuantity] = useState('');
+  const [totalCost, setTotalCost] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const addQty = parseFloat(quantity) || 0;
+  const addCost = parseFloat(totalCost) || 0;
+  const newCostPerUnit = addQty > 0 ? addCost / addQty : 0;
+
+  const currentStock = material.stockQuantity;
+  const avgCostPerUnit = currentStock > 0 && addQty > 0
+    ? (currentStock * material.costPerUnit + addQty * newCostPerUnit) / (currentStock + addQty)
+    : addQty > 0 ? newCostPerUnit : material.costPerUnit;
+
+  const costChanged = addQty > 0 && Math.abs(avgCostPerUnit - material.costPerUnit) > 0.0001;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+
+    try {
+      const res = await branchFetch(`/api/admin/materials/${material.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_stock',
+          quantity: addQty,
+          totalCost: addCost,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to add stock');
+
+      onSave();
+    } catch (error) {
+      console.error('Failed to add stock:', error);
+      alert('Failed to add stock. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full">
+        <div className="p-6 border-b">
+          <h2 className="text-xl font-bold">Add Stock</h2>
+          <p className="text-sm text-gray-500 mt-1">{material.name}</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="bg-gray-50 rounded-lg p-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Current stock</span>
+              <span className="font-medium">{currentStock}{material.purchaseUnit}</span>
+            </div>
+            <div className="flex justify-between mt-1">
+              <span className="text-gray-600">Current cost</span>
+              <span className="font-medium">RM {material.costPerUnit.toFixed(4)}/{material.purchaseUnit}</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Quantity to add ({material.purchaseUnit})
+            </label>
+            <input
+              type="number"
+              step="any"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder={`e.g., ${material.purchaseQuantity}`}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Total cost of this purchase (RM)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={totalCost}
+              onChange={(e) => setTotalCost(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder={`e.g., ${material.purchaseCost.toFixed(2)}`}
+              required
+            />
+          </div>
+
+          {addQty > 0 && addCost > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-blue-700">New stock cost</span>
+                <span className="font-medium text-blue-900">RM {newCostPerUnit.toFixed(4)}/{material.purchaseUnit}</span>
+              </div>
+              <div className="flex justify-between border-t border-blue-200 pt-1.5">
+                <span className="text-blue-700 font-semibold">Avg cost after</span>
+                <span className={`font-bold ${costChanged ? 'text-blue-900' : 'text-gray-700'}`}>
+                  RM {avgCostPerUnit.toFixed(4)}/{material.purchaseUnit}
+                </span>
+              </div>
+              {costChanged && (
+                <p className="text-xs text-blue-600">
+                  {avgCostPerUnit > material.costPerUnit ? '↑' : '↓'} {Math.abs(((avgCostPerUnit - material.costPerUnit) / material.costPerUnit) * 100).toFixed(1)}% from current — recipes will recalculate
+                </p>
+              )}
+              <div className="flex justify-between border-t border-blue-200 pt-1.5">
+                <span className="text-blue-700">Stock after</span>
+                <span className="font-medium text-blue-900">{(currentStock + addQty)}{material.purchaseUnit}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              disabled={saving || addQty <= 0}
+            >
+              {saving ? 'Adding...' : 'Add Stock'}
             </button>
           </div>
         </form>
