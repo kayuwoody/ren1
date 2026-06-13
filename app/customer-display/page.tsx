@@ -135,9 +135,9 @@ export default function CustomerDisplayPage() {
   const hasDiscount = totalDiscount > 0;
 
   return (
-    <div className="min-h-screen bg-white p-4 flex flex-col">
+    <div className="h-screen bg-white p-4 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="mb-4 border-b border-gray-200 pb-3">
+      <div className="mb-4 border-b border-gray-200 pb-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative h-[230px] w-auto">
@@ -195,12 +195,12 @@ export default function CustomerDisplayPage() {
       </div>
 
       {/* Your Order Text */}
-      <div className="mb-4">
+      <div className="mb-4 shrink-0">
         <p className="text-2xl font-semibold text-gray-800">Your Order</p>
       </div>
 
       {/* Items List */}
-      <div className="flex-1 mb-4">
+      <div className="flex-1 mb-4 overflow-y-auto min-h-0">
         {cartItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full">
             <div className="relative w-48 h-48 mb-4">
@@ -298,7 +298,7 @@ export default function CustomerDisplayPage() {
 
       {/* Total Section */}
       {cartItems.length > 0 && (
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-md">
+        <div className="shrink-0 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-md">
           <div className="space-y-2">
             {/* Item Count */}
             <div className="flex items-center justify-between text-sm">
@@ -380,7 +380,7 @@ export default function CustomerDisplayPage() {
 
       {/* DuitNow QR Payment */}
       {cartItems.length > 0 && finalTotal > 0 && (
-        <div className="mt-4 flex items-center justify-center gap-6">
+        <div className="mt-4 shrink-0 flex items-center justify-center gap-6">
           <div className="rounded-xl overflow-hidden shadow-md" style={{ width: 200 }}>
             <Image
               src="/duitnow-qr.png"
@@ -401,7 +401,7 @@ export default function CustomerDisplayPage() {
       )}
 
       {/* Footer */}
-      <div className="mt-4 text-center">
+      <div className="mt-4 text-center shrink-0">
         <p className="text-xs text-gray-600">
           Thank you for choosing Coffee Oasis! ☕
         </p>
