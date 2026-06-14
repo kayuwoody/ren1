@@ -76,6 +76,9 @@ export default function OnlineOrdersPage() {
   const [orders, setOrders] = useState<OnlineOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [intakePaused, setIntakePaused] = useState(false);
+  const [scheduled, setScheduled] = useState(true);
+  const [forceOpen, setForceOpen] = useState(false);
+  const [manualPaused, setManualPaused] = useState(false);
   const [avgWait, setAvgWait] = useState(0);
   const [rejectingOrderId, setRejectingOrderId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -105,6 +108,9 @@ export default function OnlineOrdersPage() {
       if (res.ok) {
         const data = await res.json();
         setIntakePaused(data.intake_paused);
+        setScheduled(data.scheduled ?? true);
+        setForceOpen(data.force_open ?? false);
+        setManualPaused(data.manual_paused ?? false);
       }
     } catch {}
   }, []);
@@ -213,16 +219,15 @@ export default function OnlineOrdersPage() {
     }
   };
 
-  const toggleIntake = async () => {
-    const newState = !intakePaused;
+  const setIntakeAction = async (action: 'force_open' | 'close' | 'auto') => {
     try {
       const res = await fetch('/api/online-orders/intake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paused: newState }),
+        body: JSON.stringify({ action }),
       });
       if (res.ok) {
-        setIntakePaused(newState);
+        await fetchIntakeStatus();
       }
     } catch {}
   };
@@ -247,9 +252,29 @@ export default function OnlineOrdersPage() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FFF6E8' }}>
       {intakePaused && (
-        <div className="px-4 py-3 text-center text-white font-semibold" style={{ backgroundColor: '#C62828' }}>
-          <AlertTriangle className="inline w-5 h-5 mr-2 -mt-0.5" />
-          Online ordering is PAUSED — customers cannot place new orders
+        <div className="px-4 py-2 text-center text-white font-semibold text-sm" style={{ backgroundColor: '#C62828' }}>
+          <AlertTriangle className="inline w-4 h-4 mr-1.5 -mt-0.5" />
+          {manualPaused ? 'Manually paused' : !scheduled ? 'Outside business hours (8am–8:30pm, closed Sun)' : 'Paused'}
+          {' — customers cannot place orders'}
+          {!scheduled && !manualPaused && (
+            <button
+              onClick={() => setIntakeAction('force_open')}
+              className="ml-3 px-2 py-0.5 bg-white text-red-700 rounded text-xs font-bold hover:bg-red-50"
+            >
+              Open anyway
+            </button>
+          )}
+        </div>
+      )}
+      {forceOpen && !scheduled && !intakePaused && (
+        <div className="px-4 py-2 text-center text-white font-semibold text-sm" style={{ backgroundColor: '#2E7D32' }}>
+          Manually opened outside business hours
+          <button
+            onClick={() => setIntakeAction('auto')}
+            className="ml-3 px-2 py-0.5 bg-white text-green-700 rounded text-xs font-bold hover:bg-green-50"
+          >
+            Back to schedule
+          </button>
         </div>
       )}
 
@@ -287,16 +312,23 @@ export default function OnlineOrdersPage() {
             )}
           </button>
 
-          <button
-            onClick={toggleIntake}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition"
-            style={{ backgroundColor: intakePaused ? '#2E7D32' : '#C62828' }}
-          >
-            {intakePaused
-              ? <><Play className="w-4 h-4" /> Resume Intake</>
-              : <><Pause className="w-4 h-4" /> Pause Intake</>
-            }
-          </button>
+          {intakePaused ? (
+            <button
+              onClick={() => scheduled ? setIntakeAction('auto') : setIntakeAction('force_open')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition"
+              style={{ backgroundColor: '#2E7D32' }}
+            >
+              <Play className="w-4 h-4" /> {scheduled ? 'Resume' : 'Open'}
+            </button>
+          ) : (
+            <button
+              onClick={() => setIntakeAction('close')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition"
+              style={{ backgroundColor: '#C62828' }}
+            >
+              <Pause className="w-4 h-4" /> Pause
+            </button>
+          )}
         </div>
       </header>
 
