@@ -160,19 +160,26 @@ export async function GET(req: Request) {
                 unitCost: c.unitCost || prod?.unitCost || prod?.supplierCost || 0,
               };
             });
-            // Sum component base prices for proportional revenue split
+            // Revenue split: proportional by base price
             const totalCompBasePrice = compsWithPrices.reduce(
               (s: number, c: any) => s + c.basePrice * (c.quantity || 1), 0
+            );
+            // COGS split: proportional by unit cost (uses combo's actual recorded COGS)
+            const totalCompUnitCost = compsWithPrices.reduce(
+              (s: number, c: any) => s + c.unitCost * (c.quantity || 1), 0
             );
             for (const comp of compsWithPrices) {
               const compQty = (comp.quantity || 1) * item.quantity;
               const compBaseTotal = comp.basePrice * (comp.quantity || 1);
-              // Revenue: proportional share of the combo's actual revenue
+              const compCostTotal = comp.unitCost * (comp.quantity || 1);
+              // Revenue: share of combo's actual revenue by base price ratio
               const compRevenue = totalCompBasePrice > 0
                 ? (compBaseTotal / totalCompBasePrice) * itemRevenue
                 : 0;
-              // COGS: each component's actual unit cost
-              const compCogs = comp.unitCost * compQty;
+              // COGS: share of combo's actual recorded COGS by unit cost ratio
+              const compCogs = totalCompUnitCost > 0
+                ? (compCostTotal / totalCompUnitCost) * itemCOGS
+                : 0;
               addExpandedItem(comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
             }
           } catch {}
