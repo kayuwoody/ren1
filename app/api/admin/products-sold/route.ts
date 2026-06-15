@@ -94,21 +94,22 @@ export async function GET(req: Request) {
           expandedStats[productId].combos.push(comboName);
         }
       }
-      // Track variant-level stats
-      if (productName !== baseName) {
-        if (!expandedStats[productId].variants[productName]) {
-          expandedStats[productId].variants[productName] = {
-            name: productName, quantity: 0, standalone: 0, fromCombos: 0,
-            revenue: 0, cogs: 0,
-          };
-        }
-        const v = expandedStats[productId].variants[productName];
-        v.quantity += qty;
-        v.revenue += revenue;
-        v.cogs += cogs;
-        if (source === 'standalone') v.standalone += qty;
-        else v.fromCombos += qty;
+      // Track variant-level stats. Always record a variant (keyed by the display
+      // name) so the breakdown reconciles to the base total — base-name sales
+      // (no modifier selected) show under the base name.
+      const variantKey = productName;
+      if (!expandedStats[productId].variants[variantKey]) {
+        expandedStats[productId].variants[variantKey] = {
+          name: variantKey, quantity: 0, standalone: 0, fromCombos: 0,
+          revenue: 0, cogs: 0,
+        };
       }
+      const variant = expandedStats[productId].variants[variantKey];
+      variant.quantity += qty;
+      variant.revenue += revenue;
+      variant.cogs += cogs;
+      if (source === 'standalone') variant.standalone += qty;
+      else variant.fromCombos += qty;
     };
 
     // Process POS orders

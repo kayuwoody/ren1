@@ -756,7 +756,9 @@ export default function ProductsSoldPage() {
                     .filter(item => !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase())
                       || item.variants?.some(v => v.name.toLowerCase().includes(searchQuery.toLowerCase())))
                     .map((item) => {
-                      const hasVariants = item.variants && item.variants.length > 0;
+                      // Show the breakdown chevron only when there's more than one
+                      // variant (a single variant equals the item itself).
+                      const hasVariants = item.variants && item.variants.length > 1;
                       const isOpen = expandedVariants.has(item.productId);
                       return (
                         <React.Fragment key={item.productId}>
