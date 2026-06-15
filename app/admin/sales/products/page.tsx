@@ -27,7 +27,19 @@ interface ProductData {
   sales: SaleDetail[];
 }
 
+interface ExpandedVariant {
+  name: string;
+  quantity: number;
+  standalone: number;
+  fromCombos: number;
+  revenue: number;
+  cogs: number;
+  profit: number;
+  margin: number;
+}
+
 interface ExpandedItem {
+  productId: string;
   name: string;
   quantity: number;
   standalone: number;
@@ -37,6 +49,7 @@ interface ExpandedItem {
   profit: number;
   margin: number;
   combos: string[];
+  variants: ExpandedVariant[];
 }
 
 interface ProductsReport {
@@ -81,6 +94,7 @@ export default function ProductsSoldPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'products' | 'expanded'>('products');
 
   const toggleExpanded = (productName: string) => {
@@ -90,6 +104,18 @@ export default function ProductsSoldPage() {
         next.delete(productName);
       } else {
         next.add(productName);
+      }
+      return next;
+    });
+  };
+
+  const toggleVariants = (productId: string) => {
+    setExpandedVariants(prev => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
       }
       return next;
     });
@@ -727,53 +753,106 @@ export default function ProductsSoldPage() {
                 </thead>
                 <tbody className="divide-y">
                   {(report.expandedItems || [])
-                    .filter(item => !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((item, index) => (
-                      <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-4 py-4 text-sm font-medium">{item.name}</td>
-                        <td className="px-4 py-4 text-sm text-right font-bold text-purple-600">
-                          {item.quantity}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-right text-gray-700">
-                          {item.standalone}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-right">
-                          {item.fromCombos > 0 ? (
-                            <span className="text-blue-600 font-semibold">{item.fromCombos}</span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-right">
-                          RM {item.revenue.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-right text-red-600">
-                          RM {item.cogs.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-right font-bold text-green-600">
-                          RM {item.profit.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-right">
-                          <MarginBadge margin={item.margin} />
-                        </td>
-                        <td className="px-4 py-4 text-sm text-gray-500">
-                          {item.combos.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {item.combos.map((combo, i) => (
-                                <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">
-                                  {combo}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                        </td>
-                      </tr>
-                    ))}
+                    .filter(item => !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase())
+                      || item.variants?.some(v => v.name.toLowerCase().includes(searchQuery.toLowerCase())))
+                    .map((item) => {
+                      const hasVariants = item.variants && item.variants.length > 0;
+                      const isOpen = expandedVariants.has(item.productId);
+                      return (
+                        <React.Fragment key={item.productId}>
+                          <tr className="hover:bg-gray-50">
+                            <td className="px-4 py-4 text-sm font-medium">
+                              <div className="flex items-center gap-1">
+                                {hasVariants ? (
+                                  <button
+                                    onClick={() => toggleVariants(item.productId)}
+                                    className="p-0.5 rounded hover:bg-gray-200 -ml-1"
+                                  >
+                                    {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                                  </button>
+                                ) : (
+                                  <span className="w-5" />
+                                )}
+                                {item.name}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right font-bold text-purple-600">
+                              {item.quantity}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right text-gray-700">
+                              {item.standalone}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right">
+                              {item.fromCombos > 0 ? (
+                                <span className="text-blue-600 font-semibold">{item.fromCombos}</span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right">
+                              RM {item.revenue.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right text-red-600">
+                              RM {item.cogs.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right font-bold text-green-600">
+                              RM {item.profit.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right">
+                              <MarginBadge margin={item.margin} />
+                            </td>
+                            <td className="px-4 py-4 text-sm text-gray-500">
+                              {item.combos.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {item.combos.map((combo, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">
+                                      {combo}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </td>
+                          </tr>
+                          {hasVariants && isOpen && item.variants.map((v, vi) => (
+                            <tr key={`${item.productId}-v-${vi}`} className="bg-gray-50/50">
+                              <td className="px-4 py-2 text-sm text-gray-500 pl-10">
+                                {v.name}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-purple-400">
+                                {v.quantity}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-gray-400">
+                                {v.standalone}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right">
+                                {v.fromCombos > 0 ? (
+                                  <span className="text-blue-400">{v.fromCombos}</span>
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-gray-500">
+                                RM {v.revenue.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-red-400">
+                                RM {v.cogs.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-green-500">
+                                RM {v.profit.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right">
+                                <MarginBadge margin={v.margin} />
+                              </td>
+                              <td className="px-4 py-2 text-sm"></td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
                 </tbody>
               </table>
               <div className="px-4 py-3 border-t text-xs text-gray-500">
-                Combo revenue is split proportionally across components by their base price.
-                COGS uses each component's unit cost.
+                Combo revenue split by base price ratio. COGS from actual consumption records at time of sale.
               </div>
             </div>
           )}
