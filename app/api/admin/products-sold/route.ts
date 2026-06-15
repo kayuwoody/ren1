@@ -151,27 +151,28 @@ export async function GET(req: Request) {
             const visibleComps = components.filter(
               (c: any) => c.productName && c.category !== 'hidden' && c.category !== 'private'
             );
-            // Look up each component's base price from the product table
+            // Look up each component's prices from the product table
             const compsWithPrices = visibleComps.map((c: any) => {
               const prod = c.productId ? getProduct(c.productId) : undefined;
               return {
                 ...c,
                 basePrice: c.basePrice || prod?.basePrice || 0,
+                unitCost: c.unitCost || prod?.unitCost || prod?.supplierCost || 0,
               };
             });
-            // Sum component base prices to calculate proportional share
+            // Sum component base prices for proportional revenue split
             const totalCompBasePrice = compsWithPrices.reduce(
               (s: number, c: any) => s + c.basePrice * (c.quantity || 1), 0
             );
             for (const comp of compsWithPrices) {
               const compQty = (comp.quantity || 1) * item.quantity;
               const compBaseTotal = comp.basePrice * (comp.quantity || 1);
-              const priceRatio = totalCompBasePrice > 0
-                ? compBaseTotal / totalCompBasePrice
+              // Revenue: proportional share of the combo's actual revenue
+              const compRevenue = totalCompBasePrice > 0
+                ? (compBaseTotal / totalCompBasePrice) * itemRevenue
                 : 0;
-              // Split both revenue and COGS proportionally by base price
-              const compRevenue = priceRatio * itemRevenue;
-              const compCogs = priceRatio * itemCOGS;
+              // COGS: each component's actual unit cost
+              const compCogs = comp.unitCost * compQty;
               addExpandedItem(comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
             }
           } catch {}
