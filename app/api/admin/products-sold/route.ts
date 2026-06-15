@@ -151,30 +151,72 @@ export async function GET(req: Request) {
             const visibleComps = components.filter(
               (c: any) => c.productName && c.category !== 'hidden' && c.category !== 'private'
             );
+
+            // Build per-component COGS from actual consumption records
+            // Each consumption record has productId = the product whose recipe it came from
+            // 'product' type records link parent → child via linkedProductId
+            const componentCogs: Record<string, number> = {};
+            if (itemConsumptions.length > 0) {
+              // Build parent map: childProductId → parentProductId
+              const parentMap: Record<string, string> = {};
+              const comboProductId = item.productId;
+              for (const c of itemConsumptions) {
+                if (c.itemType === 'product' && c.linkedProductId) {
+                  parentMap[c.linkedProductId] = c.productId;
+                }
+              }
+              // Find which direct combo child a productId belongs to
+              const resolveTopChild = (productId: string): string | null => {
+                let current = productId;
+                for (let i = 0; i < 10; i++) {
+                  const parent = parentMap[current];
+                  if (!parent || parent === comboProductId) return current;
+                  current = parent;
+                }
+                return current;
+              };
+              // Sum material costs per top-level component
+              let comboLevelCost = 0;
+              for (const c of itemConsumptions) {
+                if (c.itemType === 'material' && c.totalCost > 0) {
+                  const topChild = resolveTopChild(c.productId);
+                  if (topChild && topChild !== comboProductId) {
+                    componentCogs[topChild] = (componentCogs[topChild] || 0) + c.totalCost;
+                  } else {
+                    comboLevelCost += c.totalCost;
+                  }
+                }
+              }
+              // Distribute combo-level costs (packaging etc.) evenly across components
+              if (comboLevelCost > 0 && visibleComps.length > 0) {
+                const share = comboLevelCost / visibleComps.length;
+                for (const c of visibleComps) {
+                  componentCogs[c.productId] = (componentCogs[c.productId] || 0) + share;
+                }
+              }
+            }
+
             const compsWithPrices = visibleComps.map((c: any) => {
               const prod = c.productId ? getProduct(c.productId) : undefined;
               const bp = c.basePrice || prod?.basePrice || 0;
-              const uc = c.unitCost || prod?.unitCost || prod?.supplierCost || 0;
-              return { ...c, basePrice: bp, unitCost: uc };
+              return { ...c, basePrice: bp, actualCogs: componentCogs[c.productId] || 0 };
             });
             const totalCompBasePrice = compsWithPrices.reduce(
               (s: number, c: any) => s + c.basePrice * (c.quantity || 1), 0
             );
-            const totalCompUnitCost = compsWithPrices.reduce(
-              (s: number, c: any) => s + c.unitCost * (c.quantity || 1), 0
+            const totalActualCogs = compsWithPrices.reduce(
+              (s: number, c: any) => s + c.actualCogs, 0
             );
-            // Use unitCost ratio when all components have costs; otherwise fall back to basePrice ratio
-            const allHaveCost = compsWithPrices.every((c: any) => c.unitCost > 0);
             for (const comp of compsWithPrices) {
               const compQty = (comp.quantity || 1) * item.quantity;
               const compBaseTotal = comp.basePrice * (comp.quantity || 1);
-              const compUnitCostTotal = comp.unitCost * (comp.quantity || 1);
               const compRevenue = totalCompBasePrice > 0
                 ? (compBaseTotal / totalCompBasePrice) * itemRevenue
                 : 0;
-              // COGS: split by unitCost ratio if reliable, otherwise by basePrice ratio
-              const compCogs = allHaveCost && totalCompUnitCost > 0
-                ? (compUnitCostTotal / totalCompUnitCost) * itemCOGS
+              // Use actual per-component COGS from consumption records;
+              // fall back to proportional split of combo COGS by basePrice if no data
+              const compCogs = totalActualCogs > 0
+                ? comp.actualCogs
                 : totalCompBasePrice > 0
                   ? (compBaseTotal / totalCompBasePrice) * itemCOGS
                   : 0;
