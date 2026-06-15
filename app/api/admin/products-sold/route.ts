@@ -169,85 +169,98 @@ export async function GET(req: Request) {
         });
 
         // Expanded view: break bundles into components with financials
-        if (isBundle && v._bundle_components) {
-          try {
-            const components = typeof v._bundle_components === 'string'
-              ? JSON.parse(v._bundle_components) : v._bundle_components;
-            const visibleComps = components.filter(
-              (c: any) => c.productName && c.category !== 'hidden' && c.category !== 'private'
-            );
+        if (isBundle) {
+          // Derive components from consumption records (always available, more reliable than _bundle_components)
+          const comboProductId = item.productId;
+          const parentMap: Record<string, string> = {};
+          const directChildren: Array<{ productId: string; productName: string }> = [];
 
-            // Build per-component COGS from actual consumption records
-            // Each consumption record has productId = the product whose recipe it came from
-            // 'product' type records link parent → child via linkedProductId
+          for (const c of itemConsumptions) {
+            if (c.itemType === 'product' && c.linkedProductId) {
+              parentMap[c.linkedProductId] = c.productId;
+              if (c.productId === comboProductId) {
+                const childProd = getProduct(c.linkedProductId);
+                directChildren.push({
+                  productId: c.linkedProductId,
+                  productName: childProd?.name || c.linkedProductName || 'Unknown',
+                });
+              }
+            }
+          }
+
+          // Fall back to _bundle_components if no consumption records identify children
+          if (directChildren.length === 0 && v._bundle_components) {
+            try {
+              const components = typeof v._bundle_components === 'string'
+                ? JSON.parse(v._bundle_components) : v._bundle_components;
+              for (const c of components) {
+                if (c.productId && c.productName && c.category !== 'hidden' && c.category !== 'private') {
+                  directChildren.push({ productId: c.productId, productName: c.productName });
+                }
+              }
+            } catch {}
+          }
+
+          if (directChildren.length > 0) {
+            // Build per-component COGS from consumption records
+            const resolveTopChild = (pid: string): string | null => {
+              let current = pid;
+              for (let i = 0; i < 10; i++) {
+                const parent = parentMap[current];
+                if (!parent || parent === comboProductId) return current;
+                current = parent;
+              }
+              return current;
+            };
+
             const componentCogs: Record<string, number> = {};
-            if (itemConsumptions.length > 0) {
-              // Build parent map: childProductId → parentProductId
-              const parentMap: Record<string, string> = {};
-              const comboProductId = item.productId;
-              for (const c of itemConsumptions) {
-                if (c.itemType === 'product' && c.linkedProductId) {
-                  parentMap[c.linkedProductId] = c.productId;
-                }
-              }
-              // Find which direct combo child a productId belongs to
-              const resolveTopChild = (productId: string): string | null => {
-                let current = productId;
-                for (let i = 0; i < 10; i++) {
-                  const parent = parentMap[current];
-                  if (!parent || parent === comboProductId) return current;
-                  current = parent;
-                }
-                return current;
-              };
-              // Sum material costs per top-level component
-              let comboLevelCost = 0;
-              for (const c of itemConsumptions) {
-                if (c.itemType === 'material' && c.totalCost > 0) {
-                  const topChild = resolveTopChild(c.productId);
-                  if (topChild && topChild !== comboProductId) {
-                    componentCogs[topChild] = (componentCogs[topChild] || 0) + c.totalCost;
-                  } else {
-                    comboLevelCost += c.totalCost;
-                  }
-                }
-              }
-              // Distribute combo-level costs (packaging etc.) evenly across components
-              if (comboLevelCost > 0 && visibleComps.length > 0) {
-                const share = comboLevelCost / visibleComps.length;
-                for (const c of visibleComps) {
-                  componentCogs[c.productId] = (componentCogs[c.productId] || 0) + share;
+            let comboLevelCost = 0;
+            for (const c of itemConsumptions) {
+              if (c.itemType === 'material' && c.totalCost > 0) {
+                const topChild = resolveTopChild(c.productId);
+                if (topChild && topChild !== comboProductId) {
+                  componentCogs[topChild] = (componentCogs[topChild] || 0) + c.totalCost;
+                } else {
+                  comboLevelCost += c.totalCost;
                 }
               }
             }
+            if (comboLevelCost > 0) {
+              const share = comboLevelCost / directChildren.length;
+              for (const child of directChildren) {
+                componentCogs[child.productId] = (componentCogs[child.productId] || 0) + share;
+              }
+            }
 
-            const compsWithPrices = visibleComps.map((c: any) => {
-              const prod = c.productId ? getProduct(c.productId) : undefined;
-              const bp = c.basePrice || prod?.basePrice || 0;
-              return { ...c, basePrice: bp, actualCogs: componentCogs[c.productId] || 0 };
+            // Look up base prices for revenue split
+            const compsWithPrices = directChildren.map(child => {
+              const prod = getProduct(child.productId);
+              return {
+                ...child,
+                basePrice: prod?.basePrice || 0,
+                actualCogs: componentCogs[child.productId] || 0,
+              };
             });
             const totalCompBasePrice = compsWithPrices.reduce(
-              (s: number, c: any) => s + c.basePrice * (c.quantity || 1), 0
+              (s, c) => s + c.basePrice, 0
             );
             const totalActualCogs = compsWithPrices.reduce(
-              (s: number, c: any) => s + c.actualCogs, 0
+              (s, c) => s + c.actualCogs, 0
             );
+
             for (const comp of compsWithPrices) {
-              const compQty = (comp.quantity || 1) * item.quantity;
-              const compBaseTotal = comp.basePrice * (comp.quantity || 1);
+              const compQty = item.quantity;
               const compRevenue = totalCompBasePrice > 0
-                ? (compBaseTotal / totalCompBasePrice) * itemRevenue
+                ? (comp.basePrice / totalCompBasePrice) * itemRevenue
                 : 0;
-              // Use actual per-component COGS from consumption records;
-              // fall back to proportional split of combo COGS by basePrice if no data
               const compCogs = totalActualCogs > 0
                 ? comp.actualCogs
                 : totalCompBasePrice > 0
-                  ? (compBaseTotal / totalCompBasePrice) * itemCOGS
+                  ? (comp.basePrice / totalCompBasePrice) * itemCOGS
                   : 0;
               addExpandedItem(comp.productId, comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
             }
-          } catch {}
+          }
         } else {
           addExpandedItem(item.productId, productName, item.quantity, itemRevenue, itemCOGS, 'standalone');
         }
