@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
@@ -59,6 +59,9 @@ export default function AdminDashboard() {
   const [catalogSyncResult, setCatalogSyncResult] = useState<string | null>(null);
   const [onlineOrderCount, setOnlineOrderCount] = useState(0);
   const [hasArrivedCustomer, setHasArrivedCustomer] = useState(false);
+  const [showShutdown, setShowShutdown] = useState(false);
+  const [shutdownRunning, setShutdownRunning] = useState(false);
+  const [shutdownSteps, setShutdownSteps] = useState<{ step: string; status: string; detail?: string }[]>([]);
 
   const fetchOnlineOrderCount = useCallback(async () => {
     try {
@@ -178,6 +181,20 @@ export default function AdminDashboard() {
     } finally {
       setCatalogSyncing(false);
       setTimeout(() => setCatalogSyncResult(null), 5000);
+    }
+  };
+
+  const handleShutdown = async () => {
+    setShutdownRunning(true);
+    setShutdownSteps([]);
+    try {
+      const res = await fetch('/api/admin/shutdown', { method: 'POST' });
+      const data = await res.json();
+      setShutdownSteps(data.steps || []);
+    } catch (err) {
+      setShutdownSteps([{ step: 'Shutdown', status: 'failed', detail: 'Network error' }]);
+    } finally {
+      setShutdownRunning(false);
     }
   };
 
@@ -550,6 +567,17 @@ export default function AdminDashboard() {
                 </div>
                 <p className="text-pink-50">Create playful promo images for combos</p>
               </Link>
+
+              <button
+                onClick={() => setShowShutdown(true)}
+                className="bg-gradient-to-br from-gray-700 to-gray-900 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105 text-left"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Power className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">End of Day</h2>
+                </div>
+                <p className="text-gray-300">Backup data, pause orders, shut down PC</p>
+              </button>
             </div>
           </div>
         </div>
@@ -611,6 +639,96 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* Shutdown Confirmation Dialog */}
+      {showShutdown && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => !shutdownRunning && setShowShutdown(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+              {shutdownSteps.length === 0 ? (
+                <>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                      <Power className="w-6 h-6 text-gray-700" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">End of Day Shutdown</h3>
+                      <p className="text-sm text-gray-500">This will:</p>
+                    </div>
+                  </div>
+
+                  <ol className="space-y-2 mb-6 ml-4">
+                    <li className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                      Back up the local database
+                    </li>
+                    <li className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                      Back up cloud data (loyalty, orders, vouchers)
+                    </li>
+                    <li className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                      Pause online order intake
+                    </li>
+                    <li className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">4</span>
+                      Shut down the PC
+                    </li>
+                  </ol>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowShutdown(false)}
+                      className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleShutdown}
+                      disabled={shutdownRunning}
+                      className="flex-1 px-4 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {shutdownRunning ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Running...</>
+                      ) : (
+                        <><Power className="w-4 h-4" /> Shut Down</>
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Shutdown Progress</h3>
+                  <div className="space-y-3 mb-6">
+                    {shutdownSteps.map((s, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        {s.status === 'ok' ? (
+                          <Check className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                        ) : s.status === 'skipped' ? (
+                          <span className="w-5 h-5 text-gray-400 shrink-0 mt-0.5 text-center">—</span>
+                        ) : (
+                          <X className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                        )}
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{s.step}</p>
+                          {s.detail && <p className="text-xs text-gray-500">{s.detail}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => { setShowShutdown(false); setShutdownSteps([]); }}
+                    className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+                  >
+                    Close
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
