@@ -163,6 +163,15 @@ export function upsertProduct(
   return saved;
 }
 
+export function setProductAvailableOnline(id: string, availableOnline: boolean): boolean {
+  const stmt = db.prepare('UPDATE Product SET availableOnline = ?, updatedAt = ? WHERE id = ?');
+  const result = stmt.run(availableOnline ? 1 : 0, new Date().toISOString(), id);
+  if (result.changes > 0) {
+    syncProduct(id).catch(() => {});
+  }
+  return result.changes > 0;
+}
+
 /**
  * Update product cost (called by recipe service)
  */

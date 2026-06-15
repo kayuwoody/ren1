@@ -500,14 +500,14 @@ export default function OnlineOrdersPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {(['coffee', 'non-coffee', 'food', 'combo'] as const).map(cat => {
+              {Array.from(new Set(menuProducts.map(p => p.category))).sort().map(cat => {
                 const items = menuProducts.filter(p => p.category === cat);
                 if (items.length === 0) return null;
-                const icon = cat === 'coffee' ? <Coffee className="w-4 h-4" />
-                  : cat === 'food' ? <UtensilsCrossed className="w-4 h-4" />
-                  : cat === 'combo' ? <Layers className="w-4 h-4" />
-                  : <Coffee className="w-4 h-4" />;
-                const label = cat === 'non-coffee' ? 'Non-Coffee' : cat.charAt(0).toUpperCase() + cat.slice(1);
+                const icon = cat.includes('coffee') ? <Coffee className="w-4 h-4" />
+                  : cat.includes('food') || cat.includes('pastry') || cat.includes('pastries') ? <UtensilsCrossed className="w-4 h-4" />
+                  : cat.includes('combo') || cat.includes('bundle') ? <Layers className="w-4 h-4" />
+                  : <Store className="w-4 h-4" />;
+                const label = cat.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                 return (
                   <div key={cat}>
                     <div className="px-5 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
