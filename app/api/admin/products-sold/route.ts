@@ -151,35 +151,33 @@ export async function GET(req: Request) {
             const visibleComps = components.filter(
               (c: any) => c.productName && c.category !== 'hidden' && c.category !== 'private'
             );
-            // Look up each component's prices from the product table
             const compsWithPrices = visibleComps.map((c: any) => {
               const prod = c.productId ? getProduct(c.productId) : undefined;
-              return {
-                ...c,
-                basePrice: c.basePrice || prod?.basePrice || 0,
-                unitCost: c.unitCost || prod?.unitCost || prod?.supplierCost || 0,
-              };
+              const bp = c.basePrice || prod?.basePrice || 0;
+              const uc = c.unitCost || prod?.unitCost || prod?.supplierCost || 0;
+              return { ...c, basePrice: bp, unitCost: uc };
             });
-            // Revenue split: proportional by base price
             const totalCompBasePrice = compsWithPrices.reduce(
               (s: number, c: any) => s + c.basePrice * (c.quantity || 1), 0
             );
-            // COGS split: proportional by unit cost (uses combo's actual recorded COGS)
             const totalCompUnitCost = compsWithPrices.reduce(
               (s: number, c: any) => s + c.unitCost * (c.quantity || 1), 0
             );
+            // Use unitCost ratio when all components have costs; otherwise fall back to basePrice ratio
+            const allHaveCost = compsWithPrices.every((c: any) => c.unitCost > 0);
             for (const comp of compsWithPrices) {
               const compQty = (comp.quantity || 1) * item.quantity;
               const compBaseTotal = comp.basePrice * (comp.quantity || 1);
-              const compCostTotal = comp.unitCost * (comp.quantity || 1);
-              // Revenue: share of combo's actual revenue by base price ratio
+              const compUnitCostTotal = comp.unitCost * (comp.quantity || 1);
               const compRevenue = totalCompBasePrice > 0
                 ? (compBaseTotal / totalCompBasePrice) * itemRevenue
                 : 0;
-              // COGS: share of combo's actual recorded COGS by unit cost ratio
-              const compCogs = totalCompUnitCost > 0
-                ? (compCostTotal / totalCompUnitCost) * itemCOGS
-                : 0;
+              // COGS: split by unitCost ratio if reliable, otherwise by basePrice ratio
+              const compCogs = allHaveCost && totalCompUnitCost > 0
+                ? (compUnitCostTotal / totalCompUnitCost) * itemCOGS
+                : totalCompBasePrice > 0
+                  ? (compBaseTotal / totalCompBasePrice) * itemCOGS
+                  : 0;
               addExpandedItem(comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
             }
           } catch {}
