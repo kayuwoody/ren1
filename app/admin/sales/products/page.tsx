@@ -32,6 +32,10 @@ interface ExpandedItem {
   quantity: number;
   standalone: number;
   fromCombos: number;
+  revenue: number;
+  cogs: number;
+  profit: number;
+  margin: number;
   combos: string[];
 }
 
@@ -692,19 +696,31 @@ export default function ProductsSoldPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Item
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                       Total Qty
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                       Standalone
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                       In Combos
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Revenue
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      COGS
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Profit
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Margin
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Combo Sources
                     </th>
                   </tr>
@@ -714,21 +730,33 @@ export default function ProductsSoldPage() {
                     .filter(item => !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase()))
                     .map((item, index) => (
                       <tr key={index} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium">{item.name}</td>
-                        <td className="px-6 py-4 text-sm text-right font-bold text-purple-600">
+                        <td className="px-4 py-4 text-sm font-medium">{item.name}</td>
+                        <td className="px-4 py-4 text-sm text-right font-bold text-purple-600">
                           {item.quantity}
                         </td>
-                        <td className="px-6 py-4 text-sm text-right text-gray-700">
+                        <td className="px-4 py-4 text-sm text-right text-gray-700">
                           {item.standalone}
                         </td>
-                        <td className="px-6 py-4 text-sm text-right">
+                        <td className="px-4 py-4 text-sm text-right">
                           {item.fromCombos > 0 ? (
                             <span className="text-blue-600 font-semibold">{item.fromCombos}</span>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
+                        <td className="px-4 py-4 text-sm text-right">
+                          RM {item.revenue.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right text-red-600">
+                          RM {item.cogs.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right font-bold text-green-600">
+                          RM {item.profit.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right">
+                          <MarginBadge margin={item.margin} />
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-500">
                           {item.combos.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {item.combos.map((combo, i) => (
@@ -743,9 +771,9 @@ export default function ProductsSoldPage() {
                     ))}
                 </tbody>
               </table>
-              <div className="px-6 py-3 border-t text-xs text-gray-500">
-                Shows every item sold in the period, including items that were part of a combo/bundle.
-                A Flat White sold 5 times standalone + 3 times inside combos = 8 total.
+              <div className="px-4 py-3 border-t text-xs text-gray-500">
+                Combo revenue is split proportionally across components by their base price.
+                COGS uses each component's unit cost.
               </div>
             </div>
           )}

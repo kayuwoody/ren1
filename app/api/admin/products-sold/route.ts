@@ -52,18 +52,29 @@ export async function GET(req: Request) {
 
     const productStats: Record<string, ProductData> = {};
     // Expanded view: counts each component product individually (incl. inside combos)
-    const expandedStats: Record<string, { name: string; quantity: number; standalone: number; fromCombos: number; combos: string[] }> = {};
+    const expandedStats: Record<string, {
+      name: string; quantity: number; standalone: number; fromCombos: number;
+      revenue: number; cogs: number; combos: string[];
+    }> = {};
     let totalRevenue = 0;
     let totalCOGS = 0;
     let totalProfit = 0;
     let totalItemsSold = 0;
     let totalDiscounts = 0;
 
-    const addExpandedItem = (productName: string, qty: number, source: 'standalone' | 'combo', comboName?: string) => {
+    const addExpandedItem = (
+      productName: string, qty: number, revenue: number, cogs: number,
+      source: 'standalone' | 'combo', comboName?: string
+    ) => {
       if (!expandedStats[productName]) {
-        expandedStats[productName] = { name: productName, quantity: 0, standalone: 0, fromCombos: 0, combos: [] };
+        expandedStats[productName] = {
+          name: productName, quantity: 0, standalone: 0, fromCombos: 0,
+          revenue: 0, cogs: 0, combos: [],
+        };
       }
       expandedStats[productName].quantity += qty;
+      expandedStats[productName].revenue += revenue;
+      expandedStats[productName].cogs += cogs;
       if (source === 'standalone') {
         expandedStats[productName].standalone += qty;
       } else {
@@ -131,19 +142,32 @@ export async function GET(req: Request) {
           cogs: item.quantity > 0 ? itemCOGS / item.quantity : 0,
         });
 
-        // Expanded view: break bundles into components
+        // Expanded view: break bundles into components with financials
         if (isBundle && v._bundle_components) {
           try {
             const components = typeof v._bundle_components === 'string'
               ? JSON.parse(v._bundle_components) : v._bundle_components;
-            for (const comp of components) {
-              if (comp.productName && comp.category !== 'hidden' && comp.category !== 'private') {
-                addExpandedItem(comp.productName, (comp.quantity || 1) * item.quantity, 'combo', productName);
-              }
+            const visibleComps = components.filter(
+              (c: any) => c.productName && c.category !== 'hidden' && c.category !== 'private'
+            );
+            // Sum component base prices to calculate proportional revenue share
+            const totalCompBasePrice = visibleComps.reduce(
+              (s: number, c: any) => s + (c.basePrice || 0) * (c.quantity || 1), 0
+            );
+            for (const comp of visibleComps) {
+              const compQty = (comp.quantity || 1) * item.quantity;
+              const compBaseTotal = (comp.basePrice || 0) * (comp.quantity || 1);
+              // Revenue: proportional share of the combo's actual revenue
+              const compRevenue = totalCompBasePrice > 0
+                ? (compBaseTotal / totalCompBasePrice) * itemRevenue
+                : 0;
+              // COGS: use the component's unit cost
+              const compCogs = (comp.unitCost || 0) * compQty;
+              addExpandedItem(comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
             }
           } catch {}
         } else {
-          addExpandedItem(productName, item.quantity, 'standalone');
+          addExpandedItem(productName, item.quantity, itemRevenue, itemCOGS, 'standalone');
         }
 
         totalRevenue += itemRevenue;
@@ -191,7 +215,7 @@ export async function GET(req: Request) {
         });
 
         // Expanded view for online orders (no bundle metadata currently)
-        addExpandedItem(productName, item.quantity, 'standalone');
+        addExpandedItem(productName, item.quantity, itemRevenue, itemCOGS, 'standalone');
 
         totalRevenue += itemRevenue;
         totalCOGS += itemCOGS;
@@ -276,6 +300,11 @@ export async function GET(req: Request) {
     }
 
     const expandedItems = Object.values(expandedStats)
+      .map(e => ({
+        ...e,
+        profit: e.revenue - e.cogs,
+        margin: e.revenue > 0 ? ((e.revenue - e.cogs) / e.revenue) * 100 : 0,
+      }))
       .sort((a, b) => b.quantity - a.quantity);
 
     const report = {
