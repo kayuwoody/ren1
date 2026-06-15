@@ -168,101 +168,94 @@ export async function GET(req: Request) {
           cogs: item.quantity > 0 ? itemCOGS / item.quantity : 0,
         });
 
-        // Expanded view: break bundles into components with financials
-        if (isBundle) {
-          // Derive components from consumption records (always available, more reliable than _bundle_components)
-          const comboProductId = item.productId;
-          const parentMap: Record<string, string> = {};
-          const directChildren: Array<{ productId: string; productName: string }> = [];
+        // Expanded view: start from the products-sold count (every line counted
+        // as-is under its base product), then dive into real combos and add each
+        // component to its product's count.
+        // NOTE: A combo is identified by product CATEGORY, not by _is_bundle —
+        // single products with variants (e.g. Hot/Iced Latte) also set _is_bundle,
+        // but they are ONE sellable item and must not be exploded into recipe parts.
+        const itemProduct = getProduct(item.productId);
+        const isComboProduct = itemProduct?.category === 'combo';
 
-          for (const c of itemConsumptions) {
-            if (c.itemType === 'product' && c.linkedProductId) {
-              parentMap[c.linkedProductId] = c.productId;
-              if (c.productId === comboProductId) {
-                const childProd = getProduct(c.linkedProductId);
-                directChildren.push({
-                  productId: c.linkedProductId,
-                  productName: childProd?.name || c.linkedProductName || 'Unknown',
-                });
-              }
-            }
-          }
+        // Step 1: count the line item itself (latte → latte, combo → combo)
+        addExpandedItem(item.productId, productName, item.quantity, itemRevenue, itemCOGS, 'standalone');
 
-          // Fall back to _bundle_components if no consumption records identify children
-          if (directChildren.length === 0 && v._bundle_components) {
-            try {
-              const components = typeof v._bundle_components === 'string'
-                ? JSON.parse(v._bundle_components) : v._bundle_components;
-              for (const c of components) {
-                if (c.productId && c.productName && c.category !== 'hidden' && c.category !== 'private') {
-                  directChildren.push({ productId: c.productId, productName: c.productName });
+        // Step 2: for real combos, add each direct component to its product
+        if (isComboProduct && v._bundle_components) {
+          try {
+            const components = typeof v._bundle_components === 'string'
+              ? JSON.parse(v._bundle_components) : v._bundle_components;
+            const visibleComps = (components as any[]).filter(
+              (c) => c.productId && c.productName && c.category !== 'hidden' && c.category !== 'private'
+            );
+
+            if (visibleComps.length > 0) {
+              // Per-component COGS from consumption records (trace materials up to direct child)
+              const comboProductId = item.productId;
+              const parentMap: Record<string, string> = {};
+              for (const c of itemConsumptions) {
+                if (c.itemType === 'product' && c.linkedProductId) {
+                  parentMap[c.linkedProductId] = c.productId;
                 }
               }
-            } catch {}
-          }
-
-          if (directChildren.length > 0) {
-            // Build per-component COGS from consumption records
-            const resolveTopChild = (pid: string): string | null => {
-              let current = pid;
-              for (let i = 0; i < 10; i++) {
-                const parent = parentMap[current];
-                if (!parent || parent === comboProductId) return current;
-                current = parent;
-              }
-              return current;
-            };
-
-            const componentCogs: Record<string, number> = {};
-            let comboLevelCost = 0;
-            for (const c of itemConsumptions) {
-              if (c.itemType === 'material' && c.totalCost > 0) {
-                const topChild = resolveTopChild(c.productId);
-                if (topChild && topChild !== comboProductId) {
-                  componentCogs[topChild] = (componentCogs[topChild] || 0) + c.totalCost;
-                } else {
-                  comboLevelCost += c.totalCost;
+              const resolveTopChild = (pid: string): string | null => {
+                let current = pid;
+                for (let i = 0; i < 10; i++) {
+                  const parent = parentMap[current];
+                  if (!parent || parent === comboProductId) return current;
+                  current = parent;
                 }
-              }
-            }
-            if (comboLevelCost > 0) {
-              const share = comboLevelCost / directChildren.length;
-              for (const child of directChildren) {
-                componentCogs[child.productId] = (componentCogs[child.productId] || 0) + share;
-              }
-            }
-
-            // Look up base prices for revenue split
-            const compsWithPrices = directChildren.map(child => {
-              const prod = getProduct(child.productId);
-              return {
-                ...child,
-                basePrice: prod?.basePrice || 0,
-                actualCogs: componentCogs[child.productId] || 0,
+                return current;
               };
-            });
-            const totalCompBasePrice = compsWithPrices.reduce(
-              (s, c) => s + c.basePrice, 0
-            );
-            const totalActualCogs = compsWithPrices.reduce(
-              (s, c) => s + c.actualCogs, 0
-            );
+              const componentCogs: Record<string, number> = {};
+              let comboLevelCost = 0;
+              for (const c of itemConsumptions) {
+                if (c.itemType === 'material' && c.totalCost > 0) {
+                  const topChild = resolveTopChild(c.productId);
+                  if (topChild && topChild !== comboProductId) {
+                    componentCogs[topChild] = (componentCogs[topChild] || 0) + c.totalCost;
+                  } else {
+                    comboLevelCost += c.totalCost;
+                  }
+                }
+              }
+              if (comboLevelCost > 0) {
+                const share = comboLevelCost / visibleComps.length;
+                for (const c of visibleComps) {
+                  componentCogs[c.productId] = (componentCogs[c.productId] || 0) + share;
+                }
+              }
 
-            for (const comp of compsWithPrices) {
-              const compQty = item.quantity;
-              const compRevenue = totalCompBasePrice > 0
-                ? (comp.basePrice / totalCompBasePrice) * itemRevenue
-                : 0;
-              const compCogs = totalActualCogs > 0
-                ? comp.actualCogs
-                : totalCompBasePrice > 0
-                  ? (comp.basePrice / totalCompBasePrice) * itemCOGS
+              const compsWithPrices = visibleComps.map((c) => {
+                const prod = getProduct(c.productId);
+                return {
+                  ...c,
+                  basePrice: c.basePrice || prod?.basePrice || 0,
+                  actualCogs: componentCogs[c.productId] || 0,
+                };
+              });
+              const totalCompBasePrice = compsWithPrices.reduce(
+                (s, c) => s + c.basePrice * (c.quantity || 1), 0
+              );
+              const totalActualCogs = compsWithPrices.reduce(
+                (s, c) => s + c.actualCogs, 0
+              );
+
+              for (const comp of compsWithPrices) {
+                const compQty = (comp.quantity || 1) * item.quantity;
+                const compBaseTotal = comp.basePrice * (comp.quantity || 1);
+                const compRevenue = totalCompBasePrice > 0
+                  ? (compBaseTotal / totalCompBasePrice) * itemRevenue
                   : 0;
-              addExpandedItem(comp.productId, comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
+                const compCogs = totalActualCogs > 0
+                  ? comp.actualCogs
+                  : totalCompBasePrice > 0
+                    ? (compBaseTotal / totalCompBasePrice) * itemCOGS
+                    : 0;
+                addExpandedItem(comp.productId, comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
+              }
             }
-          }
-        } else {
-          addExpandedItem(item.productId, productName, item.quantity, itemRevenue, itemCOGS, 'standalone');
+          } catch {}
         }
 
         totalRevenue += itemRevenue;

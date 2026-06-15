@@ -852,7 +852,8 @@ export default function ProductsSoldPage() {
                 </tbody>
               </table>
               <div className="px-4 py-3 border-t text-xs text-gray-500">
-                Combo revenue split by base price ratio. COGS from actual consumption records at time of sale.
+                Counts every item sold standalone plus each time it appeared inside a combo. Combos
+                also appear as their own line, so combo revenue overlaps with its components&apos; split share.
               </div>
             </div>
           )}
