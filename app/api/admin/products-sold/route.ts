@@ -157,22 +157,21 @@ export async function GET(req: Request) {
               return {
                 ...c,
                 basePrice: c.basePrice || prod?.basePrice || 0,
-                unitCost: c.unitCost || prod?.unitCost || prod?.supplierCost || 0,
               };
             });
-            // Sum component base prices to calculate proportional revenue share
+            // Sum component base prices to calculate proportional share
             const totalCompBasePrice = compsWithPrices.reduce(
               (s: number, c: any) => s + c.basePrice * (c.quantity || 1), 0
             );
             for (const comp of compsWithPrices) {
               const compQty = (comp.quantity || 1) * item.quantity;
               const compBaseTotal = comp.basePrice * (comp.quantity || 1);
-              // Revenue: proportional share of the combo's actual revenue
-              const compRevenue = totalCompBasePrice > 0
-                ? (compBaseTotal / totalCompBasePrice) * itemRevenue
+              const priceRatio = totalCompBasePrice > 0
+                ? compBaseTotal / totalCompBasePrice
                 : 0;
-              // COGS: use the component's unit cost
-              const compCogs = comp.unitCost * compQty;
+              // Split both revenue and COGS proportionally by base price
+              const compRevenue = priceRatio * itemRevenue;
+              const compCogs = priceRatio * itemCOGS;
               addExpandedItem(comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
             }
           } catch {}
