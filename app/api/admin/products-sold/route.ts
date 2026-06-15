@@ -51,11 +51,28 @@ export async function GET(req: Request) {
       : [];
 
     const productStats: Record<string, ProductData> = {};
+    // Expanded view: counts each component product individually (incl. inside combos)
+    const expandedStats: Record<string, { name: string; quantity: number; standalone: number; fromCombos: number; combos: string[] }> = {};
     let totalRevenue = 0;
     let totalCOGS = 0;
     let totalProfit = 0;
     let totalItemsSold = 0;
     let totalDiscounts = 0;
+
+    const addExpandedItem = (productName: string, qty: number, source: 'standalone' | 'combo', comboName?: string) => {
+      if (!expandedStats[productName]) {
+        expandedStats[productName] = { name: productName, quantity: 0, standalone: 0, fromCombos: 0, combos: [] };
+      }
+      expandedStats[productName].quantity += qty;
+      if (source === 'standalone') {
+        expandedStats[productName].standalone += qty;
+      } else {
+        expandedStats[productName].fromCombos += qty;
+        if (comboName && !expandedStats[productName].combos.includes(comboName)) {
+          expandedStats[productName].combos.push(comboName);
+        }
+      }
+    };
 
     // Process POS orders
     for (const order of posOrders) {
@@ -114,6 +131,21 @@ export async function GET(req: Request) {
           cogs: item.quantity > 0 ? itemCOGS / item.quantity : 0,
         });
 
+        // Expanded view: break bundles into components
+        if (isBundle && v._bundle_components) {
+          try {
+            const components = typeof v._bundle_components === 'string'
+              ? JSON.parse(v._bundle_components) : v._bundle_components;
+            for (const comp of components) {
+              if (comp.productName && comp.category !== 'hidden' && comp.category !== 'private') {
+                addExpandedItem(comp.productName, (comp.quantity || 1) * item.quantity, 'combo', productName);
+              }
+            }
+          } catch {}
+        } else {
+          addExpandedItem(productName, item.quantity, 'standalone');
+        }
+
         totalRevenue += itemRevenue;
         totalCOGS += itemCOGS;
         totalProfit += itemRevenue - itemCOGS;
@@ -157,6 +189,9 @@ export async function GET(req: Request) {
           price: item.finalPrice,
           cogs: item.quantity > 0 ? itemCOGS / item.quantity : 0,
         });
+
+        // Expanded view for online orders (no bundle metadata currently)
+        addExpandedItem(productName, item.quantity, 'standalone');
 
         totalRevenue += itemRevenue;
         totalCOGS += itemCOGS;
@@ -240,6 +275,9 @@ export async function GET(req: Request) {
       }
     }
 
+    const expandedItems = Object.values(expandedStats)
+      .sort((a, b) => b.quantity - a.quantity);
+
     const report = {
       summary: {
         totalProducts: products.length,
@@ -253,6 +291,7 @@ export async function GET(req: Request) {
         avgProfitPerItem: totalItemsSold > 0 ? totalProfit / totalItemsSold : 0,
       },
       allProducts,
+      expandedItems,
       highlights: {
         topSelling,
         highestRevenue,
