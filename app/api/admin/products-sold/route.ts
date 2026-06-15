@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSaleOrders, parseItemVariations, buildDateFilter } from '@/lib/db/orderService';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 import { getCollectedOnlineOrders } from '@/lib/db/onlineOrderService';
+import { getProduct } from '@/lib/db/productService';
 import { handleApiError } from '@/lib/api/error-handler';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
@@ -150,19 +151,28 @@ export async function GET(req: Request) {
             const visibleComps = components.filter(
               (c: any) => c.productName && c.category !== 'hidden' && c.category !== 'private'
             );
+            // Look up each component's base price from the product table
+            const compsWithPrices = visibleComps.map((c: any) => {
+              const prod = c.productId ? getProduct(c.productId) : undefined;
+              return {
+                ...c,
+                basePrice: c.basePrice || prod?.basePrice || 0,
+                unitCost: c.unitCost || prod?.unitCost || prod?.supplierCost || 0,
+              };
+            });
             // Sum component base prices to calculate proportional revenue share
-            const totalCompBasePrice = visibleComps.reduce(
-              (s: number, c: any) => s + (c.basePrice || 0) * (c.quantity || 1), 0
+            const totalCompBasePrice = compsWithPrices.reduce(
+              (s: number, c: any) => s + c.basePrice * (c.quantity || 1), 0
             );
-            for (const comp of visibleComps) {
+            for (const comp of compsWithPrices) {
               const compQty = (comp.quantity || 1) * item.quantity;
-              const compBaseTotal = (comp.basePrice || 0) * (comp.quantity || 1);
+              const compBaseTotal = comp.basePrice * (comp.quantity || 1);
               // Revenue: proportional share of the combo's actual revenue
               const compRevenue = totalCompBasePrice > 0
                 ? (compBaseTotal / totalCompBasePrice) * itemRevenue
                 : 0;
               // COGS: use the component's unit cost
-              const compCogs = (comp.unitCost || 0) * compQty;
+              const compCogs = comp.unitCost * compQty;
               addExpandedItem(comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
             }
           } catch {}
