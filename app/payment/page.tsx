@@ -9,7 +9,7 @@ import { Gift, X } from "lucide-react";
 
 export default function PaymentPage() {
   const router = useRouter();
-  const { cartItems, clearCart, customer, voucher, pass, setVoucher } = useCart();
+  const { cartItems, clearCart, clearCartAfterPayment, customer, voucher, pass, setVoucher } = useCart();
   const { branchFetch } = useBranch();
   const [order, setOrder] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -202,7 +202,7 @@ export default function PaymentPage() {
     const currentPass = pass;
     const currentPassProductIds = [...passAppliedProductIds];
 
-    clearCart();
+    clearCartAfterPayment();
 
     await fetch('/api/cart/current', {
       method: 'POST',

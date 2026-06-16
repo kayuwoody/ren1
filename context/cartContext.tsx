@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 
 export interface CartItem {
   productId: number | string;
@@ -66,6 +66,7 @@ interface CartContextType {
   setVoucher: (voucher: CartVoucher | null) => void;
   setPass: (pass: CartPass | null) => void;
   clearCart: () => void;
+  clearCartAfterPayment: () => void;
   loadCart: (items: CartItem[]) => void;
 }
 
@@ -111,11 +112,40 @@ function isSameCartItem(item1: CartItem, item2: Omit<CartItem, 'finalPrice'>): b
   return mandatory1 === mandatory2 && optional1 === optional2;
 }
 
+const CUSTOMER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const CUSTOMER_TIMEOUT_KEY = 'cart_customer_timeout';
+
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [customer, setCustomerState] = useState<CartCustomer | null>(null);
   const [voucher, setVoucherState] = useState<CartVoucher | null>(null);
   const [pass, setPassState] = useState<CartPass | null>(null);
+  const customerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCustomerTimeout = useCallback(() => {
+    if (customerTimeoutRef.current) {
+      clearTimeout(customerTimeoutRef.current);
+      customerTimeoutRef.current = null;
+    }
+    localStorage.removeItem(CUSTOMER_TIMEOUT_KEY);
+  }, []);
+
+  const clearCustomerNow = useCallback(() => {
+    clearCustomerTimeout();
+    setCustomerState(null);
+    localStorage.removeItem('cart_customer');
+  }, [clearCustomerTimeout]);
+
+  const startCustomerTimeout = useCallback((ms?: number) => {
+    clearCustomerTimeout();
+    const delay = ms ?? CUSTOMER_TIMEOUT_MS;
+    const expiresAt = Date.now() + delay;
+    localStorage.setItem(CUSTOMER_TIMEOUT_KEY, String(expiresAt));
+    customerTimeoutRef.current = setTimeout(() => {
+      console.log('⏰ Customer auto-cleared after timeout');
+      clearCustomerNow();
+    }, delay);
+  }, [clearCustomerTimeout, clearCustomerNow]);
 
   // Load cart from localStorage on mount (for persistence across page refreshes)
   useEffect(() => {
@@ -126,6 +156,23 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       if (savedVoucher) setVoucherState(JSON.parse(savedVoucher));
       const savedPass = localStorage.getItem('cart_pass');
       if (savedPass) setPassState(JSON.parse(savedPass));
+
+      // Resume customer timeout if one was set before page navigation
+      const expiresAt = localStorage.getItem(CUSTOMER_TIMEOUT_KEY);
+      if (expiresAt && savedCustomer) {
+        const remaining = parseInt(expiresAt, 10) - Date.now();
+        if (remaining > 0) {
+          customerTimeoutRef.current = setTimeout(() => {
+            console.log('⏰ Customer auto-cleared after timeout (resumed)');
+            clearCustomerNow();
+          }, remaining);
+        } else {
+          // Already expired while page was navigating
+          setCustomerState(null);
+          localStorage.removeItem('cart_customer');
+          localStorage.removeItem(CUSTOMER_TIMEOUT_KEY);
+        }
+      }
     } catch {}
 
     const saved = localStorage.getItem('cart');
@@ -306,8 +353,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const setCustomer = (c: CartCustomer | null) => {
     setCustomerState(c);
-    if (c) localStorage.setItem('cart_customer', JSON.stringify(c));
-    else localStorage.removeItem('cart_customer');
+    if (c) {
+      localStorage.setItem('cart_customer', JSON.stringify(c));
+      startCustomerTimeout();
+    } else {
+      clearCustomerTimeout();
+      localStorage.removeItem('cart_customer');
+    }
   };
 
   const setVoucher = (v: CartVoucher | null) => {
@@ -331,6 +383,17 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('cart');
   };
 
+  const clearCartAfterPayment = () => {
+    console.log('🗑️ Clearing cart after payment (customer kept with timeout)');
+    setCartItems([]);
+    setVoucherState(null);
+    localStorage.removeItem('cart_voucher');
+    setPassState(null);
+    localStorage.removeItem('cart_pass');
+    localStorage.removeItem('cart');
+    startCustomerTimeout();
+  };
+
   const loadCart = (items: CartItem[]) => {
     console.log('📥 Loading cart with', items.length, 'items');
     setCartItems(items);
@@ -338,7 +401,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <CartContext.Provider value={{ cartItems, customer, voucher, pass, addToCart, removeFromCart, updateQuantity, updateItemDiscount, updateItemSurcharge, setCustomer, setVoucher, setPass, clearCart, loadCart }}>
+    <CartContext.Provider value={{ cartItems, customer, voucher, pass, addToCart, removeFromCart, updateQuantity, updateItemDiscount, updateItemSurcharge, setCustomer, setVoucher, setPass, clearCart, clearCartAfterPayment, loadCart }}>
       {children}
     </CartContext.Provider>
   );
