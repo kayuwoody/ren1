@@ -99,13 +99,26 @@ export async function POST() {
   }
 
   // Step 3: Pause online order intake
+  // Upsert so it works even if no settings row exists yet, and tolerate a
+  // missing intake_force_open column (older schemas) by falling back to
+  // writing just intake_paused.
   try {
-    const { error } = await supabase
+    const full = await supabase
       .from('outlet_settings')
-      .update({ intake_paused: true, intake_force_open: false })
-      .eq('outlet_id', 'main');
+      .upsert(
+        { outlet_id: 'main', intake_paused: true, intake_force_open: false },
+        { onConflict: 'outlet_id' },
+      );
 
-    if (error) throw error;
+    if (full.error) {
+      const fallback = await supabase
+        .from('outlet_settings')
+        .upsert(
+          { outlet_id: 'main', intake_paused: true },
+          { onConflict: 'outlet_id' },
+        );
+      if (fallback.error) throw fallback.error;
+    }
     steps.push({ step: 'Pause online orders', status: 'ok' });
   } catch (err: any) {
     steps.push({ step: 'Pause online orders', status: 'failed', detail: err.message });

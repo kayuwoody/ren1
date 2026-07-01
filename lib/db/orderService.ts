@@ -253,6 +253,7 @@ export function getDayOrders(opts: {
 export function getDailyStats(branchId: string): {
   todayOrders: number;
   todayRevenue: number;
+  todayCOGS: number;
   itemsSold: number;
   pendingOrders: number;
 } {
@@ -304,9 +305,23 @@ export function getDailyStats(branchId: string): {
       AND (branchId = ? OR branchId IS NULL)
   `).get(branchId) as { pendingCount: number };
 
+  // COGS from consumption records recorded today (covers POS + online sales
+  // whose materials were deducted today). Used for the gross-profit indicator.
+  const cogsResult = db.prepare(`
+    SELECT COALESCE(SUM(totalCost), 0) as cogs
+    FROM InventoryConsumption
+    WHERE consumedAt >= ? AND consumedAt <= ?
+      AND (branchId = ? OR branchId IS NULL)
+  `).get(
+    startUTC.toISOString(),
+    endUTC.toISOString(),
+    branchId,
+  ) as { cogs: number };
+
   return {
     todayOrders: todayResult.orderCount,
     todayRevenue: todayResult.revenue,
+    todayCOGS: cogsResult.cogs,
     itemsSold: itemsResult.itemsSold,
     pendingOrders: pendingResult.pendingCount,
   };

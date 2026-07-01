@@ -564,6 +564,18 @@ export function initDatabase() {
     }
   } catch (e) { /* column already exists */ }
 
+  // Migration: Add costPerUnit to StockCheckLogItem table (frozen unit cost at check time,
+  // used to value stock mismatches — e.g. 1kg beans short × RM75/kg = RM75 loss)
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(StockCheckLogItem)").all() as any[];
+    const hasCostPerUnit = tableInfo.some((col: any) => col.name === 'costPerUnit');
+    if (tableInfo.length > 0 && !hasCostPerUnit) {
+      console.log('Adding costPerUnit column to StockCheckLogItem table...');
+      db.exec(`ALTER TABLE StockCheckLogItem ADD COLUMN costPerUnit REAL NOT NULL DEFAULT 0`);
+      console.log('costPerUnit column added to StockCheckLogItem table');
+    }
+  } catch (e) { /* column already exists */ }
+
   // Migration: Add operational columns to Order table (WC decoupling)
   {
     const cols = db.prepare('PRAGMA table_info("Order")').all() as any[];

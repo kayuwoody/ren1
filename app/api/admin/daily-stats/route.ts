@@ -13,9 +13,14 @@ export async function GET(req: Request) {
       getOnlineDailyStats('main'),
     ]);
 
+    const todayRevenue = posStats.todayRevenue + onlineStats.revenue;
+    // todayCOGS already includes online consumptions (recorded on accept)
+    const todayProfit = todayRevenue - posStats.todayCOGS;
+
     return NextResponse.json({
       todayOrders: posStats.todayOrders + onlineStats.orderCount,
-      todayRevenue: posStats.todayRevenue + onlineStats.revenue,
+      todayRevenue,
+      todayProfit,
       itemsSold: posStats.itemsSold + onlineStats.itemsSold,
       pendingOrders: posStats.pendingOrders + onlineStats.pendingCount,
     });
@@ -24,6 +29,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       todayOrders: 0,
       todayRevenue: 0,
+      todayProfit: 0,
       itemsSold: 0,
       pendingOrders: 0,
     });

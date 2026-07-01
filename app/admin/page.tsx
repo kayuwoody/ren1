@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2 } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, TrendingUp, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
@@ -37,6 +37,7 @@ interface LockerStatus {
 interface DailyStats {
   todayOrders: number;
   todayRevenue: number;
+  todayProfit: number;
   itemsSold: number;
   pendingOrders: number;
 }
@@ -50,6 +51,7 @@ export default function AdminDashboard() {
   const [dailyStats, setDailyStats] = useState<DailyStats>({
     todayOrders: 0,
     todayRevenue: 0,
+    todayProfit: 0,
     itemsSold: 0,
     pendingOrders: 0
   });
@@ -303,7 +305,7 @@ export default function AdminDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         {/* Daily Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-3">
               <Receipt className="w-8 h-8 text-blue-600" />
@@ -320,6 +322,16 @@ export default function AdminDashboard() {
               <div>
                 <p className="text-sm text-gray-500">Today's Revenue</p>
                 <p className="text-2xl font-bold text-green-600">RM {dailyStats.todayRevenue.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="w-8 h-8 text-emerald-600" />
+              <div>
+                <p className="text-sm text-gray-500">Today's Profit</p>
+                <p className="text-2xl font-bold text-emerald-600">RM {dailyStats.todayProfit.toFixed(2)}</p>
               </div>
             </div>
           </div>
