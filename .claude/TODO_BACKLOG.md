@@ -141,6 +141,39 @@ tipping/partial approvals, sandbox availability.
 
 ---
 
+# Operational Gaps (deferred — revisit when volume grows)
+
+These are real single-shop gaps, consciously deferred because current sales
+volume makes the manual workaround cheaper than the feature. Revisit when
+volume increases.
+
+## O1. Refunds / voids / returns
+No flow exists to reverse a customer sale. A proper version would: set order
+status (voided/refunded), restock materials (reverse `InventoryConsumption` +
+BranchStock), reverse COGS, and write an audit entry. Today any correction is
+manual. Deferred: low volume, wrong-order corrections are rare.
+
+## O2. Cash management / end-of-day cash-up
+No opening float, cash in/out, or Z-report to reconcile the drawer against
+sales. The "profit today" card is the closest existing thing. Deferred: low
+volume.
+
+## O3. Order types / table management
+Dine-in vs takeaway vs delivery, and table assignment for dine-in. Ripples into
+kitchen display, receipts, reporting. Deferred: grab-and-go model, low volume.
+(Owner-raised; kept for when the format expands.)
+
+## O4. Rate limiting + PDPA exposure (shared with bubu1)
+bubu1's API routes have no rate limiting; sequential-phone scraping of order
+history is a PDPA exposure as the user base grows. Also verify whether the
+public anon key can read Supabase tables directly (RLS off + default anon
+grants) — test: `curl "$SUPABASE_URL/rest/v1/loyalty_members?select=phone,name"
+-H "apikey: <anon-key>"`. If it returns rows, the customer list is directly
+readable regardless of the phone-gated app routes. Deferred: low traffic; cheap
+to add rate limiting (Vercel middleware / Upstash) when traffic grows.
+
+---
+
 ## Notes
 
 - Full audit context and the "keep / false-alarm" decisions live in
