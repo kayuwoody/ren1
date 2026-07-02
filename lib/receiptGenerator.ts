@@ -12,6 +12,23 @@ export interface BranchInfo {
   code?: string;
 }
 
+/**
+ * Escape a value for safe interpolation into receipt HTML.
+ * Receipts are served as text/html from a public URL, so every dynamic field
+ * (product names, discount reasons, voucher/pass codes, branch info) must be
+ * escaped — both to prevent injected markup/script and so ordinary characters
+ * like & or < in a product name render correctly instead of breaking layout.
+ */
+function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?: string): string {
   const getItemMeta = (item: any, key: string) => {
     return item.meta_data?.find((m: any) => m.key === key)?.value;
@@ -44,7 +61,7 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Coffee Oasis Receipt #${order.number || order.id}</title>
+  <title>Coffee Oasis Receipt #${escapeHtml(order.number || order.id)}</title>
   <style>
     * {
       margin: 0;
@@ -293,17 +310,17 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
   <div class="container">
     <!-- Header -->
     <div class="header">
-      ${mascotUrl ? `<img src="${mascotUrl}" alt="Coffee Oasis Logo" class="logo" />` : ''}
+      ${mascotUrl ? `<img src="${escapeHtml(mascotUrl)}" alt="Coffee Oasis Logo" class="logo" />` : ''}
       <h1>Coffee Oasis</h1>
-      <p class="subtitle">${branch?.name || 'Your friendly local Coffee Shop'}</p>
-      <p class="location">${branch?.address ? `📍 ${branch.address}` : '📍 9ine'} | 🌐 coffee-oasis.com.my${branch?.phone ? ` | 📞 ${branch.phone}` : ''}</p>
+      <p class="subtitle">${escapeHtml(branch?.name || 'Your friendly local Coffee Shop')}</p>
+      <p class="location">${branch?.address ? `📍 ${escapeHtml(branch.address)}` : '📍 9ine'} | 🌐 coffee-oasis.com.my${branch?.phone ? ` | 📞 ${escapeHtml(branch.phone)}` : ''}</p>
     </div>
 
     <!-- Order Info -->
     <div class="order-info">
       <div class="info-row">
         <span class="info-label">Order Number:</span>
-        <span class="info-value">#${order.number || order.id}</span>
+        <span class="info-value">#${escapeHtml(order.number || order.id)}</span>
       </div>
       <div class="info-row">
         <span class="info-label">Date:</span>
@@ -346,10 +363,10 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
           return `
         <tr>
           <td>
-            <div class="item-name">${displayName}</div>
-            ${isBundle && bundleBaseName ? `<div class="item-base">Base: ${bundleBaseName}</div>` : ''}
-            ${bundleComponents.map(c => `<div class="item-component">→ ${c.productName}${c.quantity > 1 ? ` × ${c.quantity}` : ''}</div>`).join('')}
-            ${discountReason ? `<div class="discount-label">• ${discountReason}</div>` : ''}
+            <div class="item-name">${escapeHtml(displayName)}</div>
+            ${isBundle && bundleBaseName ? `<div class="item-base">Base: ${escapeHtml(bundleBaseName)}</div>` : ''}
+            ${bundleComponents.map(c => `<div class="item-component">→ ${escapeHtml(c.productName)}${c.quantity > 1 ? ` × ${escapeHtml(c.quantity)}` : ''}</div>`).join('')}
+            ${discountReason ? `<div class="discount-label">• ${escapeHtml(discountReason)}</div>` : ''}
           </td>
           <td class="center">${item.quantity}</td>
           <td class="right">
@@ -390,13 +407,13 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
       ` : ''}
       ${voucherDiscount > 0 ? `
         <div class="total-row voucher">
-          <span class="total-label">Voucher (${voucherCode}):</span>
+          <span class="total-label">Voucher (${escapeHtml(voucherCode)}):</span>
           <span class="total-value">-RM ${voucherDiscount.toFixed(2)}</span>
         </div>
       ` : ''}
       ${passDiscount > 0 ? `
         <div class="total-row pass">
-          <span class="total-label">Pass (${passCode}):</span>
+          <span class="total-label">Pass (${escapeHtml(passCode)}):</span>
           <span class="total-value">-RM ${passDiscount.toFixed(2)}</span>
         </div>
       ` : ''}
