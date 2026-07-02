@@ -27,7 +27,6 @@ interface ErrorResponse {
  *
  * Handles errors consistently across all routes with:
  * - Proper logging with context
- * - WooCommerce API error extraction
  * - Consistent response format
  * - Appropriate status codes
  *
@@ -38,7 +37,7 @@ interface ErrorResponse {
  *
  * @example
  * try {
- *   const order = await wcApi.get('orders/123');
+ *   const order = getOrderWithItems(orderId);
  * } catch (error) {
  *   return handleApiError(error, '/api/orders/[orderId]');
  * }

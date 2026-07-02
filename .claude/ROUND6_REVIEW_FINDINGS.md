@@ -123,26 +123,24 @@ The first three routes all duplicate the same pattern: fetch consumptions per or
 
 ---
 
-## Cleanup Backlog (Low Priority)
+## Cleanup Backlog
 
-None of these are breaking. All are cosmetic or dead code removal.
+### Dead Code — ✅ DONE (Round 7, 2026-06-16)
+1. **materialService**: ~~Stock movement logging in UPDATE path records a change that no longer happens~~ → Removed the phantom `logStockMovement` call (and the now-unused import). Replaced with an explanatory comment.
+2. **productService**: ~~Dead `stockQuantity` variable + debug logging in `syncProductFromWooCommerce()`~~ → Removed the **entire** `syncProductFromWooCommerce()` function. It had zero callers (WooCommerce is gone). `getProductByWcId` is retained — still used widely for id lookups.
+3. **error-handler.ts**: ~~Stale WC reference in JSDoc~~ → Replaced the `wcApi.get(...)` example with a local `getOrderWithItems(...)` example and dropped the "WooCommerce API error extraction" bullet.
 
-### Dead Code
-1. **materialService**: Stock movement logging in UPDATE path (lines 82-93) records a change that no longer happens
-2. **productService**: `stockQuantity` variable + debug logging in `syncProductFromWooCommerce()` (lines 215-228) — computed but never used
-3. **error-handler.ts**: Stale WC reference in JSDoc comment (line 41)
-
-### Vestigial Schema Fields
-4. **`Material.stockQuantity`** on TypeScript interface — BranchStock is the real source of truth
-5. **`Product.stockQuantity`** on TypeScript interface — same
-6. **`Product.comboPriceOverride`** on interface but not referenced in SQL
+### Vestigial Schema Fields — DECISION: KEEP
+4. **`Material.stockQuantity`** on interface — **KEEP.** Still read as a fallback in several places (e.g. stock-check route `getBranchStock(...) || material.stockQuantity`, materials admin display) and kept in sync by `syncLegacyStockColumns()`. Removing it would break those reads.
+5. **`Product.stockQuantity`** on interface — **KEEP.** Same fallback role.
+6. **`Product.comboPriceOverride`** — **FALSE ALARM.** Not stale. It is written via the dedicated `PATCH /api/admin/products/[productId]/combo-price` route (`UPDATE Product SET comboPriceOverride = ?`) and read across combo pricing (`recursiveProductExpansion`, `bundleExpansionService`, `ProductSelectionModal`, `catalogSync`, recipe route). It is simply not written by `upsertProduct` — by design.
 
 ### INSERT Path Legacy Writes
-7. **materialService INSERT** still writes `material.stockQuantity` to legacy column (while BranchStock inits at 0)
-8. **productService INSERT** hardcodes `stockQuantity: 0` to legacy column
+7. **materialService INSERT** writes `material.stockQuantity` to the legacy column while `initBranchStockForItem` seeds BranchStock at 0 — **OPEN (minor bug).** A new material created with a non-zero initial stock will show that stock until the next `syncLegacyStockColumns()` overwrites the legacy column back to BranchStock's 0. The materials admin form does expose a stock input. Proper fix needs a branch decision (which branch receives the initial quantity), so deferred — recommend adding initial stock through the stock-check / purchase-order flow instead of the create form, or seeding BranchStock on create.
+8. **productService INSERT** hardcodes `stockQuantity: 0` to legacy column — **NON-ISSUE.** Consistent with BranchStock also initialising at 0. No action.
 
 ### Consolidation Opportunity
-9. **COGS aggregation** duplicated across 3 reporting routes — could be extracted to `orderService.ts`
+9. **COGS aggregation** duplicated across 3 reporting routes (`sales`, `sales/daily`, `products-sold`) — **OPEN (optional refactor).** Could extract a `getOrderCOGS(orderId)` helper returning `{ total, byItemId }` into `orderService.ts`. Not breaking; deferred pending a decision to take on the refactor risk on the reporting routes.
 
 ---
 
