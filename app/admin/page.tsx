@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, TrendingUp, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2 } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, TrendingUp, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2, Pause } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
@@ -61,6 +61,7 @@ export default function AdminDashboard() {
   const [catalogSyncResult, setCatalogSyncResult] = useState<string | null>(null);
   const [onlineOrderCount, setOnlineOrderCount] = useState(0);
   const [hasArrivedCustomer, setHasArrivedCustomer] = useState(false);
+  const [intakePaused, setIntakePaused] = useState(false);
   const [showShutdown, setShowShutdown] = useState(false);
   const [shutdownRunning, setShutdownRunning] = useState(false);
   const [shutdownSteps, setShutdownSteps] = useState<{ step: string; status: string; detail?: string }[]>([]);
@@ -83,6 +84,16 @@ export default function AdminDashboard() {
     } catch {}
   }, []);
 
+  const fetchIntakeStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/online-orders/intake');
+      if (res.ok) {
+        const data = await res.json();
+        setIntakePaused(!!data.intake_paused);
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     // Check if already authenticated
     const authToken = sessionStorage.getItem('admin_auth');
@@ -91,10 +102,12 @@ export default function AdminDashboard() {
       fetchLockerStatus();
       fetchDailyStats();
       fetchOnlineOrderCount();
+      fetchIntakeStatus();
 
       // Set up auto-refresh for daily stats every 30 seconds
       const statsInterval = setInterval(() => {
         fetchDailyStats();
+        fetchIntakeStatus();
       }, 30000); // 30 seconds
 
       // Refresh stats when page becomes visible again (user switches back to tab)
@@ -102,6 +115,7 @@ export default function AdminDashboard() {
         if (document.visibilityState === 'visible') {
           fetchDailyStats();
           fetchOnlineOrderCount();
+          fetchIntakeStatus();
         }
       };
       document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -366,13 +380,19 @@ export default function AdminDashboard() {
                 href="/admin/online-orders"
                 className="bg-gradient-to-br from-orange-400 to-orange-500 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105 relative"
               >
+                {intakePaused && (
+                  <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs font-bold rounded-full h-7 flex items-center gap-1 px-2.5 shadow-lg">
+                    <Pause className="w-3.5 h-3.5" fill="currentColor" />
+                    Paused
+                  </span>
+                )}
                 {onlineOrderCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-sm font-bold rounded-full min-w-[28px] h-7 flex items-center justify-center px-2 shadow-lg animate-pulse">
+                  <span className={`absolute -top-2 ${intakePaused ? 'right-24' : '-right-2'} bg-red-600 text-white text-sm font-bold rounded-full min-w-[28px] h-7 flex items-center justify-center px-2 shadow-lg animate-pulse`}>
                     {hasArrivedCustomer && '! '}{onlineOrderCount}
                   </span>
                 )}
                 {hasArrivedCustomer && onlineOrderCount === 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-sm font-bold rounded-full w-7 h-7 flex items-center justify-center shadow-lg animate-pulse">
+                  <span className={`absolute -top-2 ${intakePaused ? 'right-24' : '-right-2'} bg-red-600 text-white text-sm font-bold rounded-full w-7 h-7 flex items-center justify-center shadow-lg animate-pulse`}>
                     !
                   </span>
                 )}
