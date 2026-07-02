@@ -64,6 +64,83 @@ numbers.
 
 ---
 
+# Intended Upgrades — Productization / Multi-tenant Groundwork
+
+**Status:** Intent only. Not currently building. No plan to resell the POS at
+this time, and no intent to operate outside the Malaysia (UTC+8) timezone.
+**Guiding rule:** only build groundwork that ALSO improves the single-shop
+product today. Anything that pays off solely in a resale scenario stays here as
+documented intent until there is a concrete trigger (a second location, a
+second real user, or genuine reseller interest).
+
+## U1. Centralize the business profile (config source)
+
+**Trigger:** second location, or reseller interest. **Dual-benefit:** yes (maintainability).
+
+Today the app is hardcoded to *be* Coffee Oasis in many places. Pull these
+behind a single config/settings source so they're changed in one place:
+- **Timezone** — hardcoded UTC+8 offset math in `lib/dateUtils.ts`, daily stats,
+  the online-intake schedule, and receipts. (Note: staying UTC+8 for the
+  foreseeable future, so this is low priority — but the scattered offset math is
+  a latent fragility even single-shop.)
+- **Currency** — "RM" strings throughout.
+- **Business hours** — 8am–8:30pm / closed Sunday baked into
+  `app/api/online-orders/intake/route.ts`.
+- **Branding** — mascot + business name/address in `lib/receiptGenerator.ts`.
+
+## U2. Branch-scoping discipline (→ tenant seam)
+
+**Trigger:** second location. **Dual-benefit:** yes (correct multi-branch).
+
+The branch system (`X-Branch-Id`, `getBranchIdFromRequest`, `branchId` columns)
+is already the natural seam a tenant model would sit on. Keep every query
+branch-scoped and audit the few that aren't. This directly enables a real
+second Coffee Oasis location (far likelier than resale) and keeps the
+multi-tenant door open at no extra cost.
+
+## U3. Auth + roles
+
+**Trigger:** more than a handful of trusted staff, or any resale. **Dual-benefit:** partial.
+
+Replace the shared sessionStorage PIN with real accounts and roles
+(owner/manager/cashier/kitchen). Even single-shop, a who-did-what **audit trail**
+on voids/discounts/price-overrides/shutdown has standalone value and could be
+done as a lighter first step ahead of full role-based auth.
+
+## U4. Data isolation model (decision, not code)
+
+**Trigger:** any real multi-tenant use. **Cheap to decide now, expensive to retrofit.**
+
+Decide shared-DB-with-`tenant_id`(+RLS) vs DB-per-tenant before building
+anything multi-tenant. No code needed now; just keep treating branch as the
+scoping key everywhere (see U2), which keeps both options open.
+
+## U5. Payment-provider abstraction
+
+**Trigger:** first real integrated payment path (see Alliance Bank ECR, below).
+
+A thin interface so cash / DuitNow QR / Fiuu / bank terminal sit behind one
+payment-result shape. Build this AROUND the first real integration, not before.
+
+## U6. Alliance Bank ECR card terminal (parked — external blockers)
+
+**Status:** Parked. Blocked on (1) Alliance Bank approving the application and
+(2) signing an NDA to receive the ECR API spec. Terminal is confirmed
+ECR-capable with APIs.
+
+When unblocked, do the low-risk groundwork first (all free, single-shop useful):
+- Explicit **tender types** (cash / DuitNow QR / card) on the order.
+- A nullable **payment-reference / approval-code** field on the order (also the
+  hook that later enables card refunds).
+- **Payment-method breakdown** in the daily report + cash-up.
+
+Then build the ECR adapter behind the U5 seam. Open questions for the spec:
+transport (local serial/USB/LAN vs cloud API), approval-code + txn-id return,
+refund/void + void-on-timeout, settlement/reconciliation report API,
+tipping/partial approvals, sandbox availability.
+
+---
+
 ## Notes
 
 - Full audit context and the "keep / false-alarm" decisions live in
