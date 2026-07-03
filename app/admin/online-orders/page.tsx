@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import {
   Clock, User, Car, MapPin,
   Check, X, ChefHat, Package, AlertTriangle, Pause, Play,
@@ -165,24 +164,19 @@ export default function OnlineOrdersPage() {
     const pollInterval = setInterval(fetchOrders, 15000);
     const tickInterval = setInterval(() => setNow(Date.now()), 30000);
 
-    const channel = supabaseBrowser
-      .channel('pos-orders')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
-        () => fetchOrders()
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
-        () => fetchOrders()
-      )
-      .subscribe();
+    // Live online-order feed via server-side SSE (no anon key in browser)
+    const ordersSource = new EventSource('/api/online-orders/stream');
+    ordersSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'online-orders-updated') fetchOrders();
+      } catch {}
+    };
 
     return () => {
       clearInterval(pollInterval);
       clearInterval(tickInterval);
-      supabaseBrowser.removeChannel(channel);
+      ordersSource.close();
     };
   }, [fetchOrders, fetchIntakeStatus, fetchAvgWait]);
 

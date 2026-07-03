@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Bell } from 'lucide-react';
 
 interface NotifierOrder {
@@ -229,23 +228,18 @@ export default function OnlineOrderNotifier() {
     fetchOrders();
     const pollInterval = setInterval(fetchOrders, 15000);
 
-    const channel = supabaseBrowser
-      .channel('global-order-notifier')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
-        () => fetchOrders()
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
-        () => fetchOrders()
-      )
-      .subscribe();
+    // Live online-order feed via server-side SSE (no anon key in browser)
+    const ordersSource = new EventSource('/api/online-orders/stream');
+    ordersSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'online-orders-updated') fetchOrders();
+      } catch {}
+    };
 
     return () => {
       clearInterval(pollInterval);
-      supabaseBrowser.removeChannel(channel);
+      ordersSource.close();
       for (const timer of escalationTimers.current.values()) {
         clearTimeout(timer);
       }

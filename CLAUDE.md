@@ -237,7 +237,7 @@ Only orders where the customer scanned their QR have `loyalty_member_phone` popu
 ### Supabase Clients
 
 - `lib/supabase.ts` — Server-side, uses `SUPABASE_SERVICE_ROLE_KEY` (bypasses RLS)
-- `lib/supabaseBrowser.ts` — Client-side, uses `NEXT_PUBLIC_SUPABASE_ANON_KEY` (for Realtime subscriptions)
+- **No browser Supabase client.** The POS never touches Supabase from the browser (the anon key is not shipped in the bundle). Live online-order updates come via server-side SSE: `lib/sse/onlineOrderStreamManager.ts` holds a single service-role Supabase Realtime subscription on `online_orders` and fans changes out to the POS screens through `/api/online-orders/stream`. This lets `online_orders` (and the other Supabase tables) be locked with RLS while keeping instant push.
 
 ## Active Pages
 
@@ -360,7 +360,7 @@ lib/receiptGenerator.ts           — HTML receipt generation
 lib/receiptStorage.ts             — Receipt upload to Supabase Storage
 lib/dateUtils.ts                  — Malaysia timezone utilities
 lib/supabase.ts                   — Supabase server client (service role)
-lib/supabaseBrowser.ts            — Supabase browser client (anon key, Realtime)
+lib/sse/onlineOrderStreamManager.ts — Server-side Supabase Realtime→SSE bridge for online orders
 lib/printerService.ts             — Thermal printer (ESC/POS)
 lib/labelPrinterService.ts        — Label printer (Web Bluetooth)
 

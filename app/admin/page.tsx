@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, TrendingUp, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2, Pause } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
-import { supabaseBrowser } from '@/lib/supabaseBrowser';
 
 /**
  * Admin Dashboard
@@ -68,19 +67,12 @@ export default function AdminDashboard() {
 
   const fetchOnlineOrderCount = useCallback(async () => {
     try {
-      const [countRes, arrivedRes] = await Promise.all([
-        supabaseBrowser
-          .from('online_orders')
-          .select('id', { count: 'exact', head: true })
-          .in('status', ['pending', 'accepted', 'ready']),
-        supabaseBrowser
-          .from('online_orders')
-          .select('id', { count: 'exact', head: true })
-          .in('status', ['accepted', 'ready'])
-          .not('arrived_at', 'is', null),
-      ]);
-      if (!countRes.error && countRes.count !== null) setOnlineOrderCount(countRes.count);
-      setHasArrivedCustomer((arrivedRes.count ?? 0) > 0);
+      const res = await fetch('/api/online-orders/count');
+      if (res.ok) {
+        const data = await res.json();
+        setOnlineOrderCount(data.count ?? 0);
+        setHasArrivedCustomer(!!data.hasArrivedCustomer);
+      }
     } catch {}
   }, []);
 
@@ -120,20 +112,20 @@ export default function AdminDashboard() {
       };
       document.addEventListener('visibilitychange', handleVisibilityChange);
 
-      const channel = supabaseBrowser
-        .channel('admin-online-order-count')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'online_orders' },
-          () => fetchOnlineOrderCount()
-        )
-        .subscribe();
+      // Live online-order count via server-side SSE (no anon key in browser)
+      const ordersSource = new EventSource('/api/online-orders/stream');
+      ordersSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'online-orders-updated') fetchOnlineOrderCount();
+        } catch {}
+      };
 
       // Clean up interval and event listener on unmount
       return () => {
         clearInterval(statsInterval);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
-        supabaseBrowser.removeChannel(channel);
+        ordersSource.close();
       };
     }
   }, []);
