@@ -17,6 +17,8 @@ export interface Product {
   availableOnline: boolean;
   comboPriceOverride?: number;
   supplier?: string;
+  supplierProductName?: string;
+  staffPrice?: number;
   quantityPerCarton?: number;
   imageUrl?: string;
   createdAt: string;
@@ -98,7 +100,8 @@ export function upsertProduct(
       UPDATE Product
       SET wcId = ?, name = ?, sku = ?, category = ?, basePrice = ?,
           supplierCost = ?, unitCost = ?, manageStock = ?, availableOnline = ?,
-          supplier = ?, quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
+          supplier = ?, supplierProductName = ?, staffPrice = ?,
+          quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
       WHERE id = ?
     `);
 
@@ -113,6 +116,8 @@ export function upsertProduct(
       product.manageStock ? 1 : 0,
       product.availableOnline ? 1 : 0,
       product.supplier || null,
+      product.supplierProductName || null,
+      product.staffPrice ?? null,
       product.quantityPerCarton || null,
       product.imageUrl || null,
       now,
@@ -122,8 +127,9 @@ export function upsertProduct(
     // Insert new product — stockQuantity defaults to 0 (real stock lives in BranchStock)
     const stmt = db.prepare(`
       INSERT INTO Product (id, wcId, name, sku, category, basePrice, supplierCost, unitCost,
-                          stockQuantity, manageStock, availableOnline, supplier, quantityPerCarton, imageUrl, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+                          stockQuantity, manageStock, availableOnline, supplier, supplierProductName, staffPrice,
+                          quantityPerCarton, imageUrl, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -138,6 +144,8 @@ export function upsertProduct(
       product.manageStock ? 1 : 0,
       product.availableOnline ? 1 : 0,
       product.supplier || null,
+      product.supplierProductName || null,
+      product.staffPrice ?? null,
       product.quantityPerCarton || null,
       product.imageUrl || null,
       now,
@@ -153,6 +161,15 @@ export function upsertProduct(
   const saved = getProduct(id)!;
   syncProduct(id).catch(() => {});
   return saved;
+}
+
+export function setProductAvailableOnline(id: string, availableOnline: boolean): boolean {
+  const stmt = db.prepare('UPDATE Product SET availableOnline = ?, updatedAt = ? WHERE id = ?');
+  const result = stmt.run(availableOnline ? 1 : 0, new Date().toISOString(), id);
+  if (result.changes > 0) {
+    syncProduct(id).catch(() => {});
+  }
+  return result.changes > 0;
 }
 
 /**
@@ -173,68 +190,4 @@ export function deleteProduct(id: string): boolean {
     syncProductDelete(id).catch(() => {});
   }
   return result.changes > 0;
-}
-
-/**
- * Sync product from WooCommerce
- */
-export function syncProductFromWooCommerce(wcProduct: any): Product {
-  // Check if product already exists to preserve local fields
-  const existing = getProductByWcId(wcProduct.id);
-
-  const supplierCost = existing?.supplierCost ?? 0;
-  const unitCost = existing?.unitCost ?? 0;
-  const supplier = existing?.supplier ?? undefined; // Preserve supplier
-  const quantityPerCarton = existing?.quantityPerCarton ?? undefined; // Preserve carton quantity
-
-  // Debug logging for supplier sync
-  if (existing?.supplier) {
-    console.log(`🔄 Syncing ${wcProduct.name} - Preserving supplier: "${existing.supplier}"`);
-  }
-
-  // Preserve existing stock (BranchStock is source of truth)
-  const stockQuantity = existing?.stockQuantity ?? 0;
-
-  // Debug logging for stock preservation
-  if (existing && wcProduct.manage_stock) {
-    const localStock = existing.stockQuantity ?? 0;
-    const wcStock = wcProduct.stock_quantity ?? 0;
-    if (localStock !== wcStock) {
-      console.log(`📦 Stock preservation for "${wcProduct.name}": Local=${localStock} (KEPT), WC=${wcStock} (ignored)`);
-    }
-  }
-
-  if (existing && (supplierCost > 0 || unitCost > 0)) {
-    console.log(`🔄 Syncing ${wcProduct.name} - Preserving: supplierCost=RM${supplierCost}, unitCost=RM${unitCost}, stock=${stockQuantity}`);
-  }
-
-  const result = upsertProduct({
-    id: undefined, // Will be auto-generated or matched by wcId
-    wcId: wcProduct.id,
-    name: wcProduct.name,
-    sku: wcProduct.sku,
-    category: wcProduct.categories?.[0]?.slug || 'uncategorized',
-    basePrice: parseFloat(wcProduct.price) || 0,
-    supplierCost, // Preserve existing supplierCost (local field)
-    unitCost, // Preserve existing unitCost from recipes
-    stockQuantity, // Preserve existing stock (BranchStock is source of truth)
-    manageStock: wcProduct.manage_stock ?? false, // Store whether WooCommerce tracks inventory
-    availableOnline: existing?.availableOnline ?? true,
-    supplier, // Preserve existing supplier (local field)
-    quantityPerCarton, // Preserve existing carton quantity (local field)
-    imageUrl: wcProduct.images?.[0]?.src,
-  });
-
-  if (existing && (supplierCost > 0 || unitCost > 0)) {
-    console.log(`   ✅ After sync - supplierCost=RM${result.supplierCost}, unitCost=RM${result.unitCost}, stock=${result.stockQuantity}`);
-  }
-
-  // Debug: Verify supplier was preserved
-  if (existing?.supplier && result.supplier !== existing.supplier) {
-    console.error(`❌ BUG: Supplier lost during sync! Before: "${existing.supplier}", After: "${result.supplier}"`);
-  } else if (existing?.supplier) {
-    console.log(`   ✅ Supplier preserved: "${result.supplier}"`);
-  }
-
-  return result;
 }

@@ -15,6 +15,7 @@ interface Material {
 interface Product {
   id: string;
   name: string;
+  supplierProductName?: string;
   sku: string;
   supplierCost: number;
 }
@@ -204,7 +205,7 @@ export default function EditPurchaseOrderPage() {
         tempId: `temp-${Date.now()}-${Math.random()}`,
         itemType: "product",
         productId: product.id,
-        productName: product.name,
+        productName: product.supplierProductName || product.name,
         quantity: newItemQuantity,
         unit: newItemUnit,
         unitCost: newItemUnitCost,
@@ -456,7 +457,7 @@ export default function EditPurchaseOrderPage() {
                   <option value="">Select product...</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} ({p.sku})
+                      {p.supplierProductName || p.name} ({p.sku})
                     </option>
                   ))}
                 </select>

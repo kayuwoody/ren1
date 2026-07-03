@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coffee Oasis Loyalty Bunting</title>
+  <style>
+    @page {
+      size: landscape;
+      margin: 0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f9fafb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    .banner {
+      width: 297mm;
+      height: 105mm;
+      background: linear-gradient(135deg, #78350f 0%, #92400e 30%, #b45309 70%, #d97706 100%);
+      border-radius: 12px;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+      color: white;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    }
+
+    .header-section {
+      width: 28%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem;
+      background: rgba(0,0,0,0.15);
+      text-align: center;
+    }
+    .brand-name {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 0.3rem;
+    }
+    .brand-tagline {
+      font-size: 0.7rem;
+      opacity: 0.85;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 1rem;
+    }
+    .scan-prompt {
+      background: white;
+      color: #78350f;
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .qr-placeholder {
+      width: 70px;
+      height: 70px;
+      background: white;
+      border-radius: 8px;
+      margin: 0.75rem 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.5rem;
+      color: #78350f;
+      font-weight: 600;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .perks-section {
+      flex: 1;
+      display: flex;
+      padding: 1.2rem 1.5rem;
+      gap: 1rem;
+    }
+
+    .perk {
+      flex: 1;
+      background: rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.15);
+      transition: transform 0.2s;
+    }
+    .perk-icon {
+      font-size: 1.8rem;
+      margin-bottom: 0.4rem;
+    }
+    .perk-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+      line-height: 1.2;
+    }
+    .perk-desc {
+      font-size: 0.65rem;
+      opacity: 0.9;
+      line-height: 1.4;
+      flex: 1;
+    }
+    .perk-highlight {
+      margin-top: 0.5rem;
+      background: rgba(255,255,255,0.2);
+      padding: 0.3rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+
+    .website-strip {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      background: rgba(0,0,0,0.2);
+      padding: 0.3rem 1.5rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      border-top-left-radius: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    @media print {
+      body { background: none; padding: 0; }
+      .banner { box-shadow: none; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <!-- Left: Branding -->
+    <div class="header-section">
+      <div class="brand-name">Coffee Oasis</div>
+      <div class="brand-tagline">Rewards Program</div>
+      <div class="qr-placeholder">
+        QR CODE<br>HERE
+      </div>
+      <div class="scan-prompt">Scan to Join</div>
+    </div>
+
+    <!-- Right: 4 Perks -->
+    <div class="perks-section">
+      <div class="perk">
+        <div class="perk-icon">📱</div>
+        <div class="perk-title">Daily Check-in</div>
+        <div class="perk-desc">
+          Scan your QR code every visit to collect stamps.
+        </div>
+        <div class="perk-highlight">
+          <!-- UPDATE: Set your actual threshold -->
+          10 STAMPS = FREE VOUCHER
+        </div>
+      </div>
+
+      <div class="perk">
+        <div class="perk-icon">💰</div>
+        <div class="perk-title">Earn Points</div>
+        <div class="perk-desc">
+          Every ringgit you spend earns you points toward rewards.
+        </div>
+        <div class="perk-highlight">
+          <!-- UPDATE: Set your actual rate -->
+          RM1 = 1 POINT
+        </div>
+      </div>
+
+      <div class="perk">
+        <div class="perk-icon">☕</div>
+        <div class="perk-title">Drink Passes</div>
+        <div class="perk-desc">
+          Get a multi-drink pass and save on your daily coffee.
+        </div>
+        <div class="perk-highlight">
+          <!-- UPDATE: Set your actual pass deal -->
+          SAVE MORE PER CUP
+        </div>
+      </div>
+
+      <div class="perk">
+        <div class="perk-icon">🌐</div>
+        <div class="perk-title">Order Online</div>
+        <div class="perk-desc">
+          Skip the queue! Order ahead and pick up when ready.
+        </div>
+        <div class="perk-highlight">
+          COFFEE-OASIS.COM
+        </div>
+      </div>
+    </div>
+
+    <div class="website-strip">www.coffee-oasis.com</div>
+  </div>
+</body>
+</html>

@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { labelPrinter } from "@/lib/labelPrinterService";
-import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 interface OrderItem {
   id: number | string;
@@ -416,24 +415,21 @@ export default function KitchenDisplayPage() {
       // EventSource will automatically attempt to reconnect
     };
 
-    const channel = supabaseBrowser
-      .channel('kitchen-online-orders')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
-        () => fetchOrders()
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
-        () => fetchOrders()
-      )
-      .subscribe();
+    // Online-order changes come via the server-side SSE feed (no anon key in browser)
+    const onlineOrdersSource = new EventSource('/api/online-orders/stream');
+    onlineOrdersSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'online-orders-updated') fetchOrders();
+      } catch (err) {
+        console.error('🍳 Kitchen Display: Failed to parse online-orders SSE:', err);
+      }
+    };
 
     return () => {
       console.log('🍳 Kitchen Display: Disconnecting from order stream');
       eventSource.close();
-      supabaseBrowser.removeChannel(channel);
+      onlineOrdersSource.close();
     };
   }, []);
 

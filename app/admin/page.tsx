@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, TrendingUp, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2, Pause } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
-import { supabaseBrowser } from '@/lib/supabaseBrowser';
 
 /**
  * Admin Dashboard
@@ -37,6 +36,7 @@ interface LockerStatus {
 interface DailyStats {
   todayOrders: number;
   todayRevenue: number;
+  todayProfit: number;
   itemsSold: number;
   pendingOrders: number;
 }
@@ -50,6 +50,7 @@ export default function AdminDashboard() {
   const [dailyStats, setDailyStats] = useState<DailyStats>({
     todayOrders: 0,
     todayRevenue: 0,
+    todayProfit: 0,
     itemsSold: 0,
     pendingOrders: 0
   });
@@ -59,22 +60,34 @@ export default function AdminDashboard() {
   const [catalogSyncResult, setCatalogSyncResult] = useState<string | null>(null);
   const [onlineOrderCount, setOnlineOrderCount] = useState(0);
   const [hasArrivedCustomer, setHasArrivedCustomer] = useState(false);
+  const [intakePaused, setIntakePaused] = useState(false);
+  const [showShutdown, setShowShutdown] = useState(false);
+  const [shutdownRunning, setShutdownRunning] = useState(false);
+  const [shutdownSteps, setShutdownSteps] = useState<{ step: string; status: string; detail?: string }[]>([]);
 
   const fetchOnlineOrderCount = useCallback(async () => {
     try {
-      const [countRes, arrivedRes] = await Promise.all([
-        supabaseBrowser
-          .from('online_orders')
-          .select('id', { count: 'exact', head: true })
-          .in('status', ['pending', 'accepted', 'ready']),
-        supabaseBrowser
-          .from('online_orders')
-          .select('id', { count: 'exact', head: true })
-          .in('status', ['accepted', 'ready'])
-          .not('arrived_at', 'is', null),
-      ]);
-      if (!countRes.error && countRes.count !== null) setOnlineOrderCount(countRes.count);
-      setHasArrivedCustomer((arrivedRes.count ?? 0) > 0);
+      // Reuse the same endpoint the order notifier uses (server-side, service_role).
+      // It already filters to active statuses (pending/accepted/ready) for outlet 'main'.
+      const res = await fetch('/api/online-orders');
+      if (res.ok) {
+        const data = await res.json();
+        const orders = (data.orders ?? []) as Array<{ status: string; arrived_at: string | null }>;
+        setOnlineOrderCount(orders.length);
+        setHasArrivedCustomer(
+          orders.some(o => (o.status === 'accepted' || o.status === 'ready') && !!o.arrived_at)
+        );
+      }
+    } catch {}
+  }, []);
+
+  const fetchIntakeStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/online-orders/intake');
+      if (res.ok) {
+        const data = await res.json();
+        setIntakePaused(!!data.intake_paused);
+      }
     } catch {}
   }, []);
 
@@ -86,10 +99,12 @@ export default function AdminDashboard() {
       fetchLockerStatus();
       fetchDailyStats();
       fetchOnlineOrderCount();
+      fetchIntakeStatus();
 
       // Set up auto-refresh for daily stats every 30 seconds
       const statsInterval = setInterval(() => {
         fetchDailyStats();
+        fetchIntakeStatus();
       }, 30000); // 30 seconds
 
       // Refresh stats when page becomes visible again (user switches back to tab)
@@ -97,24 +112,25 @@ export default function AdminDashboard() {
         if (document.visibilityState === 'visible') {
           fetchDailyStats();
           fetchOnlineOrderCount();
+          fetchIntakeStatus();
         }
       };
       document.addEventListener('visibilitychange', handleVisibilityChange);
 
-      const channel = supabaseBrowser
-        .channel('admin-online-order-count')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'online_orders' },
-          () => fetchOnlineOrderCount()
-        )
-        .subscribe();
+      // Live online-order count via server-side SSE (no anon key in browser)
+      const ordersSource = new EventSource('/api/online-orders/stream');
+      ordersSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'online-orders-updated') fetchOnlineOrderCount();
+        } catch {}
+      };
 
       // Clean up interval and event listener on unmount
       return () => {
         clearInterval(statsInterval);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
-        supabaseBrowser.removeChannel(channel);
+        ordersSource.close();
       };
     }
   }, []);
@@ -178,6 +194,20 @@ export default function AdminDashboard() {
     } finally {
       setCatalogSyncing(false);
       setTimeout(() => setCatalogSyncResult(null), 5000);
+    }
+  };
+
+  const handleShutdown = async () => {
+    setShutdownRunning(true);
+    setShutdownSteps([]);
+    try {
+      const res = await fetch('/api/admin/shutdown', { method: 'POST' });
+      const data = await res.json();
+      setShutdownSteps(data.steps || []);
+    } catch (err) {
+      setShutdownSteps([{ step: 'Shutdown', status: 'failed', detail: 'Network error' }]);
+    } finally {
+      setShutdownRunning(false);
     }
   };
 
@@ -286,7 +316,7 @@ export default function AdminDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         {/* Daily Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-3">
               <Receipt className="w-8 h-8 text-blue-600" />
@@ -303,6 +333,16 @@ export default function AdminDashboard() {
               <div>
                 <p className="text-sm text-gray-500">Today's Revenue</p>
                 <p className="text-2xl font-bold text-green-600">RM {dailyStats.todayRevenue.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="w-8 h-8 text-emerald-600" />
+              <div>
+                <p className="text-sm text-gray-500">Today's Profit</p>
+                <p className="text-2xl font-bold text-emerald-600">RM {dailyStats.todayProfit.toFixed(2)}</p>
               </div>
             </div>
           </div>
@@ -337,13 +377,19 @@ export default function AdminDashboard() {
                 href="/admin/online-orders"
                 className="bg-gradient-to-br from-orange-400 to-orange-500 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105 relative"
               >
+                {intakePaused && (
+                  <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs font-bold rounded-full h-7 flex items-center gap-1 px-2.5 shadow-lg">
+                    <Pause className="w-3.5 h-3.5" fill="currentColor" />
+                    Paused
+                  </span>
+                )}
                 {onlineOrderCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-sm font-bold rounded-full min-w-[28px] h-7 flex items-center justify-center px-2 shadow-lg animate-pulse">
+                  <span className={`absolute -top-2 ${intakePaused ? 'right-24' : '-right-2'} bg-red-600 text-white text-sm font-bold rounded-full min-w-[28px] h-7 flex items-center justify-center px-2 shadow-lg animate-pulse`}>
                     {hasArrivedCustomer && '! '}{onlineOrderCount}
                   </span>
                 )}
                 {hasArrivedCustomer && onlineOrderCount === 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-600 text-white text-sm font-bold rounded-full w-7 h-7 flex items-center justify-center shadow-lg animate-pulse">
+                  <span className={`absolute -top-2 ${intakePaused ? 'right-24' : '-right-2'} bg-red-600 text-white text-sm font-bold rounded-full w-7 h-7 flex items-center justify-center shadow-lg animate-pulse`}>
                     !
                   </span>
                 )}
@@ -550,6 +596,17 @@ export default function AdminDashboard() {
                 </div>
                 <p className="text-pink-50">Create playful promo images for combos</p>
               </Link>
+
+              <button
+                onClick={() => setShowShutdown(true)}
+                className="bg-gradient-to-br from-gray-700 to-gray-900 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105 text-left"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Power className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">End of Day</h2>
+                </div>
+                <p className="text-gray-300">Backup data, pause orders, shut down PC</p>
+              </button>
             </div>
           </div>
         </div>
@@ -611,6 +668,96 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* Shutdown Confirmation Dialog */}
+      {showShutdown && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => !shutdownRunning && setShowShutdown(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+              {shutdownSteps.length === 0 ? (
+                <>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                      <Power className="w-6 h-6 text-gray-700" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">End of Day Shutdown</h3>
+                      <p className="text-sm text-gray-500">This will:</p>
+                    </div>
+                  </div>
+
+                  <ol className="space-y-2 mb-6 ml-4">
+                    <li className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                      Back up the local database
+                    </li>
+                    <li className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                      Back up cloud data (loyalty, orders, vouchers)
+                    </li>
+                    <li className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                      Pause online order intake
+                    </li>
+                    <li className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">4</span>
+                      Shut down the PC
+                    </li>
+                  </ol>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowShutdown(false)}
+                      className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleShutdown}
+                      disabled={shutdownRunning}
+                      className="flex-1 px-4 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {shutdownRunning ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Running...</>
+                      ) : (
+                        <><Power className="w-4 h-4" /> Shut Down</>
+                      )}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Shutdown Progress</h3>
+                  <div className="space-y-3 mb-6">
+                    {shutdownSteps.map((s, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        {s.status === 'ok' ? (
+                          <Check className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                        ) : s.status === 'skipped' ? (
+                          <span className="w-5 h-5 text-gray-400 shrink-0 mt-0.5 text-center">—</span>
+                        ) : (
+                          <X className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                        )}
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{s.step}</p>
+                          {s.detail && <p className="text-xs text-gray-500">{s.detail}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => { setShowShutdown(false); setShutdownSteps([]); }}
+                    className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+                  >
+                    Close
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

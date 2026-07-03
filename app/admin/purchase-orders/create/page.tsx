@@ -18,6 +18,7 @@ interface Material {
 interface Product {
   id: string;
   name: string;
+  supplierProductName?: string;
   sku: string;
   supplierCost: number;
   supplier?: string;
@@ -145,7 +146,7 @@ export default function CreatePurchaseOrderPage() {
         tempId: `temp-${Date.now()}-${Math.random()}`,
         itemType: "product",
         productId: product.id,
-        productName: product.name,
+        productName: product.supplierProductName || product.name,
         quantity: newItemQuantity,
         unit: newItemUnit,
         unitCost: newItemUnitCost,
@@ -446,9 +447,10 @@ export default function CreatePurchaseOrderPage() {
                     .sort((a, b) => (a.stockQuantity ?? 999) - (b.stockQuantity ?? 999))
                     .map((p) => {
                       const stockStatus = getStockStatus(p.stockQuantity, undefined);
+                      const displayName = p.supplierProductName || p.name;
                       return (
                         <option key={p.id} value={p.id}>
-                          {p.name} • Stock: {stockStatus.label} • {p.sku} • {p.supplier || "No supplier"}
+                          {displayName} • Stock: {stockStatus.label} • {p.sku} • {p.supplier || "No supplier"}
                         </option>
                       );
                     })}

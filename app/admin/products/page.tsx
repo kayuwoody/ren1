@@ -16,6 +16,8 @@ interface Product {
   unitCost: number;
   comboPriceOverride?: number;
   supplier?: string;
+  supplierProductName?: string;
+  staffPrice?: number | null;
   quantityPerCarton?: number | null;
   imageUrl?: string;
   stockQuantity?: number | null;
@@ -301,10 +303,12 @@ function ProductModal({
     sku: product?.sku || '',
     category: product?.category || '',
     basePrice: product?.currentPrice ?? '',
+    staffPrice: product?.staffPrice ?? '',
     manageStock: product?.manageStock ?? false,
     availableOnline: product?.availableOnline ?? true,
     imageUrl: product?.imageUrl || '',
     supplier: product?.supplier || '',
+    supplierProductName: product?.supplierProductName || '',
     quantityPerCarton: product?.quantityPerCarton ?? '',
   });
 
@@ -325,6 +329,7 @@ function ProductModal({
         body: JSON.stringify({
           ...formData,
           basePrice: parseFloat(String(formData.basePrice)) || 0,
+          staffPrice: formData.staffPrice !== '' ? parseFloat(String(formData.staffPrice)) : null,
           quantityPerCarton: formData.quantityPerCarton ? parseInt(String(formData.quantityPerCarton)) : null,
         }),
       });
@@ -449,6 +454,22 @@ function ProductModal({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                Staff Price (RM)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.staffPrice}
+                onChange={(e) => setFormData({ ...formData, staffPrice: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
+                placeholder="e.g., 8.00"
+              />
+              <p className="text-xs text-gray-500 mt-1">Shows as a quick discount button at POS checkout</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Supplier
               </label>
               <input
@@ -458,6 +479,20 @@ function ProductModal({
                 className="w-full px-3 py-2 border rounded-lg"
                 placeholder="e.g., ABC Supplies Sdn Bhd"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Supplier Product Name
+              </label>
+              <input
+                type="text"
+                value={formData.supplierProductName}
+                onChange={(e) => setFormData({ ...formData, supplierProductName: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
+                placeholder="e.g., Premium Arabica 1kg"
+              />
+              <p className="text-xs text-gray-500 mt-1">Used on purchase orders instead of your product name</p>
             </div>
 
             <div>

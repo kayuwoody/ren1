@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Package, DollarSign, TrendingUp, TrendingDown, Download, Percent, Award, Star, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Package, DollarSign, TrendingUp, TrendingDown, Download, Percent, Award, Star, ChevronDown, ChevronRight, Layers } from 'lucide-react';
 
 interface SaleDetail {
   orderId: number;
@@ -27,6 +27,31 @@ interface ProductData {
   sales: SaleDetail[];
 }
 
+interface ExpandedVariant {
+  name: string;
+  quantity: number;
+  standalone: number;
+  fromCombos: number;
+  revenue: number;
+  cogs: number;
+  profit: number;
+  margin: number;
+}
+
+interface ExpandedItem {
+  productId: string;
+  name: string;
+  quantity: number;
+  standalone: number;
+  fromCombos: number;
+  revenue: number;
+  cogs: number;
+  profit: number;
+  margin: number;
+  combos: string[];
+  variants: ExpandedVariant[];
+}
+
 interface ProductsReport {
   summary: {
     totalProducts: number;
@@ -40,6 +65,7 @@ interface ProductsReport {
     avgProfitPerItem: number;
   };
   allProducts: ProductData[];
+  expandedItems: ExpandedItem[];
   highlights: {
     topSelling: ProductData[];
     highestRevenue: ProductData[];
@@ -62,12 +88,15 @@ export default function ProductsSoldPage() {
   const [dateRange, setDateRange] = useState('30days');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [month, setMonth] = useState(''); // YYYY-MM for the "Specific Month" filter
   const [hideStaffMeals, setHideStaffMeals] = useState(true);
   const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
   const [sortField, setSortField] = useState<SortField>('quantity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'products' | 'expanded'>('products');
 
   const toggleExpanded = (productName: string) => {
     setExpandedProducts(prev => {
@@ -76,6 +105,18 @@ export default function ProductsSoldPage() {
         next.delete(productName);
       } else {
         next.add(productName);
+      }
+      return next;
+    });
+  };
+
+  const toggleVariants = (productId: string) => {
+    setExpandedVariants(prev => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
       }
       return next;
     });
@@ -103,6 +144,21 @@ export default function ProductsSoldPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Map a "YYYY-MM" value to first/last calendar day and drive the existing
+  // start/end date filter (no backend change needed).
+  const applyMonth = (ym: string) => {
+    setMonth(ym);
+    if (!ym) {
+      setStartDate('');
+      setEndDate('');
+      return;
+    }
+    const [y, m] = ym.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    setStartDate(`${ym}-01`);
+    setEndDate(`${ym}-${String(lastDay).padStart(2, '0')}`);
   };
 
   const handleSort = (field: SortField) => {
@@ -259,9 +315,15 @@ export default function ProductsSoldPage() {
               <select
                 value={dateRange}
                 onChange={(e) => {
-                  setDateRange(e.target.value);
+                  const next = e.target.value;
                   setStartDate('');
                   setEndDate('');
+                  setMonth('');
+                  setDateRange(next);
+                  if (next === 'month') {
+                    const now = new Date();
+                    applyMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+                  }
                 }}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               >
@@ -269,11 +331,26 @@ export default function ProductsSoldPage() {
                 <option value="30days">Last 30 Days</option>
                 <option value="90days">Last 90 Days</option>
                 <option value="mtd">Month to Date</option>
+                <option value="month">Specific Month</option>
                 <option value="ytd">Year to Date</option>
                 <option value="all">All Time</option>
                 <option value="custom">Custom Range</option>
               </select>
             </div>
+
+            {dateRange === 'month' && (
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Month
+                </label>
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(e) => applyMonth(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
 
             {dateRange === 'custom' && (
               <>
@@ -488,13 +565,37 @@ export default function ProductsSoldPage() {
           </div>
         </div>
 
-        {/* All Products Table */}
+        {/* View Mode Toggle + Table */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              All Products ({sortedProducts.length})
-            </h2>
+            <div className="flex items-center gap-3">
+              <div className="flex rounded-lg overflow-hidden border border-gray-300">
+                <button
+                  onClick={() => setViewMode('products')}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition ${
+                    viewMode === 'products' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Package className="w-4 h-4" />
+                  Products
+                </button>
+                <button
+                  onClick={() => setViewMode('expanded')}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition ${
+                    viewMode === 'expanded' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Layers className="w-4 h-4" />
+                  Items (Expanded)
+                </button>
+              </div>
+              <span className="text-sm text-gray-500">
+                {viewMode === 'products'
+                  ? `${sortedProducts.length} products`
+                  : `${report.expandedItems?.length || 0} items (incl. combo components)`
+                }
+              </span>
+            </div>
             <div className="flex-1 max-w-sm">
               <input
                 type="text"
@@ -505,153 +606,296 @@ export default function ProductsSoldPage() {
               />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('name')}
-                  >
-                    Product{SortIcon({ field: 'name' })}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('quantity')}
-                  >
-                    Qty Sold{SortIcon({ field: 'quantity' })}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('revenue')}
-                  >
-                    Revenue{SortIcon({ field: 'revenue' })}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('cogs')}
-                  >
-                    COGS{SortIcon({ field: 'cogs' })}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('profit')}
-                  >
-                    Profit{SortIcon({ field: 'profit' })}
-                  </th>
-                  <th
-                    className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('margin')}
-                  >
-                    Margin{SortIcon({ field: 'margin' })}
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Avg Price
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    Avg Profit
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {sortedProducts.map((product, index) => {
-                  const isExpanded = expandedProducts.has(product.name);
-                  return (
-                    <React.Fragment key={index}>
-                      <tr
-                        className="hover:bg-gray-50 cursor-pointer"
-                        onClick={() => toggleExpanded(product.name)}
-                      >
-                        <td className="px-6 py-4 text-sm font-medium">
-                          <div className="flex items-center gap-2">
-                            {isExpanded ? (
-                              <ChevronDown className="w-4 h-4 text-gray-400" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 text-gray-400" />
-                            )}
-                            {product.name}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right font-semibold text-purple-600">
-                          {product.quantity}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right">
-                          RM {product.revenue.toFixed(2)}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right text-red-600">
-                          RM {product.cogs.toFixed(2)}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right font-bold text-green-600">
-                          RM {product.profit.toFixed(2)}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right">
-                          <MarginBadge margin={product.margin} />
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right text-gray-600">
-                          RM {product.avgPrice.toFixed(2)}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right text-gray-600">
-                          RM {product.avgProfit.toFixed(2)}
-                        </td>
-                      </tr>
-                      {isExpanded && product.sales && product.sales.length > 0 && (
-                        <tr>
-                          <td colSpan={8} className="px-0 py-0 bg-gray-50">
-                            <div className="px-8 py-3">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="text-xs text-gray-500 uppercase">
-                                    <th className="px-3 py-2 text-left">Order #</th>
-                                    <th className="px-3 py-2 text-left">Date</th>
-                                    <th className="px-3 py-2 text-right">Qty</th>
-                                    <th className="px-3 py-2 text-right">Unit Price</th>
-                                    <th className="px-3 py-2 text-right">Unit COGS</th>
-                                    <th className="px-3 py-2 text-right">Unit Profit</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                  {product.sales.map((sale, saleIndex) => (
-                                    <tr key={saleIndex} className="hover:bg-gray-100">
-                                      <td className="px-3 py-2 font-medium">
-                                        <Link
-                                          href={`/orders/${sale.orderId}`}
-                                          className="text-blue-600 hover:underline"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          #{sale.orderNumber}
-                                        </Link>
-                                      </td>
-                                      <td className="px-3 py-2 text-gray-600">
-                                        {new Date(sale.date).toLocaleDateString('en-MY', {
-                                          day: 'numeric',
-                                          month: 'short',
-                                          year: 'numeric',
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                        })}
-                                      </td>
-                                      <td className="px-3 py-2 text-right">{sale.quantity}</td>
-                                      <td className="px-3 py-2 text-right">RM {sale.price.toFixed(2)}</td>
-                                      <td className="px-3 py-2 text-right text-red-600">
-                                        RM {sale.cogs.toFixed(2)}
-                                      </td>
-                                      <td className="px-3 py-2 text-right text-green-600">
-                                        RM {(sale.price - sale.cogs).toFixed(2)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+          {viewMode === 'products' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('name')}
+                    >
+                      Product{SortIcon({ field: 'name' })}
+                    </th>
+                    <th
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('quantity')}
+                    >
+                      Qty Sold{SortIcon({ field: 'quantity' })}
+                    </th>
+                    <th
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('revenue')}
+                    >
+                      Revenue{SortIcon({ field: 'revenue' })}
+                    </th>
+                    <th
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('cogs')}
+                    >
+                      COGS{SortIcon({ field: 'cogs' })}
+                    </th>
+                    <th
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('profit')}
+                    >
+                      Profit{SortIcon({ field: 'profit' })}
+                    </th>
+                    <th
+                      className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('margin')}
+                    >
+                      Margin{SortIcon({ field: 'margin' })}
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Avg Price
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Avg Profit
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {sortedProducts.map((product, index) => {
+                    const isExpanded = expandedProducts.has(product.name);
+                    return (
+                      <React.Fragment key={index}>
+                        <tr
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => toggleExpanded(product.name)}
+                        >
+                          <td className="px-6 py-4 text-sm font-medium">
+                            <div className="flex items-center gap-2">
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-gray-400" />
+                              )}
+                              {product.name}
                             </div>
                           </td>
+                          <td className="px-6 py-4 text-sm text-right font-semibold text-purple-600">
+                            {product.quantity}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-right">
+                            RM {product.revenue.toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-right text-red-600">
+                            RM {product.cogs.toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-right font-bold text-green-600">
+                            RM {product.profit.toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-right">
+                            <MarginBadge margin={product.margin} />
+                          </td>
+                          <td className="px-6 py-4 text-sm text-right text-gray-600">
+                            RM {product.avgPrice.toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-right text-gray-600">
+                            RM {product.avgProfit.toFixed(2)}
+                          </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        {isExpanded && product.sales && product.sales.length > 0 && (
+                          <tr>
+                            <td colSpan={8} className="px-0 py-0 bg-gray-50">
+                              <div className="px-8 py-3">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="text-xs text-gray-500 uppercase">
+                                      <th className="px-3 py-2 text-left">Order #</th>
+                                      <th className="px-3 py-2 text-left">Date</th>
+                                      <th className="px-3 py-2 text-right">Qty</th>
+                                      <th className="px-3 py-2 text-right">Unit Price</th>
+                                      <th className="px-3 py-2 text-right">Unit COGS</th>
+                                      <th className="px-3 py-2 text-right">Unit Profit</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-200">
+                                    {product.sales.map((sale, saleIndex) => (
+                                      <tr key={saleIndex} className="hover:bg-gray-100">
+                                        <td className="px-3 py-2 font-medium">
+                                          <Link
+                                            href={`/orders/${sale.orderId}`}
+                                            className="text-blue-600 hover:underline"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            #{sale.orderNumber}
+                                          </Link>
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-600">
+                                          {new Date(sale.date).toLocaleDateString('en-MY', {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })}
+                                        </td>
+                                        <td className="px-3 py-2 text-right">{sale.quantity}</td>
+                                        <td className="px-3 py-2 text-right">RM {sale.price.toFixed(2)}</td>
+                                        <td className="px-3 py-2 text-right text-red-600">
+                                          RM {sale.cogs.toFixed(2)}
+                                        </td>
+                                        <td className="px-3 py-2 text-right text-green-600">
+                                          RM {(sale.price - sale.cogs).toFixed(2)}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Item
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Total Qty
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Standalone
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      In Combos
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Revenue
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      COGS
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Profit
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Margin
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Combo Sources
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {(report.expandedItems || [])
+                    .filter(item => !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase())
+                      || item.variants?.some(v => v.name.toLowerCase().includes(searchQuery.toLowerCase())))
+                    .map((item) => {
+                      // Show the breakdown chevron only when there's more than one
+                      // variant (a single variant equals the item itself).
+                      const hasVariants = item.variants && item.variants.length > 1;
+                      const isOpen = expandedVariants.has(item.productId);
+                      return (
+                        <React.Fragment key={item.productId}>
+                          <tr className="hover:bg-gray-50">
+                            <td className="px-4 py-4 text-sm font-medium">
+                              <div className="flex items-center gap-1">
+                                {hasVariants ? (
+                                  <button
+                                    onClick={() => toggleVariants(item.productId)}
+                                    className="p-0.5 rounded hover:bg-gray-200 -ml-1"
+                                  >
+                                    {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                                  </button>
+                                ) : (
+                                  <span className="w-5" />
+                                )}
+                                {item.name}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right font-bold text-purple-600">
+                              {item.quantity}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right text-gray-700">
+                              {item.standalone}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right">
+                              {item.fromCombos > 0 ? (
+                                <span className="text-blue-600 font-semibold">{item.fromCombos}</span>
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right">
+                              RM {item.revenue.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right text-red-600">
+                              RM {item.cogs.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right font-bold text-green-600">
+                              RM {item.profit.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-4 text-sm text-right">
+                              <MarginBadge margin={item.margin} />
+                            </td>
+                            <td className="px-4 py-4 text-sm text-gray-500">
+                              {item.combos.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {item.combos.map((combo, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">
+                                      {combo}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </td>
+                          </tr>
+                          {hasVariants && isOpen && item.variants.map((v, vi) => (
+                            <tr key={`${item.productId}-v-${vi}`} className="bg-gray-50/50">
+                              <td className="px-4 py-2 text-sm text-gray-500 pl-10">
+                                {v.name}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-purple-400">
+                                {v.quantity}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-gray-400">
+                                {v.standalone}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right">
+                                {v.fromCombos > 0 ? (
+                                  <span className="text-blue-400">{v.fromCombos}</span>
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-gray-500">
+                                RM {v.revenue.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-red-400">
+                                RM {v.cogs.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right text-green-500">
+                                RM {v.profit.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right">
+                                <MarginBadge margin={v.margin} />
+                              </td>
+                              <td className="px-4 py-2 text-sm"></td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
+                </tbody>
+              </table>
+              <div className="px-4 py-3 border-t text-xs text-gray-500">
+                Counts every item sold standalone plus each time it appeared inside a combo. Combos
+                also appear as their own line, so combo revenue overlaps with its components&apos; split share.
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

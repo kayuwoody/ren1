@@ -28,6 +28,7 @@ export interface StockCheckLogItem {
   countedStock: number;
   difference: number;
   unit: string;
+  costPerUnit: number;
   note?: string;
   wcSynced: boolean;
   createdAt: string;
@@ -48,6 +49,7 @@ export interface CreateStockCheckLogInput {
     previousStock: number;
     countedStock: number;
     unit: string;
+    costPerUnit?: number;
     note?: string;
     wcSynced?: boolean;
   }[];
@@ -74,8 +76,8 @@ export function createStockCheckLog(input: CreateStockCheckLogInput): StockCheck
 
   // Insert all log items
   const insertItem = db.prepare(`
-    INSERT INTO StockCheckLogItem (id, stockCheckLogId, itemType, itemId, itemName, supplier, previousStock, countedStock, difference, unit, note, wcSynced, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO StockCheckLogItem (id, stockCheckLogId, itemType, itemId, itemName, supplier, previousStock, countedStock, difference, unit, costPerUnit, note, wcSynced, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const item of input.items) {
@@ -91,6 +93,7 @@ export function createStockCheckLog(input: CreateStockCheckLogInput): StockCheck
       item.countedStock,
       difference,
       item.unit,
+      item.costPerUnit || 0,
       item.note || null,
       item.wcSynced ? 1 : 0,
       now
@@ -172,7 +175,7 @@ export function getStockCheckLogWithItems(logId: string): StockCheckLogWithItems
   if (!log) return null;
 
   const itemsStmt = db.prepare(`
-    SELECT id, stockCheckLogId, itemType, itemId, itemName, supplier, previousStock, countedStock, difference, unit, note, wcSynced, createdAt
+    SELECT id, stockCheckLogId, itemType, itemId, itemName, supplier, previousStock, countedStock, difference, unit, costPerUnit, note, wcSynced, createdAt
     FROM StockCheckLogItem
     WHERE stockCheckLogId = ?
     ORDER BY supplier, itemName
@@ -194,7 +197,7 @@ export function getStockCheckLogWithItems(logId: string): StockCheckLogWithItems
  */
 export function getItemStockHistory(itemId: string, itemType: 'product' | 'material'): StockCheckLogItem[] {
   const stmt = db.prepare(`
-    SELECT id, stockCheckLogId, itemType, itemId, itemName, supplier, previousStock, countedStock, difference, unit, note, wcSynced, createdAt
+    SELECT id, stockCheckLogId, itemType, itemId, itemName, supplier, previousStock, countedStock, difference, unit, costPerUnit, note, wcSynced, createdAt
     FROM StockCheckLogItem
     WHERE itemId = ? AND itemType = ?
     ORDER BY createdAt DESC

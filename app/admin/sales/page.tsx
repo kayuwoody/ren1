@@ -28,6 +28,7 @@ export default function SalesReportPage() {
   const [dateRange, setDateRange] = useState('7days'); // 7days, 30days, 90days, all
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [month, setMonth] = useState(''); // YYYY-MM for the "Specific Month" filter
   const [hideStaffMeals, setHideStaffMeals] = useState(true);
   const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
 
@@ -53,6 +54,21 @@ export default function SalesReportPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Map a "YYYY-MM" value to first/last calendar day and drive the existing
+  // start/end date filter (no backend change needed).
+  const applyMonth = (ym: string) => {
+    setMonth(ym);
+    if (!ym) {
+      setStartDate('');
+      setEndDate('');
+      return;
+    }
+    const [y, m] = ym.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate(); // day 0 of next month = last day of this one
+    setStartDate(`${ym}-01`);
+    setEndDate(`${ym}-${String(lastDay).padStart(2, '0')}`);
   };
 
   const exportToCSV = () => {
@@ -147,9 +163,17 @@ export default function SalesReportPage() {
               <select
                 value={dateRange}
                 onChange={(e) => {
-                  setDateRange(e.target.value);
+                  const next = e.target.value;
                   setStartDate('');
                   setEndDate('');
+                  setMonth('');
+                  setDateRange(next);
+                  // Default the month picker to the current month so the report
+                  // loads immediately instead of falling back to the default range.
+                  if (next === 'month') {
+                    const now = new Date();
+                    applyMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+                  }
                 }}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               >
@@ -157,11 +181,26 @@ export default function SalesReportPage() {
                 <option value="30days">Last 30 Days</option>
                 <option value="90days">Last 90 Days</option>
                 <option value="mtd">Month to Date</option>
+                <option value="month">Specific Month</option>
                 <option value="ytd">Year to Date</option>
                 <option value="all">All Time</option>
                 <option value="custom">Custom Range</option>
               </select>
             </div>
+
+            {dateRange === 'month' && (
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Month
+                </label>
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(e) => applyMonth(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
 
             {dateRange === 'custom' && (
               <>
@@ -224,6 +263,14 @@ export default function SalesReportPage() {
               <Download className="w-4 h-4" />
               Export CSV
             </button>
+
+            <Link
+              href="/admin/sales/patterns"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+            >
+              <TrendingUp className="w-4 h-4" />
+              Patterns
+            </Link>
 
             <Link
               href="/admin/sales/daily"

@@ -41,6 +41,7 @@ interface StockCheckLogItem {
   countedStock: number;
   difference: number;
   unit: string;
+  costPerUnit: number;
   note?: string;
   wcSynced: boolean;
 }
@@ -102,7 +103,8 @@ export default function StockCheckPage() {
       const res = await fetch(`/api/admin/stock-check/logs/${logId}`);
       if (res.ok) {
         const data = await res.json();
-        setSelectedLog(data.log);
+        // API returns a flat log object with `items` nested inside it
+        setSelectedLog({ log: data.log, items: data.log.items });
       }
     } catch (err) {
       console.error('Failed to fetch log details:', err);
@@ -193,7 +195,12 @@ export default function StockCheckPage() {
       const data = await res.json();
 
       if (res.ok) {
-        setUpdateResult({ success: true, message: data.message });
+        let message = data.message;
+        if (typeof data.mismatchValue === 'number' && Math.abs(data.mismatchValue) >= 0.005) {
+          const loss = data.mismatchValue < 0;
+          message += ` — ${loss ? 'loss' : 'surplus'} of RM ${Math.abs(data.mismatchValue).toFixed(2)}`;
+        }
+        setUpdateResult({ success: true, message });
         // Clear inputs for successfully updated items
         const newInputs = { ...stockInputs };
         for (const result of data.results) {
@@ -592,11 +599,14 @@ export default function StockCheckPage() {
                                 <th className="text-right pb-2">Previous</th>
                                 <th className="text-right pb-2">Counted</th>
                                 <th className="text-right pb-2">Diff</th>
+                                <th className="text-right pb-2 pl-4">Value</th>
                                 <th className="text-left pb-2 pl-4">Note</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                              {selectedLog.items.map(item => (
+                              {selectedLog.items.map(item => {
+                                const value = item.difference * (item.costPerUnit || 0);
+                                return (
                                 <tr key={item.id}>
                                   <td className="py-2">
                                     <div className="flex items-center gap-2">
@@ -622,12 +632,39 @@ export default function StockCheckPage() {
                                   }`}>
                                     {item.difference > 0 ? '+' : ''}{item.difference.toFixed(item.unit === 'pcs' ? 0 : 1)}
                                   </td>
+                                  <td className={`py-2 text-right pl-4 ${
+                                    value < 0 ? 'text-red-600' : value > 0 ? 'text-green-600' : 'text-gray-400'
+                                  }`}>
+                                    {value === 0 ? '-' : `${value < 0 ? '-' : '+'}RM ${Math.abs(value).toFixed(2)}`}
+                                  </td>
                                   <td className="py-2 pl-4 text-gray-500 truncate max-w-[150px]">
                                     {item.note || '-'}
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
+                            {(() => {
+                              const total = selectedLog.items.reduce(
+                                (sum, it) => sum + it.difference * (it.costPerUnit || 0),
+                                0,
+                              );
+                              return (
+                                <tfoot>
+                                  <tr className="border-t-2 border-gray-300 font-semibold">
+                                    <td className="pt-2" colSpan={4}>
+                                      {total < 0 ? 'Net loss' : total > 0 ? 'Net surplus' : 'No value change'}
+                                    </td>
+                                    <td className={`pt-2 text-right pl-4 ${
+                                      total < 0 ? 'text-red-600' : total > 0 ? 'text-green-600' : 'text-gray-400'
+                                    }`}>
+                                      {total === 0 ? '-' : `${total < 0 ? '-' : '+'}RM ${Math.abs(total).toFixed(2)}`}
+                                    </td>
+                                    <td className="pt-2" />
+                                  </tr>
+                                </tfoot>
+                              );
+                            })()}
                           </table>
                         </div>
                       )}

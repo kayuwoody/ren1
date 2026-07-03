@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { supabaseBrowser } from '@/lib/supabaseBrowser';
+import { useEffect, useState, useCallback } from 'react';
 import {
-  Clock, User, Car, MapPin, Volume2, VolumeX,
+  Clock, User, Car, MapPin,
   Check, X, ChefHat, Package, AlertTriangle, Pause, Play,
   Store, Coffee, UtensilsCrossed, Layers,
 } from 'lucide-react';
@@ -72,43 +71,14 @@ function formatMods(mods: Record<string, any> | null): { simple: string; comboIt
   return { simple: simpleParts.join(' · '), comboItems };
 }
 
-function playAlertSound() {
-  try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    osc.type = 'sine';
-    gain.gain.value = 0.3;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    osc.stop(ctx.currentTime + 0.5);
-
-    setTimeout(() => {
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.frequency.value = 1100;
-      osc2.type = 'sine';
-      gain2.gain.value = 0.3;
-      osc2.start();
-      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1);
-      osc2.stop(ctx.currentTime + 1);
-    }, 200);
-  } catch {
-    // Audio not available
-  }
-}
-
 export default function OnlineOrdersPage() {
   const [orders, setOrders] = useState<OnlineOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [intakePaused, setIntakePaused] = useState(false);
+  const [scheduled, setScheduled] = useState(true);
+  const [forceOpen, setForceOpen] = useState(false);
+  const [manualPaused, setManualPaused] = useState(false);
   const [avgWait, setAvgWait] = useState(0);
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [rejectingOrderId, setRejectingOrderId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
@@ -116,40 +86,20 @@ export default function OnlineOrdersPage() {
   const [showMenu, setShowMenu] = useState(false);
   const [menuProducts, setMenuProducts] = useState<MenuProduct[]>([]);
   const [togglingProducts, setTogglingProducts] = useState<Set<string>>(new Set());
-  const knownOrderIds = useRef<Set<string>>(new Set());
-  const knownArrivedIds = useRef<Set<string>>(new Set());
-  const initialLoadDone = useRef(false);
 
   const fetchOrders = useCallback(async () => {
     try {
       const res = await fetch('/api/online-orders');
       if (res.ok) {
         const data = await res.json();
-        const fetched: OnlineOrder[] = data.orders ?? [];
-
-        if (initialLoadDone.current && soundEnabled) {
-          const newPending = fetched.filter(
-            o => o.status === 'pending' && !knownOrderIds.current.has(o.id)
-          );
-          const newArrivals = fetched.filter(
-            o => o.arrived_at && !knownArrivedIds.current.has(o.id)
-          );
-          if (newPending.length > 0 || newArrivals.length > 0) {
-            playAlertSound();
-          }
-        }
-
-        knownOrderIds.current = new Set(fetched.map(o => o.id));
-        knownArrivedIds.current = new Set(fetched.filter(o => o.arrived_at).map(o => o.id));
-        initialLoadDone.current = true;
-        setOrders(fetched);
+        setOrders(data.orders ?? []);
       }
     } catch (err) {
       console.error('Failed to fetch online orders:', err);
     } finally {
       setLoading(false);
     }
-  }, [soundEnabled]);
+  }, []);
 
   const fetchIntakeStatus = useCallback(async () => {
     try {
@@ -157,6 +107,9 @@ export default function OnlineOrdersPage() {
       if (res.ok) {
         const data = await res.json();
         setIntakePaused(data.intake_paused);
+        setScheduled(data.scheduled ?? true);
+        setForceOpen(data.force_open ?? false);
+        setManualPaused(data.manual_paused ?? false);
       }
     } catch {}
   }, []);
@@ -211,24 +164,19 @@ export default function OnlineOrdersPage() {
     const pollInterval = setInterval(fetchOrders, 15000);
     const tickInterval = setInterval(() => setNow(Date.now()), 30000);
 
-    const channel = supabaseBrowser
-      .channel('pos-orders')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
-        () => fetchOrders()
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'online_orders', filter: 'outlet_id=eq.main' },
-        () => fetchOrders()
-      )
-      .subscribe();
+    // Live online-order feed via server-side SSE (no anon key in browser)
+    const ordersSource = new EventSource('/api/online-orders/stream');
+    ordersSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'online-orders-updated') fetchOrders();
+      } catch {}
+    };
 
     return () => {
       clearInterval(pollInterval);
       clearInterval(tickInterval);
-      supabaseBrowser.removeChannel(channel);
+      ordersSource.close();
     };
   }, [fetchOrders, fetchIntakeStatus, fetchAvgWait]);
 
@@ -265,16 +213,15 @@ export default function OnlineOrdersPage() {
     }
   };
 
-  const toggleIntake = async () => {
-    const newState = !intakePaused;
+  const setIntakeAction = async (action: 'force_open' | 'close' | 'auto') => {
     try {
       const res = await fetch('/api/online-orders/intake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paused: newState }),
+        body: JSON.stringify({ action }),
       });
       if (res.ok) {
-        setIntakePaused(newState);
+        await fetchIntakeStatus();
       }
     } catch {}
   };
@@ -299,9 +246,29 @@ export default function OnlineOrdersPage() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FFF6E8' }}>
       {intakePaused && (
-        <div className="px-4 py-3 text-center text-white font-semibold" style={{ backgroundColor: '#C62828' }}>
-          <AlertTriangle className="inline w-5 h-5 mr-2 -mt-0.5" />
-          Online ordering is PAUSED — customers cannot place new orders
+        <div className="px-4 py-2 text-center text-white font-semibold text-sm" style={{ backgroundColor: '#C62828' }}>
+          <AlertTriangle className="inline w-4 h-4 mr-1.5 -mt-0.5" />
+          {manualPaused ? 'Manually paused' : !scheduled ? 'Outside business hours (8am–8:30pm, closed Sun)' : 'Paused'}
+          {' — customers cannot place orders'}
+          {!scheduled && !manualPaused && (
+            <button
+              onClick={() => setIntakeAction('force_open')}
+              className="ml-3 px-2 py-0.5 bg-white text-red-700 rounded text-xs font-bold hover:bg-red-50"
+            >
+              Open anyway
+            </button>
+          )}
+        </div>
+      )}
+      {forceOpen && !scheduled && !intakePaused && (
+        <div className="px-4 py-2 text-center text-white font-semibold text-sm" style={{ backgroundColor: '#2E7D32' }}>
+          Manually opened outside business hours
+          <button
+            onClick={() => setIntakeAction('auto')}
+            className="ml-3 px-2 py-0.5 bg-white text-green-700 rounded text-xs font-bold hover:bg-green-50"
+          >
+            Back to schedule
+          </button>
         </div>
       )}
 
@@ -339,27 +306,23 @@ export default function OnlineOrdersPage() {
             )}
           </button>
 
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className="p-2 rounded-lg hover:bg-gray-100"
-            title={soundEnabled ? 'Mute alerts' : 'Enable alerts'}
-          >
-            {soundEnabled
-              ? <Volume2 className="w-5 h-5" style={{ color: '#3A2414' }} />
-              : <VolumeX className="w-5 h-5" style={{ color: '#546E7A' }} />
-            }
-          </button>
-
-          <button
-            onClick={toggleIntake}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition"
-            style={{ backgroundColor: intakePaused ? '#2E7D32' : '#C62828' }}
-          >
-            {intakePaused
-              ? <><Play className="w-4 h-4" /> Resume Intake</>
-              : <><Pause className="w-4 h-4" /> Pause Intake</>
-            }
-          </button>
+          {intakePaused ? (
+            <button
+              onClick={() => scheduled ? setIntakeAction('auto') : setIntakeAction('force_open')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition"
+              style={{ backgroundColor: '#2E7D32' }}
+            >
+              <Play className="w-4 h-4" /> {scheduled ? 'Resume' : 'Open'}
+            </button>
+          ) : (
+            <button
+              onClick={() => setIntakeAction('close')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition"
+              style={{ backgroundColor: '#C62828' }}
+            >
+              <Pause className="w-4 h-4" /> Pause
+            </button>
+          )}
         </div>
       </header>
 
@@ -531,14 +494,14 @@ export default function OnlineOrdersPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {(['coffee', 'non-coffee', 'food', 'combo'] as const).map(cat => {
+              {Array.from(new Set(menuProducts.map(p => p.category))).sort().map(cat => {
                 const items = menuProducts.filter(p => p.category === cat);
                 if (items.length === 0) return null;
-                const icon = cat === 'coffee' ? <Coffee className="w-4 h-4" />
-                  : cat === 'food' ? <UtensilsCrossed className="w-4 h-4" />
-                  : cat === 'combo' ? <Layers className="w-4 h-4" />
-                  : <Coffee className="w-4 h-4" />;
-                const label = cat === 'non-coffee' ? 'Non-Coffee' : cat.charAt(0).toUpperCase() + cat.slice(1);
+                const icon = cat.includes('coffee') ? <Coffee className="w-4 h-4" />
+                  : cat.includes('food') || cat.includes('pastry') || cat.includes('pastries') ? <UtensilsCrossed className="w-4 h-4" />
+                  : cat.includes('combo') || cat.includes('bundle') ? <Layers className="w-4 h-4" />
+                  : <Store className="w-4 h-4" />;
+                const label = cat.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                 return (
                   <div key={cat}>
                     <div className="px-5 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"

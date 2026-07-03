@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSaleOrders, parseItemVariations, buildDateFilter } from '@/lib/db/orderService';
 import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 import { getCollectedOnlineOrders } from '@/lib/db/onlineOrderService';
+import { getProduct } from '@/lib/db/productService';
 import { handleApiError } from '@/lib/api/error-handler';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 
@@ -51,11 +52,65 @@ export async function GET(req: Request) {
       : [];
 
     const productStats: Record<string, ProductData> = {};
+    // Expanded view: counts each component product individually (incl. inside combos)
+    // Groups by productId so variants (Hot/Iced Americano) merge under the base product
+    const expandedStats: Record<string, {
+      productId: string; name: string; quantity: number; standalone: number; fromCombos: number;
+      revenue: number; cogs: number; combos: string[];
+      variants: Record<string, {
+        name: string; quantity: number; standalone: number; fromCombos: number;
+        revenue: number; cogs: number;
+      }>;
+    }> = {};
     let totalRevenue = 0;
     let totalCOGS = 0;
     let totalProfit = 0;
     let totalItemsSold = 0;
     let totalDiscounts = 0;
+
+    const addExpandedItem = (
+      productId: string, productName: string, qty: number, revenue: number, cogs: number,
+      source: 'standalone' | 'combo', comboName?: string
+    ) => {
+      // Look up base product name; fall back to display name without variant prefix
+      const baseName = (() => {
+        const prod = getProduct(productId);
+        return prod?.name || productName;
+      })();
+      if (!expandedStats[productId]) {
+        expandedStats[productId] = {
+          productId, name: baseName, quantity: 0, standalone: 0, fromCombos: 0,
+          revenue: 0, cogs: 0, combos: [], variants: {},
+        };
+      }
+      expandedStats[productId].quantity += qty;
+      expandedStats[productId].revenue += revenue;
+      expandedStats[productId].cogs += cogs;
+      if (source === 'standalone') {
+        expandedStats[productId].standalone += qty;
+      } else {
+        expandedStats[productId].fromCombos += qty;
+        if (comboName && !expandedStats[productId].combos.includes(comboName)) {
+          expandedStats[productId].combos.push(comboName);
+        }
+      }
+      // Track variant-level stats. Always record a variant (keyed by the display
+      // name) so the breakdown reconciles to the base total — base-name sales
+      // (no modifier selected) show under the base name.
+      const variantKey = productName;
+      if (!expandedStats[productId].variants[variantKey]) {
+        expandedStats[productId].variants[variantKey] = {
+          name: variantKey, quantity: 0, standalone: 0, fromCombos: 0,
+          revenue: 0, cogs: 0,
+        };
+      }
+      const variant = expandedStats[productId].variants[variantKey];
+      variant.quantity += qty;
+      variant.revenue += revenue;
+      variant.cogs += cogs;
+      if (source === 'standalone') variant.standalone += qty;
+      else variant.fromCombos += qty;
+    };
 
     // Process POS orders
     for (const order of posOrders) {
@@ -114,6 +169,96 @@ export async function GET(req: Request) {
           cogs: item.quantity > 0 ? itemCOGS / item.quantity : 0,
         });
 
+        // Expanded view: start from the products-sold count (every line counted
+        // as-is under its base product), then dive into real combos and add each
+        // component to its product's count.
+        // NOTE: A combo is identified by product CATEGORY, not by _is_bundle —
+        // single products with variants (e.g. Hot/Iced Latte) also set _is_bundle,
+        // but they are ONE sellable item and must not be exploded into recipe parts.
+        const itemProduct = getProduct(item.productId);
+        const isComboProduct = itemProduct?.category === 'combo';
+
+        // Step 1: count the line item itself (latte → latte, combo → combo)
+        addExpandedItem(item.productId, productName, item.quantity, itemRevenue, itemCOGS, 'standalone');
+
+        // Step 2: for real combos, add each direct component to its product
+        if (isComboProduct && v._bundle_components) {
+          try {
+            const components = typeof v._bundle_components === 'string'
+              ? JSON.parse(v._bundle_components) : v._bundle_components;
+            const visibleComps = (components as any[]).filter(
+              (c) => c.productId && c.productName && c.category !== 'hidden' && c.category !== 'private'
+            );
+
+            if (visibleComps.length > 0) {
+              // Per-component COGS from consumption records (trace materials up to direct child)
+              const comboProductId = item.productId;
+              const parentMap: Record<string, string> = {};
+              for (const c of itemConsumptions) {
+                if (c.itemType === 'product' && c.linkedProductId) {
+                  parentMap[c.linkedProductId] = c.productId;
+                }
+              }
+              const resolveTopChild = (pid: string): string | null => {
+                let current = pid;
+                for (let i = 0; i < 10; i++) {
+                  const parent = parentMap[current];
+                  if (!parent || parent === comboProductId) return current;
+                  current = parent;
+                }
+                return current;
+              };
+              const componentCogs: Record<string, number> = {};
+              let comboLevelCost = 0;
+              for (const c of itemConsumptions) {
+                if (c.itemType === 'material' && c.totalCost > 0) {
+                  const topChild = resolveTopChild(c.productId);
+                  if (topChild && topChild !== comboProductId) {
+                    componentCogs[topChild] = (componentCogs[topChild] || 0) + c.totalCost;
+                  } else {
+                    comboLevelCost += c.totalCost;
+                  }
+                }
+              }
+              if (comboLevelCost > 0) {
+                const share = comboLevelCost / visibleComps.length;
+                for (const c of visibleComps) {
+                  componentCogs[c.productId] = (componentCogs[c.productId] || 0) + share;
+                }
+              }
+
+              const compsWithPrices = visibleComps.map((c) => {
+                const prod = getProduct(c.productId);
+                return {
+                  ...c,
+                  basePrice: c.basePrice || prod?.basePrice || 0,
+                  actualCogs: componentCogs[c.productId] || 0,
+                };
+              });
+              const totalCompBasePrice = compsWithPrices.reduce(
+                (s, c) => s + c.basePrice * (c.quantity || 1), 0
+              );
+              const totalActualCogs = compsWithPrices.reduce(
+                (s, c) => s + c.actualCogs, 0
+              );
+
+              for (const comp of compsWithPrices) {
+                const compQty = (comp.quantity || 1) * item.quantity;
+                const compBaseTotal = comp.basePrice * (comp.quantity || 1);
+                const compRevenue = totalCompBasePrice > 0
+                  ? (compBaseTotal / totalCompBasePrice) * itemRevenue
+                  : 0;
+                const compCogs = totalActualCogs > 0
+                  ? comp.actualCogs
+                  : totalCompBasePrice > 0
+                    ? (compBaseTotal / totalCompBasePrice) * itemCOGS
+                    : 0;
+                addExpandedItem(comp.productId, comp.productName, compQty, compRevenue, compCogs, 'combo', productName);
+              }
+            }
+          } catch {}
+        }
+
         totalRevenue += itemRevenue;
         totalCOGS += itemCOGS;
         totalProfit += itemRevenue - itemCOGS;
@@ -157,6 +302,9 @@ export async function GET(req: Request) {
           price: item.finalPrice,
           cogs: item.quantity > 0 ? itemCOGS / item.quantity : 0,
         });
+
+        // Expanded view for online orders (no bundle metadata currently)
+        addExpandedItem(item.productId || productName, productName, item.quantity, itemRevenue, itemCOGS, 'standalone');
 
         totalRevenue += itemRevenue;
         totalCOGS += itemCOGS;
@@ -240,6 +388,24 @@ export async function GET(req: Request) {
       }
     }
 
+    const expandedItems = Object.values(expandedStats)
+      .map(e => {
+        const variants = Object.values(e.variants)
+          .map(v => ({
+            ...v,
+            profit: v.revenue - v.cogs,
+            margin: v.revenue > 0 ? ((v.revenue - v.cogs) / v.revenue) * 100 : 0,
+          }))
+          .sort((a, b) => b.quantity - a.quantity);
+        return {
+          ...e,
+          profit: e.revenue - e.cogs,
+          margin: e.revenue > 0 ? ((e.revenue - e.cogs) / e.revenue) * 100 : 0,
+          variants,
+        };
+      })
+      .sort((a, b) => b.quantity - a.quantity);
+
     const report = {
       summary: {
         totalProducts: products.length,
@@ -253,6 +419,7 @@ export async function GET(req: Request) {
         avgProfitPerItem: totalItemsSold > 0 ? totalProfit / totalItemsSold : 0,
       },
       allProducts,
+      expandedItems,
       highlights: {
         topSelling,
         highestRevenue,

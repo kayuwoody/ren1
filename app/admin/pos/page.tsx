@@ -57,6 +57,7 @@ export default function POSPage() {
   const [discountValue, setDiscountValue] = useState("");
   const [discountReason, setDiscountReason] = useState("");
   const [cogsData, setCogsData] = useState<Record<number, { totalCOGS: number; breakdown: any[] }>>({});
+  const [staffPriceMap, setStaffPriceMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
     // Check admin authentication
@@ -67,6 +68,16 @@ export default function POSPage() {
       setIsAuthenticated(true);
     }
   }, [router]);
+
+  useEffect(() => {
+    fetch('/api/products').then(r => r.json()).then((products: any[]) => {
+      const map: Record<string, number> = {};
+      for (const p of products) {
+        if (p.staff_price != null) map[p.id] = p.staff_price;
+      }
+      setStaffPriceMap(map);
+    }).catch(() => {});
+  }, []);
 
   // Fetch COGS data for all cart items
   useEffect(() => {
@@ -472,6 +483,17 @@ export default function POSPage() {
                           >
                             +RM2
                           </button>
+                          {(() => {
+                            const sp = item.staffPrice ?? staffPriceMap[item.productId];
+                            return sp != null && sp < item.retailPrice ? (
+                              <button
+                                onClick={() => updateItemDiscount(index, { type: 'override', value: sp, reason: 'Staff price' })}
+                                className="px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded-lg text-xs font-bold hover:bg-yellow-200 transition"
+                              >
+                                Staff RM{sp.toFixed(2)}
+                              </button>
+                            ) : null;
+                          })()}
                           <button
                             onClick={() => applyQuickDiscount(index, 100, "Unicorns")}
                             className="px-3 py-1.5 bg-pink-100 text-pink-700 rounded-lg text-xs font-medium hover:bg-pink-200 transition"

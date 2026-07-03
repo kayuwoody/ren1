@@ -496,8 +496,14 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order ON online_order_items(order_id)
 CREATE TABLE IF NOT EXISTS outlet_settings (
   outlet_id TEXT PRIMARY KEY,
   intake_paused BOOLEAN DEFAULT false,
+  intake_force_open BOOLEAN DEFAULT false,
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- If the table already exists without intake_force_open (drives the
+-- "open outside business hours" toggle), add it:
+ALTER TABLE outlet_settings
+  ADD COLUMN IF NOT EXISTS intake_force_open BOOLEAN DEFAULT false;
 
 -- Enable Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE online_orders;

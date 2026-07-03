@@ -253,6 +253,7 @@ export function getDayOrders(opts: {
 export function getDailyStats(branchId: string): {
   todayOrders: number;
   todayRevenue: number;
+  todayCOGS: number;
   itemsSold: number;
   pendingOrders: number;
 } {
@@ -304,9 +305,29 @@ export function getDailyStats(branchId: string): {
       AND (branchId = ? OR branchId IS NULL)
   `).get(branchId) as { pendingCount: number };
 
+  // COGS from consumption records recorded today (covers POS + online sales
+  // whose materials were deducted today). Used for the gross-profit indicator.
+  // Staff meals (100% "Unicorns" discount → order total = 0) are excluded: their
+  // revenue is 0 but their material cost is real, which would otherwise drag the
+  // profit card negative. We drop consumptions tied to a zero-total local order.
+  // Online-order consumptions have an orderId that isn't in the local Order table,
+  // so `NOT IN (... total <= 0)` keeps them (and all normal POS orders) intact.
+  const cogsResult = db.prepare(`
+    SELECT COALESCE(SUM(totalCost), 0) as cogs
+    FROM InventoryConsumption
+    WHERE consumedAt >= ? AND consumedAt <= ?
+      AND (branchId = ? OR branchId IS NULL)
+      AND orderId NOT IN (SELECT id FROM "Order" WHERE total <= 0)
+  `).get(
+    startUTC.toISOString(),
+    endUTC.toISOString(),
+    branchId,
+  ) as { cogs: number };
+
   return {
     todayOrders: todayResult.orderCount,
     todayRevenue: todayResult.revenue,
+    todayCOGS: cogsResult.cogs,
     itemsSold: itemsResult.itemsSold,
     pendingOrders: pendingResult.pendingCount,
   };

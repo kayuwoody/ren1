@@ -305,6 +305,26 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Migration: Add supplierProductName column to Product table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const has = tableInfo.some((col: any) => col.name === 'supplierProductName');
+    if (tableInfo.length > 0 && !has) {
+      db.exec(`ALTER TABLE Product ADD COLUMN supplierProductName TEXT`);
+      console.log('✅ supplierProductName column added');
+    }
+  } catch (e) {}
+
+  // Migration: Add staffPrice column to Product table
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const has = tableInfo.some((col: any) => col.name === 'staffPrice');
+    if (tableInfo.length > 0 && !has) {
+      db.exec(`ALTER TABLE Product ADD COLUMN staffPrice REAL`);
+      console.log('✅ staffPrice column added');
+    }
+  } catch (e) {}
+
   // Migration: Add availableOnline column to Product table if it doesn't exist
   try {
     const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
@@ -541,6 +561,18 @@ export function initDatabase() {
       db.exec(`ALTER TABLE StockCheckLogItem ADD COLUMN branchId TEXT REFERENCES Branch(id)`);
       db.exec(`UPDATE StockCheckLogItem SET branchId = 'branch-main' WHERE branchId IS NULL`);
       console.log('branchId column added to StockCheckLogItem table');
+    }
+  } catch (e) { /* column already exists */ }
+
+  // Migration: Add costPerUnit to StockCheckLogItem table (frozen unit cost at check time,
+  // used to value stock mismatches — e.g. 1kg beans short × RM75/kg = RM75 loss)
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(StockCheckLogItem)").all() as any[];
+    const hasCostPerUnit = tableInfo.some((col: any) => col.name === 'costPerUnit');
+    if (tableInfo.length > 0 && !hasCostPerUnit) {
+      console.log('Adding costPerUnit column to StockCheckLogItem table...');
+      db.exec(`ALTER TABLE StockCheckLogItem ADD COLUMN costPerUnit REAL NOT NULL DEFAULT 0`);
+      console.log('costPerUnit column added to StockCheckLogItem table');
     }
   } catch (e) { /* column already exists */ }
 

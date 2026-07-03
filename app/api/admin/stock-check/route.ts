@@ -120,6 +120,7 @@ export async function POST(req: Request) {
       previousStock: number;
       countedStock: number;
       unit: string;
+      costPerUnit: number;
       note?: string;
     }[] = [];
 
@@ -127,13 +128,15 @@ export async function POST(req: Request) {
       for (const update of updates) {
         try {
           if (update.type === 'product') {
-            const product = db.prepare('SELECT id, wcId, name, manageStock, stockQuantity, supplier FROM Product WHERE id = ?').get(update.id) as {
+            const product = db.prepare('SELECT id, wcId, name, manageStock, stockQuantity, supplier, supplierCost, unitCost FROM Product WHERE id = ?').get(update.id) as {
               id: string;
               wcId?: number;
               name: string;
               manageStock: number;
               stockQuantity: number;
               supplier?: string;
+              supplierCost?: number;
+              unitCost?: number;
             } | undefined;
 
             if (!product) {
@@ -142,6 +145,8 @@ export async function POST(req: Request) {
             }
 
             const previousStock = getBranchStock(branchId, 'product', update.id) || product.stockQuantity;
+            // Cost basis for mismatch valuation: acquisition cost, falling back to recipe cost
+            const costPerUnit = product.supplierCost || product.unitCost || 0;
 
             // Update BranchStock (source of truth)
             updateBranchStock(branchId, 'product', update.id, update.countedStock);
@@ -157,6 +162,7 @@ export async function POST(req: Request) {
               previousStock,
               countedStock: update.countedStock,
               unit: 'pcs',
+              costPerUnit,
               note: update.note,
             });
 
@@ -182,6 +188,7 @@ export async function POST(req: Request) {
               previousStock,
               countedStock: update.countedStock,
               unit: material.purchaseUnit,
+              costPerUnit: material.costPerUnit || 0,
               note: update.note,
             });
 
@@ -214,10 +221,18 @@ export async function POST(req: Request) {
     const successCount = results.filter(r => r.success).length;
     const failCount = results.filter(r => !r.success).length;
 
+    // Value the stock mismatch: negative = shrinkage/loss, positive = surplus.
+    // e.g. counted 1kg less coffee beans at RM75/kg => -RM75 (loss)
+    const mismatchValue = logItems.reduce(
+      (sum, it) => sum + (it.countedStock - it.previousStock) * it.costPerUnit,
+      0,
+    );
+
     return NextResponse.json({
       message: `Updated ${successCount} items${failCount > 0 ? `, ${failCount} failed` : ''}`,
       results,
       logId,
+      mismatchValue,
     });
   } catch (error) {
     return handleApiError(error, '/api/admin/stock-check');

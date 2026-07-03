@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import QRCode from "react-qr-code";
-import { generateDuitNowQR } from "@/lib/duitnowQR";
 
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -131,13 +130,14 @@ export default function CustomerDisplayPage() {
 
   const finalTotal = Math.max(0, itemFinalTotal - voucherAmount - passDiscount);
   const totalDiscount = retailTotal - finalTotal;
+
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const hasDiscount = totalDiscount > 0;
 
   return (
-    <div className="min-h-screen bg-white p-4 flex flex-col">
+    <div className="h-screen bg-white p-4 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="mb-4 border-b border-gray-200 pb-3">
+      <div className="mb-4 border-b border-gray-200 pb-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative h-[230px] w-auto">
@@ -151,64 +151,69 @@ export default function CustomerDisplayPage() {
               />
             </div>
           </div>
-          <div className="text-right">
-            {/* Connection Status Indicator */}
-            <div className="mb-1 flex items-center justify-end gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                connectionStatus === 'connected' ? 'bg-green-500' :
-                connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
-                'bg-red-500'
-              }`} />
-              <span className="text-xs text-gray-500">
-                {connectionStatus === 'connected' ? 'Live' :
-                 connectionStatus === 'connecting' ? 'Connecting...' :
-                 'Disconnected'}
-              </span>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-base font-bold text-amber-900">www.coffee-oasis.com</p>
+              <p className="text-xs text-gray-500 mt-0.5">Order online &amp; earn rewards</p>
+              {mounted && (
+                <p className="text-xs font-mono text-gray-400 mt-1">
+                  {currentTime.toLocaleTimeString('en-MY', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  })} • {currentTime.toLocaleDateString('en-MY', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short'
+                  })}
+                </p>
+              )}
+              <div className="flex items-center justify-end gap-1 mt-1">
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  connectionStatus === 'connected' ? 'bg-green-500' :
+                  connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                  'bg-red-500'
+                }`} />
+                <span className="text-[10px] text-gray-400">
+                  {connectionStatus === 'connected' ? 'Live' :
+                   connectionStatus === 'connecting' ? 'Connecting...' :
+                   'Disconnected'}
+                </span>
+              </div>
             </div>
-            {mounted && (
-              <p className="text-sm font-mono text-gray-700 whitespace-nowrap">
-                {currentTime.toLocaleTimeString('en-MY', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true
-                })} • {currentTime.toLocaleDateString('en-MY', {
-                  weekday: 'short',
-                  day: 'numeric',
-                  month: 'short'
-                })}
-              </p>
-            )}
+            <div className="bg-white rounded-xl p-1.5 shadow-sm border border-gray-100">
+              <QRCode
+                value="https://www.coffee-oasis.com"
+                size={80}
+                level="M"
+                fgColor="#3A2414"
+                bgColor="#FFFFFF"
+              />
+            </div>
           </div>
         </div>
       </div>
 
       {/* Your Order Text */}
-      <div className="mb-4">
+      <div className="mb-4 shrink-0">
         <p className="text-2xl font-semibold text-gray-800">Your Order</p>
       </div>
 
       {/* Items List */}
-      <div className="flex-1 mb-4">
+      <div className="flex-1 mb-4 overflow-y-auto min-h-0">
         {cartItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full">
-            <div className="text-center">
-              <div className="relative w-72 h-72 mx-auto mb-4">
-                <Image
-                  src="/circle mascot2.jfif"
-                  alt="Coffee Oasis Mascot"
-                  fill
-                  className="object-contain mix-blend-multiply"
-                  style={{ backgroundColor: 'transparent' }}
-                  priority
-                />
-              </div>
-              <p className="text-2xl font-light text-gray-600">
-                Your cart is empty
-              </p>
-              <p className="text-sm text-gray-400 mt-2">
-                Items will appear here as they are added
-              </p>
+            <div className="relative w-48 h-48 mb-4">
+              <Image
+                src="/circle mascot2.jfif"
+                alt="Coffee Oasis Mascot"
+                fill
+                className="object-contain mix-blend-multiply"
+                style={{ backgroundColor: 'transparent' }}
+                priority
+              />
             </div>
+            <p className="text-2xl font-bold text-amber-900">Welcome to Coffee Oasis</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -293,7 +298,7 @@ export default function CustomerDisplayPage() {
 
       {/* Total Section */}
       {cartItems.length > 0 && (
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-md">
+        <div className="shrink-0 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-md">
           <div className="space-y-2">
             {/* Item Count */}
             <div className="flex items-center justify-between text-sm">
@@ -375,30 +380,28 @@ export default function CustomerDisplayPage() {
 
       {/* DuitNow QR Payment */}
       {cartItems.length > 0 && finalTotal > 0 && (
-        <div className="mt-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-4 border border-purple-200 shadow-md">
-          <p className="text-center text-sm font-semibold text-purple-800 mb-2">
-            Scan to pay with DuitNow / TNG
-          </p>
-          <div className="flex items-center justify-center gap-6">
-            <div className="bg-white p-3 rounded-lg shadow-sm">
-              <QRCode
-                value={generateDuitNowQR()}
-                size={160}
-                level="M"
-              />
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-500 mb-1">Amount to pay</p>
-              <p className="text-4xl font-bold text-purple-700">
-                RM {finalTotal.toFixed(2)}
-              </p>
-            </div>
+        <div className="mt-4 shrink-0 flex items-center justify-center gap-6">
+          <div className="rounded-xl overflow-hidden shadow-md" style={{ width: 200 }}>
+            <Image
+              src="/duitnow-qr.png"
+              alt="DuitNow QR - Scan to Pay"
+              width={400}
+              height={400}
+              className="w-full h-auto"
+            />
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-gray-500 mb-1">Amount to pay</p>
+            <p className="text-4xl font-bold text-rose-600">
+              RM {finalTotal.toFixed(2)}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">Scan with any bank or e-wallet</p>
           </div>
         </div>
       )}
 
       {/* Footer */}
-      <div className="mt-4 text-center">
+      <div className="mt-4 text-center shrink-0">
         <p className="text-xs text-gray-600">
           Thank you for choosing Coffee Oasis! ☕
         </p>
