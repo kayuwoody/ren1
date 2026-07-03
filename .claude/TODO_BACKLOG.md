@@ -139,6 +139,34 @@ transport (local serial/USB/LAN vs cloud API), approval-code + txn-id return,
 refund/void + void-on-timeout, settlement/reconciliation report API,
 tipping/partial approvals, sandbox availability.
 
+## U7. Migrate Supabase project region to Singapore
+
+**Trigger:** near-term (considered). **Why:** the project + bubu1 functions are
+in Mumbai (ap-south-1); Singapore (ap-southeast-1) is ~5x lower latency for a
+Malaysian shop and keeps Malaysian customer PII geographically closer (cleaner
+PDPA story, though still not in-country). DB is tiny, so the move is easy.
+
+**Do NOT hand-extract tables to JSON.** The free plan's missing "export" button
+is not a blocker — the direct Postgres connection string (Settings → Database)
+works with `pg_dump`, which captures schema + data + RLS + sequences across POS
+*and* bubu1 tables in one shot. JSON row-export loses all structure.
+
+Migration outline:
+1. `pg_dump`/`supabase db dump` the source `public` schema (schema + data) via
+   the connection string. (Restrict to `public`; don't dump Supabase-managed
+   `auth`/`storage`/`extensions` schemas.)
+2. Create the new Singapore project; restore the dump into it.
+3. Re-create the `receipts` storage bucket (`POST /api/receipts/setup`) — storage
+   objects are NOT in the Postgres dump; re-upload or copy the receipt HTML +
+   mascot. (Old receipt URLs point at the old project; regenerate if needed.)
+4. Re-add tables to the `supabase_realtime` publication in the new project.
+5. Confirm RLS is enabled on all tables (comes with the dump, but verify).
+6. Repoint env vars in BOTH apps: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+   `NEXT_PUBLIC_SUPABASE_URL` (POS + bubu1). New project = new keys.
+7. Test end-to-end on both, then decommission the old project.
+
+Note: no Supabase Auth users to migrate (loyalty is keyed by phone, not Auth).
+
 ---
 
 # Operational Gaps (deferred — revisit when volume grows)
