@@ -67,11 +67,16 @@ export default function AdminDashboard() {
 
   const fetchOnlineOrderCount = useCallback(async () => {
     try {
-      const res = await fetch('/api/online-orders/count');
+      // Reuse the same endpoint the order notifier uses (server-side, service_role).
+      // It already filters to active statuses (pending/accepted/ready) for outlet 'main'.
+      const res = await fetch('/api/online-orders');
       if (res.ok) {
         const data = await res.json();
-        setOnlineOrderCount(data.count ?? 0);
-        setHasArrivedCustomer(!!data.hasArrivedCustomer);
+        const orders = (data.orders ?? []) as Array<{ status: string; arrived_at: string | null }>;
+        setOnlineOrderCount(orders.length);
+        setHasArrivedCustomer(
+          orders.some(o => (o.status === 'accepted' || o.status === 'ready') && !!o.arrived_at)
+        );
       }
     } catch {}
   }, []);
