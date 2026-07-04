@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db/init';
-import { buildDateFilter } from '@/lib/db/orderService';
+import { getSaleOrders, buildDateFilter } from '@/lib/db/orderService';
+import { getCollectedOnlineOrders } from '@/lib/db/onlineOrderService';
+import { getOrderConsumptions } from '@/lib/db/inventoryConsumptionService';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 import { handleApiError } from '@/lib/api/error-handler';
 
@@ -9,14 +10,17 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/admin/costs
  *
- * Cost of Goods Used — aggregates the frozen point-of-sale COGS from
- * InventoryConsumption over a date range. Same date + staff-meal filters as the
- * sales reports. "What we used to generate the revenue."
+ * Cost of Goods Used — "what we used to generate the revenue."
  *
- * Staff meals (100% "Unicorns" discount → order total 0) are excluded when
- * hideStaffMeals=true, matching the profit card: we drop consumption tied to a
- * zero-total local order. Online-order consumption (orderId not in the local
- * Order table) and normal POS orders are kept.
+ * Sourced from the SAME sale orders the revenue reports use (POS sale-status
+ * orders + collected online orders), so it reconciles with the sales reports.
+ * COGS comes from each order's frozen InventoryConsumption records and is
+ * bucketed by ORDER date, not by when the consumption row happened to be
+ * written. This deliberately excludes consumption not tied to a real sale
+ * (pre-launch test orders, held/cancelled orders, orphaned rows).
+ *
+ * Same date + staff-meal filters as the sales reports (staff meals = zero-total
+ * "Unicorns" orders, already dropped by getSaleOrders when hideStaffMeals=true).
  */
 export async function GET(req: Request) {
   try {
@@ -29,69 +33,64 @@ export async function GET(req: Request) {
 
     const { startDate, endDate } = buildDateFilter(range, startDateParam, endDateParam);
 
-    const staffFilter = hideStaffMeals
-      ? `AND orderId NOT IN (SELECT id FROM "Order" WHERE total <= 0)`
-      : '';
+    const posOrders = getSaleOrders({
+      branchId, range, startDate: startDateParam, endDate: endDateParam, hideStaffMeals,
+    });
+    const onlineOrders = await getCollectedOnlineOrders({ startDate, endDate });
 
-    const params = [startDate, endDate, branchId];
+    const materialMap: Record<string, { name: string; unit: string; quantity: number; cost: number }> = {};
+    const productMap: Record<string, { name: string; orders: Set<string>; cost: number }> = {};
+    const dayMap: Record<string, number> = {};
+    let totalCOGS = 0;
 
-    const totalRow = db.prepare(`
-      SELECT COALESCE(SUM(totalCost), 0) AS cost
-      FROM InventoryConsumption
-      WHERE consumedAt >= ? AND consumedAt <= ?
-        AND (branchId = ? OR branchId IS NULL)
-        ${staffFilter}
-    `).get(...params) as { cost: number };
-    const totalCOGS = totalRow.cost;
+    const klDay = (iso: string) =>
+      new Date(new Date(iso).getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    // By ingredient / material — what was physically used
-    const byMaterial = db.prepare(`
-      SELECT COALESCE(materialName, 'Unknown') AS name, unit,
-             SUM(quantityConsumed) AS quantity, SUM(totalCost) AS cost
-      FROM InventoryConsumption
-      WHERE consumedAt >= ? AND consumedAt <= ?
-        AND (branchId = ? OR branchId IS NULL)
-        AND itemType = 'material'
-        ${staffFilter}
-      GROUP BY COALESCE(materialId, materialName), unit
-      HAVING SUM(totalCost) > 0
-      ORDER BY cost DESC
-    `).all(...params) as Array<{ name: string; unit: string; quantity: number; cost: number }>;
+    const processOrder = (orderId: string, orderDateIso: string) => {
+      let consumptions: any[] = [];
+      try {
+        consumptions = getOrderConsumptions(orderId);
+      } catch {}
+      const day = klDay(orderDateIso);
+      for (const c of consumptions) {
+        const cost = c.totalCost || 0;
+        if (cost <= 0) continue;
+        totalCOGS += cost;
+        dayMap[day] = (dayMap[day] || 0) + cost;
 
-    // By menu item — which products cost the most to make
-    const byProduct = db.prepare(`
-      SELECT COALESCE(productName, 'Unknown') AS name,
-             COUNT(DISTINCT orderId) AS orders,
-             SUM(totalCost) AS cost
-      FROM InventoryConsumption
-      WHERE consumedAt >= ? AND consumedAt <= ?
-        AND (branchId = ? OR branchId IS NULL)
-        ${staffFilter}
-      GROUP BY productId
-      HAVING SUM(totalCost) > 0
-      ORDER BY cost DESC
-    `).all(...params) as Array<{ name: string; orders: number; cost: number }>;
+        if (c.itemType === 'material') {
+          const key = c.materialId || c.materialName || 'unknown';
+          materialMap[key] = materialMap[key] || { name: c.materialName || 'Unknown', unit: c.unit, quantity: 0, cost: 0 };
+          materialMap[key].quantity += c.quantityConsumed || 0;
+          materialMap[key].cost += cost;
+        }
 
-    // By day (KL calendar day) — cost trend
-    const byDay = db.prepare(`
-      SELECT date(consumedAt, '+8 hours') AS date, SUM(totalCost) AS cost
-      FROM InventoryConsumption
-      WHERE consumedAt >= ? AND consumedAt <= ?
-        AND (branchId = ? OR branchId IS NULL)
-        ${staffFilter}
-      GROUP BY date(consumedAt, '+8 hours')
-      HAVING SUM(totalCost) > 0
-      ORDER BY date DESC
-    `).all(...params) as Array<{ date: string; cost: number }>;
+        const pid = c.productId || c.productName || 'unknown';
+        productMap[pid] = productMap[pid] || { name: c.productName || 'Unknown', orders: new Set(), cost: 0 };
+        productMap[pid].cost += cost;
+        productMap[pid].orders.add(String(orderId));
+      }
+    };
+
+    for (const o of posOrders) processOrder(String(o.id), o.createdAt);
+    for (const o of onlineOrders) processOrder(String(o.id), o.createdAt);
+
+    const byMaterial = Object.values(materialMap)
+      .map(m => ({ ...m, share: totalCOGS > 0 ? (m.cost / totalCOGS) * 100 : 0 }))
+      .sort((a, b) => b.cost - a.cost);
+
+    const byProduct = Object.values(productMap)
+      .map(p => ({ name: p.name, orders: p.orders.size, cost: p.cost, share: totalCOGS > 0 ? (p.cost / totalCOGS) * 100 : 0 }))
+      .sort((a, b) => b.cost - a.cost);
+
+    const byDay = Object.entries(dayMap)
+      .map(([date, cost]) => ({ date, cost }))
+      .sort((a, b) => b.date.localeCompare(a.date));
 
     return NextResponse.json({
-      summary: {
-        totalCOGS,
-        materialCount: byMaterial.length,
-        productCount: byProduct.length,
-      },
-      byMaterial: byMaterial.map(m => ({ ...m, share: totalCOGS > 0 ? (m.cost / totalCOGS) * 100 : 0 })),
-      byProduct: byProduct.map(p => ({ ...p, share: totalCOGS > 0 ? (p.cost / totalCOGS) * 100 : 0 })),
+      summary: { totalCOGS, materialCount: byMaterial.length, productCount: byProduct.length },
+      byMaterial,
+      byProduct,
       byDay,
       dateRange: { start: startDate, end: endDate },
     });
