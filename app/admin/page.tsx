@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, TrendingUp, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2, Pause } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, TrendingUp, TrendingDown, Boxes, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2, Pause } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
 
@@ -498,6 +498,28 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-semibold">Products Sold</h2>
                 </div>
                 <p className="text-purple-50">Product performance, margins, and trends</p>
+              </Link>
+
+              <Link
+                href="/admin/costs"
+                className="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingDown className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Cost of Goods</h2>
+                </div>
+                <p className="text-red-50">What you used to generate the revenue</p>
+              </Link>
+
+              <Link
+                href="/admin/inventory-value"
+                className="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Boxes className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Inventory Value</h2>
+                </div>
+                <p className="text-amber-50">Goods ordered and current stock value</p>
               </Link>
 
               <Link
