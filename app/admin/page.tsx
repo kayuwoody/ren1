@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, TrendingUp, TrendingDown, Boxes, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2, Pause } from 'lucide-react';
+import { Shield, Package, Lock, Activity, AlertTriangle, DollarSign, TrendingUp, TrendingDown, Boxes, Coffee, Printer, ShoppingBag, ChefHat, Star, Receipt, Sparkles, Truck, ClipboardList, Building2, BarChart3, Globe, RefreshCw, Power, Check, X, Loader2, Pause } from 'lucide-react';
 import Link from 'next/link';
 import { useBranch } from '@/context/branchContext';
 
@@ -520,6 +520,17 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-semibold">Inventory Value</h2>
                 </div>
                 <p className="text-amber-50">Goods ordered and current stock value</p>
+              </Link>
+
+              <Link
+                href="/admin/staff-meals"
+                className="bg-gradient-to-br from-pink-500 to-pink-600 text-white rounded-lg shadow-lg p-6 hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Coffee className="w-6 h-6 text-white" />
+                  <h2 className="text-xl font-semibold">Staff Meals</h2>
+                </div>
+                <p className="text-pink-50">Free meals — cost and retail value</p>
               </Link>
 
               <Link
