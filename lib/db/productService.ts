@@ -16,6 +16,7 @@ export interface Product {
   manageStock: boolean;
   availableOnline: boolean;
   comboPriceOverride?: number;
+  pwpPrice?: number; // add-on price when this product is used as a PWP add-on
   supplier?: string;
   supplierProductName?: string;
   staffPrice?: number;
@@ -101,7 +102,7 @@ export function upsertProduct(
       SET wcId = ?, name = ?, sku = ?, category = ?, basePrice = ?,
           supplierCost = ?, unitCost = ?, manageStock = ?, availableOnline = ?,
           supplier = ?, supplierProductName = ?, staffPrice = ?,
-          quantityPerCarton = ?, imageUrl = ?, updatedAt = ?
+          quantityPerCarton = ?, imageUrl = ?, pwpPrice = ?, updatedAt = ?
       WHERE id = ?
     `);
 
@@ -120,6 +121,7 @@ export function upsertProduct(
       product.staffPrice ?? null,
       product.quantityPerCarton || null,
       product.imageUrl || null,
+      product.pwpPrice ?? null,
       now,
       id
     );
@@ -128,8 +130,8 @@ export function upsertProduct(
     const stmt = db.prepare(`
       INSERT INTO Product (id, wcId, name, sku, category, basePrice, supplierCost, unitCost,
                           stockQuantity, manageStock, availableOnline, supplier, supplierProductName, staffPrice,
-                          quantityPerCarton, imageUrl, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          quantityPerCarton, imageUrl, pwpPrice, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -148,6 +150,7 @@ export function upsertProduct(
       product.staffPrice ?? null,
       product.quantityPerCarton || null,
       product.imageUrl || null,
+      product.pwpPrice ?? null,
       now,
       now
     );

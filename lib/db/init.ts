@@ -260,6 +260,23 @@ export function initDatabase() {
     // Column already exists or table doesn't exist
   }
 
+  // Migration: Add pwpPrice column to Product table if it doesn't exist.
+  // PWP ("purchase with purchase") / add-on price: when this product is added as
+  // an add-on to another item, this price is charged instead of its normal
+  // basePrice. Nullable — falls back to basePrice when unset.
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
+    const hasPwpPrice = tableInfo.some((col: any) => col.name === 'pwpPrice');
+
+    if (tableInfo.length > 0 && !hasPwpPrice) {
+      console.log('🔄 Adding pwpPrice column to Product table...');
+      db.exec(`ALTER TABLE Product ADD COLUMN pwpPrice REAL`);
+      console.log('✅ pwpPrice column added');
+    }
+  } catch (e) {
+    // Column already exists or table doesn't exist
+  }
+
   // Migration: Add manageStock column to Product table if it doesn't exist
   try {
     const tableInfo = db.prepare("PRAGMA table_info(Product)").all() as any[];
