@@ -68,6 +68,56 @@ export async function getCollectedOnlineOrders(opts: {
   });
 }
 
+/**
+ * Fetch online orders of ANY status for the order-management page.
+ * Newest first, capped for safety. Includes customer phone for the billing row.
+ */
+export async function getAllOnlineOrders(opts?: { outletId?: string; limit?: number }): Promise<Array<{
+  id: string;
+  orderNumber: string;
+  status: string;
+  customerName: string;
+  customerPhone: string;
+  total: number;
+  createdAt: string;
+  items: { id: string; productId: string; productName: string; quantity: number; unitPrice: number }[];
+}>> {
+  const { data, error } = await supabase
+    .from('online_orders')
+    .select(`
+      id, status, customer_name, customer_phone, total_paid, created_at,
+      online_order_items ( id, product_id, product_name, qty, unit_price )
+    `)
+    .eq('outlet_id', opts?.outletId || 'main')
+    .order('created_at', { ascending: false })
+    .limit(opts?.limit ?? 500);
+
+  if (error || !data) {
+    console.error('Failed to fetch online orders:', error);
+    return [];
+  }
+
+  return data.map(order => {
+    const items = (order.online_order_items ?? []) as any[];
+    return {
+      id: order.id,
+      orderNumber: `ONL-${order.id.slice(0, 6).toUpperCase()}`,
+      status: order.status,
+      customerName: order.customer_name || 'Online Customer',
+      customerPhone: order.customer_phone || '',
+      total: order.total_paid,
+      createdAt: order.created_at,
+      items: items.map(item => ({
+        id: item.id,
+        productId: item.product_id || '',
+        productName: item.product_name || 'Unknown',
+        quantity: item.qty,
+        unitPrice: item.unit_price,
+      })),
+    };
+  });
+}
+
 export async function getOnlineDailyStats(outletId: string = 'main'): Promise<{
   orderCount: number;
   revenue: number;
