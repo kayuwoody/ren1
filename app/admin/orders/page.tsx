@@ -482,12 +482,22 @@ export default function AdminOrdersPage() {
                         {getCompletionMethod(order)}
                       </td>
                       <td className="px-6 py-4">
-                        <Link
-                          href={order.source === 'online' ? '/admin/online-orders' : `/orders/${order.id}`}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                        >
-                          View →
-                        </Link>
+                        <div className="flex items-center gap-3">
+                          <Link
+                            href={order.source === 'online' ? '/admin/online-orders' : `/orders/${order.id}`}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          >
+                            View →
+                          </Link>
+                          <a
+                            href={order.source === 'online' ? `/receipts/online/${order.id}` : `/receipts/${order.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-500 hover:text-gray-700 text-sm font-medium"
+                          >
+                            Receipt
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   ))
