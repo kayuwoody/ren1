@@ -29,6 +29,7 @@ interface RecipeConfig {
     id: string;
     name: string;
     basePrice: number;      // Product's base/sales price
+    pwpPrice?: number | null; // PWP/add-on price (charged instead of basePrice as an add-on)
     priceAdjustment?: number; // Extra charge on top of combo override
   }>;
 }
@@ -126,7 +127,8 @@ export default function ProductSelectionModal({
 
     recipe.optional.forEach((item) => {
       if (optionalSelections.has(item.id)) {
-        total += item.basePrice;
+        // Add-ons charge the PWP price when set, else the base price
+        total += item.pwpPrice ?? item.basePrice;
       }
     });
 
@@ -380,7 +382,7 @@ export default function ProductSelectionModal({
                     <span className="text-sm text-gray-600">
                       {hasComboOverride
                         ? (item.priceAdjustment ? `+RM ${item.priceAdjustment.toFixed(2)}` : 'Included')
-                        : `+RM ${item.basePrice.toFixed(2)}`
+                        : `+RM ${(item.pwpPrice ?? item.basePrice).toFixed(2)}`
                       }
                     </span>
                   </label>
