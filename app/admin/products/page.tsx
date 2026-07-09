@@ -15,6 +15,7 @@ interface Product {
   supplierCost: number;
   unitCost: number;
   comboPriceOverride?: number;
+  pwpPrice?: number | null;
   supplier?: string;
   supplierProductName?: string;
   staffPrice?: number | null;
@@ -304,6 +305,7 @@ function ProductModal({
     category: product?.category || '',
     basePrice: product?.currentPrice ?? '',
     staffPrice: product?.staffPrice ?? '',
+    pwpPrice: product?.pwpPrice ?? '',
     manageStock: product?.manageStock ?? false,
     availableOnline: product?.availableOnline ?? true,
     imageUrl: product?.imageUrl || '',
@@ -330,6 +332,7 @@ function ProductModal({
           ...formData,
           basePrice: parseFloat(String(formData.basePrice)) || 0,
           staffPrice: formData.staffPrice !== '' ? parseFloat(String(formData.staffPrice)) : null,
+          pwpPrice: formData.pwpPrice !== '' ? parseFloat(String(formData.pwpPrice)) : null,
           quantityPerCarton: formData.quantityPerCarton ? parseInt(String(formData.quantityPerCarton)) : null,
         }),
       });
@@ -466,6 +469,22 @@ function ProductModal({
                 placeholder="e.g., 8.00"
               />
               <p className="text-xs text-gray-500 mt-1">Shows as a quick discount button at POS checkout</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Add-on Price (RM)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.pwpPrice}
+                onChange={(e) => setFormData({ ...formData, pwpPrice: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
+                placeholder="e.g., 2.00"
+              />
+              <p className="text-xs text-gray-500 mt-1">PWP price charged when this product is added as an add-on to another item. Falls back to Selling Price if blank.</p>
             </div>
 
             <div>

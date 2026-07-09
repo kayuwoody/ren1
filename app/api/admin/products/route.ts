@@ -26,6 +26,7 @@ export async function GET(req: Request) {
         supplierCost: product.supplierCost,
         unitCost: product.unitCost,
         comboPriceOverride: product.comboPriceOverride,
+        pwpPrice: product.pwpPrice ?? null,
         supplier: product.supplier,
         supplierProductName: product.supplierProductName ?? null,
         staffPrice: product.staffPrice ?? null,
@@ -48,7 +49,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, sku, category, basePrice, manageStock, availableOnline, imageUrl, supplier, supplierProductName, staffPrice, quantityPerCarton } = body;
+    const { name, sku, category, basePrice, manageStock, availableOnline, imageUrl, supplier, supplierProductName, staffPrice, quantityPerCarton, pwpPrice } = body;
 
     if (!name || !sku || !category) {
       return NextResponse.json({ error: 'name, sku, and category are required' }, { status: 400 });
@@ -74,6 +75,7 @@ export async function POST(req: Request) {
       supplierProductName: supplierProductName || undefined,
       staffPrice: staffPrice != null ? parseFloat(staffPrice) : undefined,
       quantityPerCarton: quantityPerCarton || undefined,
+      pwpPrice: pwpPrice != null && pwpPrice !== '' ? parseFloat(pwpPrice) : undefined,
     });
 
     return NextResponse.json({ product }, { status: 201 });
