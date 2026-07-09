@@ -22,6 +22,7 @@ interface RecipeData {
   recipe: any;
   needsModal: boolean;
   isCombo: boolean;
+  isCoffee?: boolean;
 }
 
 const ProductListPage: React.FC = () => {
@@ -63,7 +64,9 @@ const ProductListPage: React.FC = () => {
         console.log(`✅ Showing modal for "${product.name}"`);
         // Check if product is a combo (has 'combo' category)
         const isCombo = (product.categories || []).some(cat => cat.slug === 'combo');
-        setModalData({ ...data, isCombo });
+        // Coffee products get the sugar-level selector
+        const isCoffee = (product.categories || []).some(cat => cat.slug === 'coffee');
+        setModalData({ ...data, isCombo, isCoffee });
       } else {
         // Simple product - add directly to cart
         console.log(`➡️  Adding "${product.name}" directly to cart (no modal needed)`);
@@ -379,6 +382,7 @@ const ProductListPage: React.FC = () => {
           product={modalData.product}
           recipe={modalData.recipe}
           isCombo={modalData.isCombo}
+          isCoffee={modalData.isCoffee}
           onAddToCart={handleModalAddToCart}
         />
       )}

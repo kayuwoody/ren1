@@ -50,6 +50,7 @@ interface ProductSelectionModalProps {
   product: Product;
   recipe: RecipeConfig;
   isCombo: boolean; // Whether this is a combo product (has 'combo' category)
+  isCoffee?: boolean; // Whether this is a coffee (shows the sugar-level selector)
   onAddToCart: (bundle: {
     displayName: string;
     baseProduct: Product;
@@ -57,8 +58,17 @@ interface ProductSelectionModalProps {
     selectedOptional: string[]; // array of item IDs
     totalPrice: number;
     isCombo: boolean; // Pass isCombo flag to handler
+    sugarLevel?: string; // 'zero' | 'less' | 'medium' | 'sweet' (coffee only)
   }) => void;
 }
+
+// Sugar levels: zero is the default (no note); others show on all displays.
+const SUGAR_LEVELS: { value: string; label: string; short: string }[] = [
+  { value: 'zero', label: 'No Sugar', short: '' },
+  { value: 'less', label: 'Less', short: 'Less Sugar' },
+  { value: 'medium', label: 'Medium', short: 'Medium Sugar' },
+  { value: 'sweet', label: 'Sweet', short: 'Sweet' },
+];
 
 export default function ProductSelectionModal({
   isOpen,
@@ -66,11 +76,13 @@ export default function ProductSelectionModal({
   product,
   recipe,
   isCombo,
+  isCoffee,
   onAddToCart,
 }: ProductSelectionModalProps) {
   // State for selections
   const [mandatorySelections, setMandatorySelections] = useState<Record<string, string>>({});
   const [optionalSelections, setOptionalSelections] = useState<Set<string>>(new Set());
+  const [sugarLevel, setSugarLevel] = useState<string>('zero');
   const [error, setError] = useState<string>("");
 
   // Initialize mandatory selections with first item of each group
@@ -85,6 +97,7 @@ export default function ProductSelectionModal({
       });
       setMandatorySelections(initialSelections);
       setOptionalSelections(new Set());
+      setSugarLevel('zero');
       setError("");
     }
   }, [isOpen, recipe]);
@@ -163,6 +176,12 @@ export default function ProductSelectionModal({
       }
     });
 
+    // Add sugar level note (only when not the default 'zero')
+    const sugar = SUGAR_LEVELS.find(s => s.value === sugarLevel);
+    if (sugar && sugar.short) {
+      parts.push(`(${sugar.short})`);
+    }
+
     return parts.join(" ");
   };
 
@@ -182,6 +201,7 @@ export default function ProductSelectionModal({
       selectedOptional: Array.from(optionalSelections),
       totalPrice: calculateTotal(),
       isCombo, // Include isCombo flag
+      sugarLevel: isCoffee ? sugarLevel : undefined,
     });
 
     onClose();
@@ -386,6 +406,29 @@ export default function ProductSelectionModal({
                       }
                     </span>
                   </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sugar level (coffee only) */}
+          {isCoffee && (
+            <div className="space-y-2">
+              <label className="block font-semibold text-gray-700">Sugar Level:</label>
+              <div className="grid grid-cols-4 gap-2">
+                {SUGAR_LEVELS.map((s) => (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => setSugarLevel(s.value)}
+                    className={`py-2 rounded-lg text-sm font-medium border transition ${
+                      sugarLevel === s.value
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
                 ))}
               </div>
             </div>
