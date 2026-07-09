@@ -111,6 +111,7 @@ export async function syncAllProducts() {
   const products = db.prepare('SELECT * FROM Product ORDER BY name').all() as any[];
   let synced = 0;
   let failed = 0;
+  const errors: string[] = [];
 
   const now = new Date().toISOString();
   const rows = products.map(p => ({
@@ -134,13 +135,15 @@ export async function syncAllProducts() {
       const { error } = await supabase.from('products').upsert(batch, { onConflict: 'id' });
       if (error) throw error;
       synced += batch.length;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Batch product sync failed:', err);
       failed += batch.length;
+      const msg = err?.message || err?.hint || err?.details || String(err);
+      if (!errors.includes(msg)) errors.push(msg);
     }
   }
 
-  return { synced, failed, total: products.length };
+  return { synced, failed, total: products.length, errors };
 }
 
 export async function syncAllRecipes() {
