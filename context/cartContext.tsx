@@ -23,6 +23,8 @@ export interface CartItem {
     productId: string;
     productName: string;
     quantity: number;
+    category?: string;        // e.g. 'addon' for PWP add-ons
+    addonPrice?: number;      // per-unit add-on price (shown as a priced sub-line)
   }>;
 }
 

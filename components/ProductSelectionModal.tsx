@@ -169,12 +169,7 @@ export default function ProductSelectionModal({
       parts.push(product.name);
     }
 
-    // Add selected optional items (if any)
-    recipe.optional.forEach((item) => {
-      if (optionalSelections.has(item.id)) {
-        parts.push(`+ ${item.name}`);
-      }
-    });
+    // Selected add-ons are shown as structured sub-lines (not in the name).
 
     // Add sugar level note (only when not the default 'zero')
     const sugar = SUGAR_LEVELS.find(s => s.value === sugarLevel);

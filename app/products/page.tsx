@@ -141,6 +141,20 @@ const ProductListPage: React.FC = () => {
       console.log(`➡️  Not a combo - skipping component fetch`);
     }
 
+    // Selected PWP add-ons → priced sub-line components (shown on all displays + receipt)
+    const optionalDefs: any[] = modalData?.recipe?.optional || [];
+    const addonComponents = (bundle.selectedOptional || [])
+      .map((id: string) => optionalDefs.find((o: any) => o.id === id))
+      .filter(Boolean)
+      .map((o: any) => ({
+        productId: o.id,
+        productName: o.name,
+        quantity: 1,
+        category: 'addon',
+        addonPrice: o.pwpPrice ?? o.basePrice,
+      }));
+    components = [...components, ...addonComponents];
+
     const matchedProduct = products.find(p => p.id === bundle.baseProduct.id);
     addToCart({
       productId: bundle.baseProduct.id,

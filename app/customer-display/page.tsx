@@ -251,9 +251,11 @@ export default function CustomerDisplayPage() {
                               component.category !== 'hidden' && component.category !== 'private'
                             )
                             .map((component: any, idx: number) => (
-                              <div key={idx} className="text-base text-gray-600 flex items-start">
-                                <span className="mr-2">→</span>
-                                <span>{component.productName} × {component.quantity}</span>
+                              <div key={idx} className="text-base text-gray-600 flex items-start justify-between">
+                                <span><span className="mr-2">→</span>{component.productName}{component.quantity > 1 ? ` × ${component.quantity}` : ''}</span>
+                                {component.addonPrice != null && component.addonPrice > 0 && (
+                                  <span className="text-teal-700 font-medium ml-2">+RM {(component.addonPrice * component.quantity).toFixed(2)}</span>
+                                )}
                               </div>
                             ))}
                         </div>

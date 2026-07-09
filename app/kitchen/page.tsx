@@ -646,6 +646,25 @@ export default function KitchenDisplayPage() {
                                 {item.name}
                               </p>
 
+                              {/* PWP add-ons */}
+                              {(() => {
+                                const raw = itemMeta.find((m: any) => m.key === '_bundle_components')?.value;
+                                if (!raw) return null;
+                                let comps: any[] = [];
+                                try { comps = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+                                const addons = comps.filter((c: any) => c.category === 'addon' || c.addonPrice != null);
+                                if (addons.length === 0) return null;
+                                return (
+                                  <div className="mt-1 space-y-0.5">
+                                    {addons.map((c: any, idx: number) => (
+                                      <p key={idx} className={`text-base font-semibold ${isInProgress ? 'text-blue-800' : 'text-teal-700'}`}>
+                                        + {c.productName}{c.quantity > 1 ? ` × ${c.quantity}` : ''}
+                                      </p>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+
                               {/* Item SKU if available */}
                               {item.sku && (
                                 <p className={`text-xs mt-1 ${

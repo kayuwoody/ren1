@@ -352,9 +352,11 @@ export default function POSPage() {
                             {expandedComponents.length > 0 && (
                               <div className="mt-2 ml-4 space-y-1">
                                 {expandedComponents.map((component: any, idx: number) => (
-                                  <div key={idx} className="text-sm text-gray-600 flex items-start">
-                                    <span className="mr-2">→</span>
-                                    <span>{component.productName} × {component.quantity}</span>
+                                  <div key={idx} className="text-sm text-gray-600 flex items-start justify-between">
+                                    <span><span className="mr-2">→</span>{component.productName}{component.quantity > 1 ? ` × ${component.quantity}` : ''}</span>
+                                    {component.addonPrice != null && component.addonPrice > 0 && (
+                                      <span className="text-teal-700 font-medium ml-2">+RM {(component.addonPrice * component.quantity).toFixed(2)}</span>
+                                    )}
                                   </div>
                                 ))}
                               </div>
