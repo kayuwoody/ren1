@@ -77,19 +77,24 @@ export async function PATCH(
 
         // Record COGS consumption in SQLite (skip if already recorded)
         if (existingConsumptions.length === 0) {
-          let bundleSelection: { selectedMandatory: Record<string, string>; selectedOptional: string[] } | undefined;
+          // Map bubu1's mods → bundle selection so combo choices AND PWP add-ons
+          // are consumed. combo_selections = XOR choices keyed by group uniqueKey;
+          // selected_optionals = ticked add-ons ({ id, name }) for the chosen branch.
+          const selectedMandatory: Record<string, string> = {};
           if (item.mods?.combo_selections) {
             const comboSels = item.mods.combo_selections as Record<string, { id?: string; name?: string }>;
-            const selectedMandatory: Record<string, string> = {};
             for (const [groupKey, sel] of Object.entries(comboSels)) {
-              if (sel?.id) {
-                selectedMandatory[groupKey] = sel.id;
-              }
-            }
-            if (Object.keys(selectedMandatory).length > 0) {
-              bundleSelection = { selectedMandatory, selectedOptional: [] };
+              if (sel?.id) selectedMandatory[groupKey] = sel.id;
             }
           }
+          const selectedOptional: string[] = Array.isArray(item.mods?.selected_optionals)
+            ? (item.mods.selected_optionals as any[]).map((o) => o?.id).filter(Boolean)
+            : [];
+
+          const bundleSelection =
+            Object.keys(selectedMandatory).length > 0 || selectedOptional.length > 0
+              ? { selectedMandatory, selectedOptional }
+              : undefined;
 
           try {
             await recordProductSale({
