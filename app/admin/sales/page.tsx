@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, DollarSign, TrendingUp, ShoppingCart, Calendar, Download, Percent } from 'lucide-react';
 import { useBranch } from '@/context/branchContext';
+import SalesTrendChart from '@/components/SalesTrendChart';
 
 interface SalesReport {
   totalRevenue: number;
@@ -451,6 +452,34 @@ export default function SalesReportPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Trend charts (oldest → newest) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SalesTrendChart
+            title="Revenue over time"
+            color="#059669"
+            data={report.revenueByDay.map(d => ({ date: d.date, value: d.revenue }))}
+            format={(v) => `RM ${v.toFixed(v >= 100 ? 0 : 2)}`}
+          />
+          <SalesTrendChart
+            title="Profit over time"
+            color="#0d9488"
+            data={report.revenueByDay.map(d => ({ date: d.date, value: d.profit }))}
+            format={(v) => `RM ${v.toFixed(v >= 100 ? 0 : 2)}`}
+          />
+          <SalesTrendChart
+            title="Items sold over time"
+            color="#2563eb"
+            data={report.revenueByDay.map(d => ({ date: d.date, value: d.itemsSold }))}
+            format={(v) => `${Math.round(v)}`}
+          />
+          <SalesTrendChart
+            title="Orders over time"
+            color="#7c3aed"
+            data={report.revenueByDay.map(d => ({ date: d.date, value: d.orders }))}
+            format={(v) => `${Math.round(v)}`}
+          />
         </div>
 
         {/* Revenue by Day */}
