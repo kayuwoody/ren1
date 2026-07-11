@@ -16,7 +16,7 @@ interface SalesReport {
   totalItemsSold: number;
   averageItemPrice: number;
   averageProfitPerItem: number;
-  revenueByDay: { date: string; revenue: number; orders: number; discounts: number; cogs: number; profit: number; margin: number }[];
+  revenueByDay: { date: string; revenue: number; orders: number; itemsSold: number; discounts: number; cogs: number; profit: number; margin: number }[];
   topProducts: { name: string; quantity: number; revenue: number; cogs: number; profit: number; margin: number }[];
   ordersByStatus: { status: string; count: number }[];
 }
@@ -71,6 +71,19 @@ export default function SalesReportPage() {
     setEndDate(`${ym}-${String(lastDay).padStart(2, '0')}`);
   };
 
+  // ISO-8601 week number (1–53) for a YYYY-MM-DD date
+  const isoWeek = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00Z');
+    const dayNum = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+    d.setUTCDate(d.getUTCDate() - dayNum + 3); // Thursday of this week
+    const firstThursday = d.getTime();
+    d.setUTCMonth(0, 1);
+    if (d.getUTCDay() !== 4) {
+      d.setUTCMonth(0, 1 + ((4 - d.getUTCDay()) + 7) % 7);
+    }
+    return 1 + Math.ceil((firstThursday - d.getTime()) / (7 * 24 * 3600 * 1000));
+  };
+
   const exportToCSV = () => {
     if (!report) return;
 
@@ -81,15 +94,18 @@ export default function SalesReportPage() {
       ['Summary'],
       ['Total Revenue', `RM ${report.totalRevenue.toFixed(2)}`],
       ['Total Orders', report.totalOrders],
+      ['Total Items Sold', report.totalItemsSold],
       ['Average Order Value', `RM ${report.averageOrderValue.toFixed(2)}`],
       ['Total Discounts', `RM ${report.totalDiscounts.toFixed(2)}`],
       [''],
       ['Daily Revenue'],
-      ['Date', 'Revenue', 'Orders', 'Discounts'],
+      ['Date', 'Week', 'Revenue', 'Orders', 'Items Sold', 'Discounts'],
       ...report.revenueByDay.map(day => [
         day.date,
+        isoWeek(day.date),
         day.revenue.toFixed(2),
         day.orders,
+        day.itemsSold,
         day.discounts.toFixed(2)
       ]),
       [''],

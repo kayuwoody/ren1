@@ -39,7 +39,7 @@ export async function GET(req: Request) {
     let totalCOGS = 0;
     let totalItemsSold = 0;
     let totalOrderCount = 0;
-    const revenueByDay: Record<string, { revenue: number; orders: number; discounts: number; voucherDiscount: number; passDiscount: number; cogs: number; profit: number }> = {};
+    const revenueByDay: Record<string, { revenue: number; orders: number; itemsSold: number; discounts: number; voucherDiscount: number; passDiscount: number; cogs: number; profit: number }> = {};
     const productStats: Record<string, { quantity: number; revenue: number; cogs: number; profit: number }> = {};
     const ordersByStatus: Record<string, number> = {};
 
@@ -72,7 +72,7 @@ export async function GET(req: Request) {
 
       const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
-        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
+        revenueByDay[orderDate] = { revenue: 0, orders: 0, itemsSold: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
       }
       revenueByDay[orderDate].revenue += finalTotal;
       revenueByDay[orderDate].orders += 1;
@@ -104,6 +104,7 @@ export async function GET(req: Request) {
         productStats[productName].profit += (itemRevenue - itemCOGS);
 
         totalItemsSold += item.quantity;
+        revenueByDay[orderDate].itemsSold += item.quantity;
       }
     }
 
@@ -124,7 +125,7 @@ export async function GET(req: Request) {
 
       const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
-        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
+        revenueByDay[orderDate] = { revenue: 0, orders: 0, itemsSold: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
       }
       revenueByDay[orderDate].revenue += finalTotal;
       revenueByDay[orderDate].orders += 1;
@@ -150,6 +151,7 @@ export async function GET(req: Request) {
         productStats[productName].profit += (itemRevenue - itemCOGS);
 
         totalItemsSold += item.quantity;
+        revenueByDay[orderDate].itemsSold += item.quantity;
       }
     }
 
@@ -159,6 +161,7 @@ export async function GET(req: Request) {
         date,
         revenue: data.revenue,
         orders: data.orders,
+        itemsSold: data.itemsSold,
         discounts: data.discounts,
         voucherDiscount: data.voucherDiscount,
         passDiscount: data.passDiscount,
