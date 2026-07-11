@@ -31,7 +31,7 @@ export default function SalesTrendChart({ title, data, color, format = (v) => St
 
   if (n === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
+      <div>
         <h3 className="font-semibold text-gray-800 mb-2">{title}</h3>
         <p className="text-sm text-gray-400 py-12 text-center">No data in this period</p>
       </div>
@@ -81,7 +81,7 @@ export default function SalesTrendChart({ title, data, color, format = (v) => St
   const hp = hover != null ? points[hover] : null;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div>
       <div className="flex items-baseline justify-between mb-1">
         <h3 className="font-semibold text-gray-800">{title}</h3>
         <span className="text-xs text-gray-400">trend —— dashed</span>

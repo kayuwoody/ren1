@@ -32,6 +32,7 @@ export default function SalesReportPage() {
   const [month, setMonth] = useState(''); // YYYY-MM for the "Specific Month" filter
   const [hideStaffMeals, setHideStaffMeals] = useState(true);
   const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
+  const [chartMetric, setChartMetric] = useState<'revenue' | 'profit' | 'orders' | 'items'>('revenue');
 
   useEffect(() => {
     fetchSalesReport();
@@ -151,6 +152,10 @@ export default function SalesReportPage() {
   const discountRate = report.totalRevenue > 0
     ? (report.totalDiscounts / (report.totalRevenue + report.totalDiscounts) * 100)
     : 0;
+
+  // Per-day averages use days with activity (trading days), so closed days don't dilute
+  const activeDays = report.revenueByDay.length || 1;
+  const perDay = (total: number) => total / activeDays;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -311,6 +316,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-green-600">
                   RM {report.totalRevenue.toFixed(2)}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg RM {perDay(report.totalRevenue).toFixed(2)}/day</p>
               </div>
             </div>
           </div>
@@ -325,6 +331,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-red-600">
                   RM {report.totalCOGS.toFixed(2)}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg RM {perDay(report.totalCOGS).toFixed(2)}/day</p>
               </div>
             </div>
           </div>
@@ -339,6 +346,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-emerald-600">
                   RM {report.totalProfit.toFixed(2)}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg RM {perDay(report.totalProfit).toFixed(2)}/day</p>
               </div>
             </div>
           </div>
@@ -373,6 +381,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-purple-600">
                   {report.totalOrders}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg {perDay(report.totalOrders).toFixed(1)}/day</p>
               </div>
             </div>
           </div>
@@ -421,6 +430,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-cyan-600">
                   {report.totalItemsSold}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg {perDay(report.totalItemsSold).toFixed(1)}/day</p>
               </div>
             </div>
           </div>
@@ -454,33 +464,40 @@ export default function SalesReportPage() {
           </div>
         </div>
 
-        {/* Trend charts (oldest → newest) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <SalesTrendChart
-            title="Revenue over time"
-            color="#059669"
-            data={report.revenueByDay.map(d => ({ date: d.date, value: d.revenue }))}
-            format={(v) => `RM ${v.toFixed(v >= 100 ? 0 : 2)}`}
-          />
-          <SalesTrendChart
-            title="Profit over time"
-            color="#0d9488"
-            data={report.revenueByDay.map(d => ({ date: d.date, value: d.profit }))}
-            format={(v) => `RM ${v.toFixed(v >= 100 ? 0 : 2)}`}
-          />
-          <SalesTrendChart
-            title="Items sold over time"
-            color="#2563eb"
-            data={report.revenueByDay.map(d => ({ date: d.date, value: d.itemsSold }))}
-            format={(v) => `${Math.round(v)}`}
-          />
-          <SalesTrendChart
-            title="Orders over time"
-            color="#7c3aed"
-            data={report.revenueByDay.map(d => ({ date: d.date, value: d.orders }))}
-            format={(v) => `${Math.round(v)}`}
-          />
-        </div>
+        {/* Trend chart with measure filters */}
+        {(() => {
+          const metrics = {
+            revenue: { label: 'Revenue', color: '#059669', get: (d: any) => d.revenue, fmt: (v: number) => `RM ${v.toFixed(v >= 100 ? 0 : 2)}` },
+            profit: { label: 'Profit', color: '#0d9488', get: (d: any) => d.profit, fmt: (v: number) => `RM ${v.toFixed(v >= 100 ? 0 : 2)}` },
+            orders: { label: 'Orders', color: '#7c3aed', get: (d: any) => d.orders, fmt: (v: number) => `${Math.round(v)}` },
+            items: { label: 'Items Sold', color: '#2563eb', get: (d: any) => d.itemsSold, fmt: (v: number) => `${Math.round(v)}` },
+          } as const;
+          const active = metrics[chartMetric];
+          return (
+            <div className="bg-white rounded-lg shadow p-6 space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {(Object.keys(metrics) as Array<keyof typeof metrics>).map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => setChartMetric(key)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      chartMetric === key ? 'text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    style={chartMetric === key ? { backgroundColor: metrics[key].color } : undefined}
+                  >
+                    {metrics[key].label}
+                  </button>
+                ))}
+              </div>
+              <SalesTrendChart
+                title={`${active.label} over time`}
+                color={active.color}
+                data={report.revenueByDay.map(d => ({ date: d.date, value: active.get(d) }))}
+                format={active.fmt}
+              />
+            </div>
+          );
+        })()}
 
         {/* Revenue by Day */}
         <div className="bg-white rounded-lg shadow">
