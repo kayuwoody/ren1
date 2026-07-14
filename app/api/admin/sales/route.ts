@@ -70,7 +70,9 @@ export async function GET(req: Request) {
       totalCOGS += orderCOGS;
       totalOrderCount++;
 
-      const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
+      // Bucket by KL local calendar day (UTC+8), not UTC — a pre-8am KL sale
+      // must not fall onto the previous day's date.
+      const orderDate = new Date(new Date(order.createdAt).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
         revenueByDay[orderDate] = { revenue: 0, orders: 0, itemsSold: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
       }
@@ -123,7 +125,9 @@ export async function GET(req: Request) {
       totalCOGS += orderCOGS;
       totalOrderCount++;
 
-      const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
+      // Bucket by KL local calendar day (UTC+8), not UTC — a pre-8am KL sale
+      // must not fall onto the previous day's date.
+      const orderDate = new Date(new Date(order.createdAt).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
         revenueByDay[orderDate] = { revenue: 0, orders: 0, itemsSold: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
       }
