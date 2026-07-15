@@ -192,7 +192,26 @@ export default function CashPayment({
 
     setPrinting(true);
     try {
-      // Disconnect receipt/kitchen printers first and wait for BT radio to be free
+      const labelPayload = { ...order, number: order.number || orderID };
+
+      // Primary: local USB print server (Bluetooth was slow/unreliable)
+      try {
+        const res = await fetch('http://localhost:9101/print-label', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(labelPayload),
+        });
+        if (res.ok) {
+          alert('Labels printed via USB!');
+          return;
+        }
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Print server returned ${res.status}`);
+      } catch (usbErr: any) {
+        console.warn('USB label print failed, trying Bluetooth:', usbErr?.message);
+      }
+
+      // Fallback: Bluetooth
       try {
         const receiptPrinter = printerManager.getReceiptPrinter();
         await receiptPrinter.disconnect?.();
@@ -202,15 +221,12 @@ export default function CashPayment({
         await kitchenPrinter.disconnect?.();
       } catch (e) { /* ignore */ }
 
-      // Wait for BT stack to settle before connecting to different device
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Connect to label printer
       if (!labelPrinter.isConnected()) {
         await labelPrinter.pair();
       }
 
-      // Print one label per item quantity
       const lineItems = order.line_items || [];
       for (const item of lineItems) {
         const itemName = item.name || 'Unknown';

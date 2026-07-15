@@ -106,8 +106,9 @@ function buildEscPosReceipt(order) {
   return Buffer.concat(parts);
 }
 
-// Find Windows printer name and its assigned port
-function findWindowsPrinter() {
+// Find a Windows printer whose name matches one of the given keywords.
+// Returns { name, port } or null.
+function findPrinterByKeywords(keywords) {
   const { execSync } = require('child_process');
   try {
     const output = execSync('wmic printer get name,portname', { encoding: 'utf8' });
@@ -115,13 +116,7 @@ function findWindowsPrinter() {
 
     for (const line of lines) {
       const lower = line.toLowerCase();
-      if (lower.includes('pos') ||
-          lower.includes('thermal') ||
-          lower.includes('receipt') ||
-          lower.includes('xprinter') ||
-          lower.includes('kprinter') ||
-          lower.includes('58') ||
-          lower.includes('80')) {
+      if (keywords.some(k => lower.includes(k))) {
         const parts = line.trim().split(/\s{2,}/);
         const printerName = parts[0];
         const portName = parts[1] || null;
@@ -136,21 +131,133 @@ function findWindowsPrinter() {
   }
 }
 
-// Print raw bytes on Windows via the Win32 Print Spooler API (PowerShell)
-async function printRawWindows(data, printerNameOverride) {
+// Thermal receipt printer (58mm/80mm ESC/POS)
+function findWindowsPrinter() {
+  return findPrinterByKeywords([
+    'pos', 'thermal', 'receipt', 'xprinter', 'kprinter', '58', '80',
+  ]);
+}
+
+// TSPL label printer (CLabel B21 / CT221 / generic label). Kept distinct from
+// the thermal receipt printer so both USB printers can coexist.
+function findLabelPrinter() {
+  // Allow an explicit override via env for odd driver names.
+  if (process.env.LABEL_PRINTER_NAME) {
+    return { name: process.env.LABEL_PRINTER_NAME, port: null };
+  }
+  return findPrinterByKeywords([
+    'label', 'clabel', 'b21', 'ct221', 'ct-221', 'tspl', 'niimbot', 'godex',
+  ]);
+}
+
+// ---- TSPL label building (15mm x 30mm kitchen/alert stickers) ----
+
+const LABEL_WIDTH_MM = 30;
+const LABEL_HEIGHT_MM = 15;
+const LABEL_GAP_MM = 2;
+
+// Encode a TSPL command string to raw bytes, preserving CR/LF line endings.
+function tsplBytes(str) {
+  return Buffer.from(str, 'latin1');
+}
+
+// Strip to printable ASCII (label printers don't render UTF-8 glyphs).
+function cleanLabelText(str) {
+  return String(str || '').replace(/[^\x20-\x7E]/g, '').trim();
+}
+
+// Word-wrap a name into up to `maxLines` lines of `maxChars` each.
+function wrapLabelText(text, maxChars, maxLines) {
+  const words = cleanLabelText(text).split(' ').filter(Boolean);
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (test.length <= maxChars) {
+      current = test;
+    } else {
+      if (current) lines.push(current);
+      current = word.length > maxChars ? word.substring(0, maxChars) : word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.slice(0, maxLines);
+}
+
+// One kitchen make-label: order number header + wrapped item name.
+// `copies` prints that many identical labels (used for quantity).
+function buildTsplItemLabel(orderNumber, itemName, copies = 1) {
+  const orderText = `#${cleanLabelText(orderNumber)}`;
+  const leftMargin = 24;
+  const lines = wrapLabelText(itemName, 14, 3);
+
+  const cmd = [
+    `SIZE ${LABEL_WIDTH_MM} mm, ${LABEL_HEIGHT_MM} mm`,
+    `GAP ${LABEL_GAP_MM} mm, 0 mm`,
+    'DIRECTION 1',
+    'CLS',
+    `TEXT ${leftMargin},8,"2",0,1,1,"${orderText}"`,
+  ];
+  lines.forEach((line, i) => {
+    cmd.push(`TEXT ${leftMargin},${40 + i * 20},"1",0,1,1,"${line}"`);
+  });
+  cmd.push(`PRINT ${Math.max(1, copies)}`, '');
+  return cmd.join('\r\n');
+}
+
+// Single "new online order" alert sticker — the noisy/visual cue.
+function buildTsplAlert(order) {
+  const shortId = cleanLabelText(order.id || order.number || '').substring(0, 10);
+  const customer = cleanLabelText(order.customer_name || 'Guest').substring(0, 14);
+  const items = order.line_items || order.items || order.online_order_items || [];
+  const itemCount = items.reduce((n, it) => n + (it.quantity || it.qty || 1), 0) || items.length;
+  const leftMargin = 20;
+
+  const cmd = [
+    `SIZE ${LABEL_WIDTH_MM} mm, ${LABEL_HEIGHT_MM} mm`,
+    `GAP ${LABEL_GAP_MM} mm, 0 mm`,
+    'DIRECTION 1',
+    'CLS',
+    `TEXT ${leftMargin},6,"2",0,1,1,"NEW ONLINE"`,
+    `TEXT ${leftMargin},34,"1",0,1,1,"Order #${shortId}"`,
+    `TEXT ${leftMargin},54,"1",0,1,1,"${customer}"`,
+    `TEXT ${leftMargin},74,"1",0,1,1,"${itemCount} item(s)"`,
+    'PRINT 1',
+    '',
+  ];
+  return cmd.join('\r\n');
+}
+
+// Build the full TSPL payload for all items in an order (one label per unit).
+function buildTsplOrderLabels(order) {
+  const orderNumber = order.number || order.id || '???';
+  const items = order.line_items || order.items || order.online_order_items || [];
+  const blocks = [];
+  for (const item of items) {
+    const name = item.name || item.product_name || item.productName || 'Unknown';
+    const qty = item.quantity || item.qty || 1;
+    blocks.push(buildTsplItemLabel(orderNumber, name, qty));
+  }
+  return blocks.join('');
+}
+
+// Print raw bytes on Windows via the Win32 Print Spooler API (PowerShell).
+// `detector` picks the target printer when no explicit name is given — defaults
+// to the thermal receipt printer; pass findLabelPrinter for label stickers.
+async function printRawWindows(data, printerNameOverride, detector = findWindowsPrinter) {
   const fs = require('fs');
   const { execSync } = require('child_process');
   const path = require('path');
 
-  const tmpFile = path.join(process.env.TEMP || '.', `receipt-${Date.now()}.bin`);
+  const tmpFile = path.join(process.env.TEMP || '.', `print-${Date.now()}.bin`);
   fs.writeFileSync(tmpFile, data);
 
   try {
-    const detected = findWindowsPrinter();
+    const detected = detector();
     const printerName = printerNameOverride || (detected && detected.name);
 
     if (!printerName) {
-      throw new Error('No thermal printer found. Please share your printer or check printer name.');
+      throw new Error('No matching printer found. Please share your printer or check printer name.');
     }
 
     console.log(`Printing to: ${printerName}`);
@@ -214,11 +321,14 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     const detected = findWindowsPrinter();
+    const label = findLabelPrinter();
     res.end(JSON.stringify({
       status: 'ok',
       port: PORT,
       printer: detected ? detected.name : null,
       printerPort: detected ? detected.port : null,
+      labelPrinter: label ? label.name : null,
+      labelPrinterPort: label ? label.port : null,
     }));
     return;
   }
@@ -244,6 +354,70 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ error: err.message }));
       }
     });
+    return;
+  }
+
+  // Print per-item kitchen labels for an order (one label per unit)
+  if (req.method === 'POST' && req.url === '/print-label') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const order = JSON.parse(body);
+        console.log(`\n🏷️  Printing item labels for order #${order.id || order.number}`);
+        const rawData = tsplBytes(buildTsplOrderLabels(order));
+        const result = await printRawWindows(rawData, null, findLabelPrinter);
+        console.log('✅ Item labels printed:', result);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        console.error('❌ Label print error:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // Print a single "new online order" alert sticker (the noisy/visual cue)
+  if (req.method === 'POST' && req.url === '/print-label-alert') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const order = JSON.parse(body);
+        console.log(`\n🔔 Printing NEW ONLINE ORDER alert #${order.id || order.number}`);
+        const rawData = tsplBytes(buildTsplAlert(order));
+        const result = await printRawWindows(rawData, null, findLabelPrinter);
+        console.log('✅ Alert sticker printed:', result);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        console.error('❌ Alert print error:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // Test label print
+  if ((req.method === 'POST' || req.method === 'GET') && req.url === '/test-label') {
+    try {
+      console.log('\n🧪 Test label print...');
+      const rawData = tsplBytes(buildTsplAlert({
+        id: 'TEST', customer_name: 'Test Cust',
+        line_items: [{ name: 'Test Item', quantity: 2 }],
+      }));
+      const result = await printRawWindows(rawData, null, findLabelPrinter);
+      console.log('✅ Test label complete:', result);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      console.error('❌ Test label error:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
@@ -301,15 +475,27 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('\nEndpoints:');
   console.log('  GET  /health   - Health check');
   console.log('  GET  /printers - List Windows printers');
-  console.log('  GET  /test     - Print test receipt');
-  console.log('  POST /print    - Print receipt (send order JSON)');
+  console.log('  GET  /test         - Print test receipt');
+  console.log('  POST /print        - Print receipt (send order JSON)');
+  console.log('  GET  /test-label   - Print test label');
+  console.log('  POST /print-label  - Print per-item kitchen labels (order JSON)');
+  console.log('  POST /print-label-alert - Print single new-order alert sticker');
 
-  // Show detected printer
+  // Show detected printers
   const printer = findWindowsPrinter();
   if (printer) {
-    console.log(`\n✅ Detected printer: ${printer.name} on port: ${printer.port || 'unknown'}`);
+    console.log(`\n✅ Receipt printer: ${printer.name} on port: ${printer.port || 'unknown'}`);
   } else {
-    console.log('\n⚠️  No thermal printer detected. Available printers:');
+    console.log('\n⚠️  No thermal receipt printer detected.');
+  }
+  const label = findLabelPrinter();
+  if (label) {
+    console.log(`✅ Label printer:   ${label.name} on port: ${label.port || 'unknown'}`);
+  } else {
+    console.log('⚠️  No label printer detected (set LABEL_PRINTER_NAME to override).');
+  }
+  if (!printer || !label) {
+    console.log('\nAvailable printers:');
     try {
       const { execSync } = require('child_process');
       const output = execSync('wmic printer get name', { encoding: 'utf8' });
