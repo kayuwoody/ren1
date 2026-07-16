@@ -106,7 +106,45 @@ function buildEscPosReceipt(order) {
   return Buffer.concat(parts);
 }
 
-// Find a Windows printer whose name matches one of the given keywords.
+// Short, loud "new online order" chit for the USB thermal receipt printer.
+// Used as the reliable arrival cue (the B221 label printer is Bluetooth-only
+// in practice, so the receipt printer carries the alert).
+function buildEscPosAlert(order) {
+  const parts = [];
+
+  parts.push(Buffer.from([ESC, 0x40]));       // Init
+  parts.push(Buffer.from([ESC, 0x74, 0x00])); // Code page PC437
+  parts.push(Buffer.from([ESC, 0x61, 0x01])); // Center
+
+  // Big, bold banner
+  parts.push(Buffer.from([ESC, 0x45, 0x01])); // Bold ON
+  parts.push(Buffer.from([GS, 0x21, 0x11]));  // Double width + height
+  parts.push(ascii('NEW ONLINE\nORDER\n'));
+  parts.push(Buffer.from([GS, 0x21, 0x00]));  // Normal size
+
+  parts.push(ascii('\n'));
+
+  const orderId = (order.id || order.number || '').substring(0, 8);
+  parts.push(ascii(`Order #${orderId}\n`));
+  parts.push(Buffer.from([ESC, 0x45, 0x00])); // Bold OFF
+
+  const customer = (order.customer_name || 'Guest')
+    .replace(/[^\x20-\x7E]/g, '').substring(0, 24);
+  parts.push(ascii(`${customer}\n`));
+
+  const items = order.line_items || order.items || [];
+  const itemCount = items.reduce((n, it) => n + (it.quantity || it.qty || 1), 0) || items.length;
+  parts.push(ascii(`${itemCount} item(s)\n`));
+
+  const d = new Date();
+  const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  parts.push(ascii(`${timeStr}\n`));
+
+  parts.push(Buffer.from([ESC, 0x64, 0x04])); // Feed 4 lines
+  parts.push(Buffer.from([GS, 0x56, 0x00]));  // Full cut
+
+  return Buffer.concat(parts);
+}
 // Returns { name, port } or null.
 function findPrinterByKeywords(keywords) {
   const { execSync } = require('child_process');
@@ -379,7 +417,31 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Print a single "new online order" alert sticker (the noisy/visual cue)
+  // Print a "new online order" alert chit on the USB thermal receipt printer
+  // (the reliable arrival cue — no Bluetooth involved)
+  if (req.method === 'POST' && req.url === '/print-alert') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const order = JSON.parse(body);
+        console.log(`\n🔔 Printing NEW ONLINE ORDER alert (receipt printer) #${order.id || order.number}`);
+        const rawData = buildEscPosAlert(order);
+        const result = await printRawWindows(rawData); // defaults to receipt printer
+        console.log('✅ Alert chit printed:', result);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        console.error('❌ Alert print error:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // Print a single "new online order" alert sticker on the LABEL printer
+  // (kept for when the label printer is reachable over USB)
   if (req.method === 'POST' && req.url === '/print-label-alert') {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -415,6 +477,26 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify(result));
     } catch (err) {
       console.error('❌ Test label error:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // Test the new-order alert chit on the receipt printer
+  if ((req.method === 'POST' || req.method === 'GET') && req.url === '/test-alert') {
+    try {
+      console.log('\n🧪 Test alert chit (receipt printer)...');
+      const rawData = buildEscPosAlert({
+        id: 'TEST1234', customer_name: 'Test Customer',
+        line_items: [{ name: 'Latte', quantity: 2 }, { name: 'Croissant', quantity: 1 }],
+      });
+      const result = await printRawWindows(rawData);
+      console.log('✅ Test alert complete:', result);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      console.error('❌ Test alert error:', err);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
     }
@@ -477,9 +559,11 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('  GET  /printers - List Windows printers');
   console.log('  GET  /test         - Print test receipt');
   console.log('  POST /print        - Print receipt (send order JSON)');
+  console.log('  GET  /test-alert   - Print test new-order chit (receipt printer)');
+  console.log('  POST /print-alert  - Print new-order alert chit on receipt printer');
   console.log('  GET  /test-label   - Print test label');
   console.log('  POST /print-label  - Print per-item kitchen labels (order JSON)');
-  console.log('  POST /print-label-alert - Print single new-order alert sticker');
+  console.log('  POST /print-label-alert - Print new-order alert sticker on label printer');
 
   // Show detected printers
   const printer = findWindowsPrinter();

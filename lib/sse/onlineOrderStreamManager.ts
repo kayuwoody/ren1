@@ -25,10 +25,11 @@ const PRINT_SERVER_URL = process.env.LABEL_PRINT_SERVER_URL || 'http://127.0.0.1
 const alertedOrderIds = new Set<string>();
 
 /**
- * Fire the label printer's "new online order" alert sticker — a noisy/visual
- * cue so staff notice an order without watching the screen. Fully fire-and-
- * forget: never throws, never blocks the SSE broadcast, degrades silently if
- * the print server or label printer is offline.
+ * Fire a "new online order" alert chit on the USB thermal receipt printer — a
+ * reliable arrival cue so staff notice an order without watching the screen.
+ * (The B221 label printer is Bluetooth-only in practice, so the alert goes to
+ * the receipt printer instead.) Fully fire-and-forget: never throws, never
+ * blocks the SSE broadcast, degrades silently if the print server is offline.
  */
 async function firePrintAlert(orderId: string) {
   if (!orderId || alertedOrderIds.has(orderId)) return;
@@ -52,7 +53,7 @@ async function firePrintAlert(orderId: string) {
 
     if (!order) return;
 
-    await fetch(`${PRINT_SERVER_URL}/print-label-alert`, {
+    await fetch(`${PRINT_SERVER_URL}/print-alert`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -61,7 +62,7 @@ async function firePrintAlert(orderId: string) {
         line_items: (order.online_order_items ?? []).map((i: any) => ({ quantity: i.qty })),
       }),
     });
-    console.log(`🔔 Fired new-order alert sticker for ${orderId}`);
+    console.log(`🔔 Fired new-order alert chit for ${orderId}`);
   } catch (err) {
     console.warn('Alert sticker print failed (non-fatal):', err);
   }
