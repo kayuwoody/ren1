@@ -121,7 +121,12 @@ export async function GET(req: Request) {
         orderCOGS = orderConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
       } catch {}
 
+      const orderVoucherDiscount = order.voucherDiscount || 0;
+      const orderPassDiscount = order.passDiscount || 0;
+
       totalRevenue += finalTotal;
+      totalVoucherDiscount += orderVoucherDiscount;
+      totalPassDiscount += orderPassDiscount;
       totalCOGS += orderCOGS;
       totalOrderCount++;
 
@@ -133,6 +138,8 @@ export async function GET(req: Request) {
       }
       revenueByDay[orderDate].revenue += finalTotal;
       revenueByDay[orderDate].orders += 1;
+      revenueByDay[orderDate].voucherDiscount += orderVoucherDiscount;
+      revenueByDay[orderDate].passDiscount += orderPassDiscount;
       revenueByDay[orderDate].cogs += orderCOGS;
       revenueByDay[orderDate].profit += (finalTotal - orderCOGS);
 

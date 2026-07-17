@@ -8,6 +8,10 @@ export interface OnlineOrderForReport {
   total: number;
   createdAt: string;
   source: 'online';
+  voucherCode: string | null;
+  voucherDiscount: number;
+  passCode: string | null;
+  passDiscount: number;
   items: OnlineOrderItemForReport[];
 }
 
@@ -31,6 +35,7 @@ export async function getCollectedOnlineOrders(opts: {
     .from('online_orders')
     .select(`
       id, status, customer_name, total_paid, created_at,
+      voucher_code, voucher_discount, pass_code, pass_discount,
       online_order_items ( id, product_id, product_name, qty, unit_price )
     `)
     .eq('status', 'collected')
@@ -54,6 +59,10 @@ export async function getCollectedOnlineOrders(opts: {
       total: order.total_paid,
       createdAt: order.created_at,
       source: 'online' as const,
+      voucherCode: order.voucher_code ?? null,
+      voucherDiscount: Number(order.voucher_discount) || 0,
+      passCode: order.pass_code ?? null,
+      passDiscount: Number(order.pass_discount) || 0,
       items: items.map(item => ({
         id: item.id,
         orderId: order.id,
@@ -80,12 +89,17 @@ export async function getAllOnlineOrders(opts?: { outletId?: string; limit?: num
   customerPhone: string;
   total: number;
   createdAt: string;
+  voucherCode: string | null;
+  voucherDiscount: number;
+  passCode: string | null;
+  passDiscount: number;
   items: { id: string; productId: string; productName: string; quantity: number; unitPrice: number }[];
 }>> {
   const { data, error } = await supabase
     .from('online_orders')
     .select(`
       id, status, customer_name, customer_phone, total_paid, created_at,
+      voucher_code, voucher_discount, pass_code, pass_discount,
       online_order_items ( id, product_id, product_name, qty, unit_price )
     `)
     .eq('outlet_id', opts?.outletId || 'main')
@@ -107,6 +121,10 @@ export async function getAllOnlineOrders(opts?: { outletId?: string; limit?: num
       customerPhone: order.customer_phone || '',
       total: order.total_paid,
       createdAt: order.created_at,
+      voucherCode: order.voucher_code ?? null,
+      voucherDiscount: Number(order.voucher_discount) || 0,
+      passCode: order.pass_code ?? null,
+      passDiscount: Number(order.pass_discount) || 0,
       items: items.map(item => ({
         id: item.id,
         productId: item.product_id || '',

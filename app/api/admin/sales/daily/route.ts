@@ -174,6 +174,9 @@ export async function GET(req: Request) {
         };
       });
 
+      const orderVoucherDiscount = order.voucherDiscount || 0;
+      const orderPassDiscount = order.passDiscount || 0;
+
       detailedOrders.push({
         id: order.id,
         orderNumber: order.orderNumber,
@@ -182,9 +185,14 @@ export async function GET(req: Request) {
         customerName: order.customerName,
         source: 'online',
         items,
-        retailTotal: finalTotal,
+        // total_paid is net of voucher/pass; gross = net + discounts given
+        retailTotal: finalTotal + orderVoucherDiscount + orderPassDiscount,
         finalTotal,
         totalDiscount: 0,
+        voucherCode: order.voucherCode || null,
+        voucherDiscount: orderVoucherDiscount,
+        passCode: order.passCode || null,
+        passDiscount: orderPassDiscount,
         orderCOGS,
         profit,
         margin,
