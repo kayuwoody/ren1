@@ -33,6 +33,7 @@ export default function SalesReportPage() {
   const [hideStaffMeals, setHideStaffMeals] = useState(true);
   const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
   const [chartMetric, setChartMetric] = useState<'revenue' | 'profit' | 'orders' | 'items'>('revenue');
+  const [chartGranularity, setChartGranularity] = useState<'daily' | 'weekly'>('daily');
 
   useEffect(() => {
     fetchSalesReport();
@@ -473,6 +474,30 @@ export default function SalesReportPage() {
             items: { label: 'Items Sold', color: '#2563eb', get: (d: any) => d.itemsSold, fmt: (v: number) => `${Math.round(v)}` },
           } as const;
           const active = metrics[chartMetric];
+
+          // Monday-start ISO week bucket for a KL calendar date (YYYY-MM-DD).
+          const toWeekStart = (dateStr: string) => {
+            const d = new Date(dateStr + 'T00:00:00Z');
+            const daysSinceMonday = (d.getUTCDay() + 6) % 7;
+            d.setUTCDate(d.getUTCDate() - daysSinceMonday);
+            return d.toISOString().split('T')[0];
+          };
+
+          // Weekly = sum of each week's daily totals (not an average).
+          const chartSource = chartGranularity === 'weekly'
+            ? Object.values(
+                report.revenueByDay.reduce((acc, day) => {
+                  const wk = toWeekStart(day.date);
+                  if (!acc[wk]) acc[wk] = { date: wk, revenue: 0, profit: 0, orders: 0, itemsSold: 0 };
+                  acc[wk].revenue += day.revenue;
+                  acc[wk].profit += day.profit;
+                  acc[wk].orders += day.orders;
+                  acc[wk].itemsSold += day.itemsSold;
+                  return acc;
+                }, {} as Record<string, { date: string; revenue: number; profit: number; orders: number; itemsSold: number }>)
+              ).sort((a, b) => a.date.localeCompare(b.date))
+            : report.revenueByDay;
+
           return (
             <div className="bg-white rounded-lg shadow p-6 space-y-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -488,11 +513,24 @@ export default function SalesReportPage() {
                     {metrics[key].label}
                   </button>
                 ))}
+                <div className="ml-auto flex items-center gap-1 rounded-lg bg-gray-100 p-0.5">
+                  {(['daily', 'weekly'] as const).map((g) => (
+                    <button
+                      key={g}
+                      onClick={() => setChartGranularity(g)}
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition ${
+                        chartGranularity === g ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {g === 'daily' ? 'Daily' : 'Weekly'}
+                    </button>
+                  ))}
+                </div>
               </div>
               <SalesTrendChart
-                title={`${active.label} over time`}
+                title={`${active.label} ${chartGranularity === 'weekly' ? 'per week' : 'over time'}`}
                 color={active.color}
-                data={report.revenueByDay.map(d => ({ date: d.date, value: active.get(d) }))}
+                data={chartSource.map(d => ({ date: d.date, value: active.get(d) }))}
                 format={active.fmt}
               />
             </div>
