@@ -52,8 +52,8 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    if (body.status && !['draft', 'ordered', 'received', 'cancelled'].includes(body.status)) {
-      return validationError('Invalid status. Must be: draft, ordered, received, or cancelled', '/api/purchase-orders/[id]');
+    if (body.status && !['draft', 'ordered', 'partial', 'received', 'cancelled'].includes(body.status)) {
+      return validationError('Invalid status. Must be: draft, ordered, partial, received, or cancelled', '/api/purchase-orders/[id]');
     }
 
     const purchaseOrder = updatePurchaseOrder(id, body);

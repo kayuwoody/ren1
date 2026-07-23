@@ -34,7 +34,7 @@ interface CreatePurchaseOrderInput {
 
 interface UpdatePurchaseOrderInput {
   supplier?: string;
-  status?: 'draft' | 'ordered' | 'received' | 'cancelled';
+  status?: 'draft' | 'ordered' | 'partial' | 'received' | 'cancelled';
   notes?: string;
   orderDate?: string;
   expectedDeliveryDate?: string;
@@ -251,66 +251,106 @@ export function updatePurchaseOrder(id: string, updates: UpdatePurchaseOrderInpu
 }
 
 /**
- * Mark a purchase order as received and update inventory
+ * Mark a purchase order as received and update inventory.
+ *
+ * `receivedItems` optionally sets the *cumulative* received quantity per line
+ * (e.g. a short or staged delivery). Stock is adjusted by the delta from what
+ * was already received, so calling this again to top up a partial PO only adds
+ * the newly-arrived amount. When omitted, every line is received in full
+ * (backward-compatible with the old one-click behaviour).
+ *
+ * The PO closes as 'received' once every line's received quantity reaches its
+ * ordered quantity; otherwise it is left 'partial' so the rest can be received
+ * later.
  */
-export async function markPurchaseOrderReceived(id: string): Promise<PurchaseOrderWithItems | null> {
+export async function markPurchaseOrderReceived(
+  id: string,
+  receivedItems?: Array<{ itemId: string; receivedQuantity: number }>,
+): Promise<PurchaseOrderWithItems | null> {
   const order = getPurchaseOrder(id);
   if (!order) return null;
 
   const now = new Date().toISOString();
+  const branchId = order.branchId || 'branch-main';
 
-  // Update PO status
-  db.prepare('UPDATE PurchaseOrder SET status = ?, receivedDate = ?, updatedAt = ? WHERE id = ?')
-    .run('received', now, now, id);
-
-  // Update received quantities to match ordered quantities
-  db.prepare('UPDATE PurchaseOrderItem SET receivedQuantity = quantity WHERE purchaseOrderId = ?')
-    .run(id);
+  // Map itemId -> requested cumulative received quantity (default: full order).
+  const requested = new Map<string, number>();
+  for (const item of order.items) {
+    const override = receivedItems?.find(r => r.itemId === item.id);
+    const target = override ? override.receivedQuantity : item.quantity;
+    // Clamp to [0, ordered] — can't receive negative or more than ordered.
+    requested.set(item.id, Math.max(0, Math.min(target, item.quantity)));
+  }
 
   console.log(`📦 Receiving PO ${order.poNumber} - Updating inventory...`);
 
-  // Update BranchStock for each received item (BranchStock is the source of truth)
-  const branchId = order.branchId || 'branch-main';
+  const updateItem = db.prepare('UPDATE PurchaseOrderItem SET receivedQuantity = ? WHERE id = ?');
+
+  // Update BranchStock for each item by the delta received since last time
+  // (BranchStock is the source of truth).
   for (const item of order.items) {
+    const alreadyReceived = item.receivedQuantity || 0;
+    const newReceived = requested.get(item.id) ?? item.quantity;
+    const delta = newReceived - alreadyReceived;
+
+    updateItem.run(newReceived, item.id);
+
+    if (delta === 0) continue; // nothing new arrived for this line
+
     if (item.itemType === 'material' && item.materialId) {
       const stockBefore = getBranchStock(branchId, 'material', item.materialId);
-      adjustBranchStock(branchId, 'material', item.materialId, item.quantity);
-      console.log(`   ✅ Material: ${item.materialName} +${item.quantity} ${item.unit}`);
+      adjustBranchStock(branchId, 'material', item.materialId, delta);
+      console.log(`   ✅ Material: ${item.materialName} ${delta >= 0 ? '+' : ''}${delta} ${item.unit}`);
 
       logStockMovement({
         itemType: 'material',
         itemId: item.materialId,
         itemName: item.materialName || 'Unknown',
         movementType: 'po_received',
-        quantityChange: item.quantity,
+        quantityChange: delta,
         stockBefore,
-        stockAfter: stockBefore + item.quantity,
+        stockAfter: stockBefore + delta,
         referenceId: order.id,
         referenceNote: `PO: ${order.poNumber}`,
       });
     } else if (item.itemType === 'product' && item.productId) {
       const stockBefore = getBranchStock(branchId, 'product', item.productId);
-      adjustBranchStock(branchId, 'product', item.productId, item.quantity);
-      console.log(`   ✅ Product: ${item.productName} +${item.quantity}`);
+      adjustBranchStock(branchId, 'product', item.productId, delta);
+      console.log(`   ✅ Product: ${item.productName} ${delta >= 0 ? '+' : ''}${delta}`);
 
       logStockMovement({
         itemType: 'product',
         itemId: item.productId,
         itemName: item.productName || 'Unknown',
         movementType: 'po_received',
-        quantityChange: item.quantity,
+        quantityChange: delta,
         stockBefore,
-        stockAfter: stockBefore + item.quantity,
+        stockAfter: stockBefore + delta,
         referenceId: order.id,
         referenceNote: `PO: ${order.poNumber}`,
       });
     }
   }
 
+  // Fully received if every line reached its ordered quantity, else partial.
+  const fullyReceived = order.items.every(
+    item => (requested.get(item.id) ?? item.quantity) >= item.quantity,
+  );
+  const newStatus = fullyReceived ? 'received' : 'partial';
+
+  // Only stamp receivedDate once fully received; keep it clear while partial.
+  if (fullyReceived) {
+    db.prepare('UPDATE PurchaseOrder SET status = ?, receivedDate = ?, updatedAt = ? WHERE id = ?')
+      .run(newStatus, now, now, id);
+  } else {
+    db.prepare('UPDATE PurchaseOrder SET status = ?, updatedAt = ? WHERE id = ?')
+      .run(newStatus, now, id);
+  }
+
   // Sync legacy columns as aggregate totals across all branches (safety net)
   syncLegacyStockColumns();
 
-  console.log(`✅ PO ${order.poNumber} marked as received and inventory updated`);
+  console.log(`✅ PO ${order.poNumber} marked as ${newStatus} and inventory updated`);
 
   return getPurchaseOrder(id);
 }

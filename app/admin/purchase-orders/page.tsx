@@ -15,13 +15,14 @@ interface PurchaseOrderItem {
   unit: string;
   unitCost: number;
   totalCost: number;
+  receivedQuantity?: number;
 }
 
 interface PurchaseOrder {
   id: string;
   poNumber: string;
   supplier: string;
-  status: "draft" | "ordered" | "received" | "cancelled";
+  status: "draft" | "ordered" | "partial" | "received" | "cancelled";
   totalAmount: number;
   notes?: string;
   orderDate?: string;
@@ -38,6 +39,9 @@ export default function PurchaseOrdersPage() {
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [receivingPO, setReceivingPO] = useState<PurchaseOrder | null>(null);
+  const [receiveInputs, setReceiveInputs] = useState<Record<string, string>>({});
+  const [submittingReceive, setSubmittingReceive] = useState(false);
 
   useEffect(() => {
     loadPurchaseOrders();
@@ -91,26 +95,50 @@ export default function PurchaseOrdersPage() {
     }
   };
 
-  const handleMarkReceived = async (id: string) => {
-    if (!confirm("Mark this purchase order as received and update inventory?")) {
-      return;
+  // Open the receive dialog, defaulting each line's "receiving now" to its
+  // outstanding quantity (ordered − already received).
+  const openReceiveModal = (po: PurchaseOrder) => {
+    const inputs: Record<string, string> = {};
+    for (const item of po.items) {
+      const outstanding = item.quantity - (item.receivedQuantity || 0);
+      inputs[item.id] = String(Math.max(0, outstanding));
     }
+    setReceiveInputs(inputs);
+    setReceivingPO(po);
+  };
 
+  const submitReceive = async () => {
+    if (!receivingPO) return;
+    setSubmittingReceive(true);
     try {
-      const response = await fetch(`/api/purchase-orders/${id}/receive`, {
+      // Send cumulative received qty per line = already received + receiving now.
+      const items = receivingPO.items.map((item) => {
+        const already = item.receivedQuantity || 0;
+        const now = Math.max(0, Number(receiveInputs[item.id]) || 0);
+        const capped = Math.min(now, item.quantity - already); // never exceed ordered
+        return { itemId: item.id, receivedQuantity: already + capped };
+      });
+
+      const response = await fetch(`/api/purchase-orders/${receivingPO.id}/receive`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
       });
 
       if (response.ok) {
-        alert("Purchase order marked as received and inventory updated!");
+        const data = await response.json();
+        alert(data.message || "Inventory updated.");
+        setReceivingPO(null);
         loadPurchaseOrders();
       } else {
         const data = await response.json();
-        alert(`Failed to mark as received: ${data.error || "Unknown error"}`);
+        alert(`Failed to receive: ${data.error || "Unknown error"}`);
       }
     } catch (error) {
-      console.error("Failed to mark as received:", error);
-      alert("Failed to mark as received");
+      console.error("Failed to receive:", error);
+      alert("Failed to receive");
+    } finally {
+      setSubmittingReceive(false);
     }
   };
 
@@ -170,6 +198,7 @@ export default function PurchaseOrdersPage() {
   const statusColors = {
     draft: "bg-gray-200 text-gray-800",
     ordered: "bg-blue-200 text-blue-800",
+    partial: "bg-amber-200 text-amber-800",
     received: "bg-green-200 text-green-800",
     cancelled: "bg-red-200 text-red-800",
   };
@@ -212,6 +241,7 @@ export default function PurchaseOrdersPage() {
             { value: "all", label: "All Orders" },
             { value: "draft", label: "Draft" },
             { value: "ordered", label: "Ordered" },
+            { value: "partial", label: "Partial" },
             { value: "received", label: "Received" },
           ].map((f) => (
             <button
@@ -307,12 +337,12 @@ export default function PurchaseOrdersPage() {
                       Export CSV
                     </button>
 
-                    {po.status === "ordered" && (
+                    {(po.status === "ordered" || po.status === "partial") && (
                       <button
-                        onClick={() => handleMarkReceived(po.id)}
+                        onClick={() => openReceiveModal(po)}
                         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
                       >
-                        Mark Received
+                        {po.status === "partial" ? "Receive More" : "Receive Items"}
                       </button>
                     )}
 
@@ -362,6 +392,12 @@ export default function PurchaseOrdersPage() {
                         • {item.quantity} {item.unit} @ RM{" "}
                         {item.unitCost.toFixed(2)} = RM{" "}
                         {item.totalCost.toFixed(2)}
+                        {(po.status === "partial" || po.status === "received") &&
+                          (item.receivedQuantity ?? 0) < item.quantity && (
+                            <span className="ml-1 text-amber-700 font-medium">
+                              (received {item.receivedQuantity ?? 0}/{item.quantity})
+                            </span>
+                          )}
                       </div>
                     ))}
                   </div>
@@ -379,6 +415,74 @@ export default function PurchaseOrdersPage() {
           </div>
         )}
       </div>
+
+      {/* Receive dialog — edit the quantity actually received per line */}
+      {receivingPO && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-bold text-gray-900">
+                Receive Delivery — {receivingPO.poNumber}
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Enter how much of each line actually arrived. Leave the full
+                amount to receive in full, or lower it for a short delivery —
+                you can receive the rest later.
+              </p>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-3">
+              {receivingPO.items.map((item) => {
+                const already = item.receivedQuantity || 0;
+                const outstanding = item.quantity - already;
+                const name = item.itemType === "material" ? item.materialName : item.productName;
+                return (
+                  <div key={item.id} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 truncate">{name}</div>
+                      <div className="text-xs text-gray-500">
+                        Ordered {item.quantity} {item.unit}
+                        {already > 0 && ` · already received ${already} · outstanding ${outstanding}`}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={outstanding}
+                        step="any"
+                        value={receiveInputs[item.id] ?? ""}
+                        onChange={(e) =>
+                          setReceiveInputs((prev) => ({ ...prev, [item.id]: e.target.value }))
+                        }
+                        className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-right"
+                      />
+                      <span className="text-sm text-gray-500 w-10">{item.unit}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-6 border-t flex justify-end gap-3">
+              <button
+                onClick={() => setReceivingPO(null)}
+                disabled={submittingReceive}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitReceive}
+                disabled={submittingReceive}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50"
+              >
+                {submittingReceive ? "Receiving…" : "Confirm & Update Stock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
