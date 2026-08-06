@@ -168,9 +168,9 @@ export async function GET(req: Request) {
           itemCOGS,
           itemProfit,
           itemMargin,
-          isBundle: false,
+          isBundle: item.isBundle,
           baseProductName: undefined,
-          components: undefined,
+          components: item.components,
         };
       });
 

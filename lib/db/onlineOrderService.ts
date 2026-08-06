@@ -24,6 +24,33 @@ export interface OnlineOrderItemForReport {
   unitPrice: number;
   finalPrice: number;
   discountApplied: number;
+  isBundle: boolean;
+  components: Array<{ productId: string; productName: string; quantity: number }>;
+}
+
+/**
+ * Extract combo/bundle component names from an online_order_items `mods` blob.
+ * bubu1 stores XOR picks under `mods.combo_selections` ({ group: { id, name } })
+ * and add-ons under `mods.selected_optionals` ([{ id, name }]).
+ */
+function componentsFromMods(
+  mods: any,
+  quantity: number,
+): Array<{ productId: string; productName: string; quantity: number }> {
+  if (!mods || typeof mods !== 'object') return [];
+
+  const picks: Array<{ id?: string; name?: string }> = [];
+
+  if (mods.combo_selections && typeof mods.combo_selections === 'object') {
+    picks.push(...Object.values(mods.combo_selections as Record<string, { id?: string; name?: string }>));
+  }
+  if (Array.isArray(mods.selected_optionals)) {
+    picks.push(...(mods.selected_optionals as Array<{ id?: string; name?: string }>));
+  }
+
+  return picks
+    .filter((c) => c && (c.name || c.id))
+    .map((c) => ({ productId: c.id || '', productName: c.name || 'Item', quantity }));
 }
 
 export async function getCollectedOnlineOrders(opts: {
@@ -36,7 +63,7 @@ export async function getCollectedOnlineOrders(opts: {
     .select(`
       id, status, customer_name, total_paid, created_at,
       voucher_code, voucher_discount, pass_code, pass_discount,
-      online_order_items ( id, product_id, product_name, qty, unit_price )
+      online_order_items ( id, product_id, product_name, qty, unit_price, mods )
     `)
     .eq('status', 'collected')
     .eq('outlet_id', opts.outletId || 'main')
@@ -63,16 +90,21 @@ export async function getCollectedOnlineOrders(opts: {
       voucherDiscount: Number(order.voucher_discount) || 0,
       passCode: order.pass_code ?? null,
       passDiscount: Number(order.pass_discount) || 0,
-      items: items.map(item => ({
-        id: item.id,
-        orderId: order.id,
-        productId: item.product_id || '',
-        productName: item.product_name || 'Unknown',
-        quantity: item.qty,
-        unitPrice: item.unit_price,
-        finalPrice: item.unit_price,
-        discountApplied: 0,
-      })),
+      items: items.map(item => {
+        const components = componentsFromMods(item.mods, item.qty);
+        return {
+          id: item.id,
+          orderId: order.id,
+          productId: item.product_id || '',
+          productName: item.product_name || 'Unknown',
+          quantity: item.qty,
+          unitPrice: item.unit_price,
+          finalPrice: item.unit_price,
+          discountApplied: 0,
+          isBundle: components.length > 0,
+          components,
+        };
+      }),
     };
   });
 }
