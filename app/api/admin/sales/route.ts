@@ -16,13 +16,14 @@ export async function GET(req: Request) {
     const startDateParam = searchParams.get('start');
     const endDateParam = searchParams.get('end');
     const hideStaffMeals = searchParams.get('hideStaffMeals') === 'true';
+    const hideShellStaff = searchParams.get('hideShellStaff') === 'true';
     const source = searchParams.get('source') || 'all';
 
     const { startDate, endDate } = buildDateFilter(range, startDateParam, endDateParam);
 
     // Fetch POS orders and online orders in parallel
     const posOrders = source !== 'online'
-      ? getSaleOrders({ branchId, range, startDate: startDateParam, endDate: endDateParam, hideStaffMeals })
+      ? getSaleOrders({ branchId, range, startDate: startDateParam, endDate: endDateParam, hideStaffMeals, hideShellStaff })
       : [];
 
     const onlineOrders = source !== 'pos'

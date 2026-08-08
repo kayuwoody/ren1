@@ -182,12 +182,34 @@ export function getOrderWithItems(orderId: string): OrderWithItems | null {
   return { ...order, items };
 }
 
+/**
+ * A "Shell Staff" order is one where EVERY line item was rung up with the staff
+ * discount (the "Staff price" override button). These are petrol-station staff
+ * sales — real revenue but very low margin, so they skew the organic-customer
+ * profit picture and can be filtered out of the sales reports.
+ *
+ * Detection: every item's `variations._discount_reason` mentions "staff". An
+ * order with any non-staff-discounted item is a normal customer sale.
+ */
+export function isShellStaffOrder(items: LocalOrderItem[]): boolean {
+  if (!items || items.length === 0) return false;
+  return items.every(item => {
+    try {
+      const v = item.variations ? JSON.parse(item.variations) : {};
+      return String(v._discount_reason || '').toLowerCase().includes('staff');
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function getSaleOrders(opts: {
   branchId: string;
   range?: string;
   startDate?: string | null;
   endDate?: string | null;
   hideStaffMeals?: boolean;
+  hideShellStaff?: boolean;
 }): OrderWithItems[] {
   const SALE_STATUSES = ['completed', 'processing', 'ready-for-pickup'];
   const { startDate, endDate } = buildDateFilter(
@@ -196,21 +218,29 @@ export function getSaleOrders(opts: {
     opts.endDate,
   );
 
-  let orders = getOrders({
+  const orders = getOrders({
     branchId: opts.branchId,
     statuses: SALE_STATUSES,
     after: startDate,
     before: endDate,
   });
 
-  if (opts.hideStaffMeals) {
-    orders = orders.filter(o => o.total > 0);
-  }
-
-  return orders.map(order => ({
+  let withItems: OrderWithItems[] = orders.map(order => ({
     ...order,
     items: getOrderItems(order.id),
   }));
+
+  // Staff meals: 100% discount → order total 0.
+  if (opts.hideStaffMeals) {
+    withItems = withItems.filter(o => o.total > 0);
+  }
+
+  // Shell Staff: every line rung up at staff price.
+  if (opts.hideShellStaff) {
+    withItems = withItems.filter(o => !isShellStaffOrder(o.items));
+  }
+
+  return withItems;
 }
 
 export function getDayOrders(opts: {
