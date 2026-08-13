@@ -383,7 +383,7 @@ export default function CustomerDisplayPage() {
 
                 {hasDiscount && (
                   <p className="text-sm text-green-600 font-semibold pt-0.5">
-                    Saved RM {totalDiscount.toFixed(2)}
+                    You saved RM {totalDiscount.toFixed(2)}
                   </p>
                 )}
               </div>
