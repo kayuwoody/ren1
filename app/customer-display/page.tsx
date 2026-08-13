@@ -369,28 +369,28 @@ export default function CustomerDisplayPage() {
 
                 {totalItemDiscount > 0 && (
                   <div className="flex items-center gap-2 text-green-600">
-                    <span>🎉 Discount</span>
+                    <span>Discount</span>
                     <span className="font-semibold">-RM {totalItemDiscount.toFixed(2)}</span>
                   </div>
                 )}
 
                 {voucherAmount > 0 && (
                   <div className="flex items-center gap-2 text-purple-600">
-                    <span>🎫 Voucher ({voucher?.code})</span>
+                    <span>Voucher ({voucher?.code})</span>
                     <span className="font-semibold">-RM {voucherAmount.toFixed(2)}</span>
                   </div>
                 )}
 
                 {passDiscount > 0 && (
                   <div className="flex items-center gap-2 text-teal-600">
-                    <span>🎟️ Pass ({pass?.program_name})</span>
+                    <span>Pass ({pass?.program_name})</span>
                     <span className="font-semibold">-RM {passDiscount.toFixed(2)}</span>
                   </div>
                 )}
 
                 {hasDiscount && (
                   <p className="text-sm text-green-600 font-semibold pt-0.5">
-                    🎊 You saved RM {totalDiscount.toFixed(2)}!
+                    Saved RM {totalDiscount.toFixed(2)}
                   </p>
                 )}
               </div>
