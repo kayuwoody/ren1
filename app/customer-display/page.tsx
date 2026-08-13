@@ -228,10 +228,9 @@ export default function CustomerDisplayPage() {
           <p className="text-2xl font-bold text-amber-900">Welcome to Coffee Oasis</p>
         </div>
       ) : (
-        /* Two-column body: items (full height) + payment rail (always visible) */
-        <div className="flex-1 mb-4 flex flex-col lg:flex-row gap-4 min-h-0">
-          {/* Items column */}
-          <div className="relative flex-1 min-h-0">
+        <>
+          {/* Items — scrollable, full remaining height */}
+          <div className="relative flex-1 mb-3 min-h-0">
             <div
               ref={scrollRef}
               onScroll={updateOverflow}
@@ -334,93 +333,12 @@ export default function CustomerDisplayPage() {
             )}
           </div>
 
-          {/* Payment rail — total + QR, always visible */}
-          <div className="lg:w-[300px] shrink-0 flex flex-col gap-3">
-            {/* Total Section */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-md">
-              <div className="space-y-1.5">
-                {/* Item Count */}
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Items</span>
-                  <span className="font-semibold text-gray-800">{totalItems}</span>
-                </div>
-
-                {/* Subtotal (if discount) */}
-                {hasDiscount && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span className="line-through text-gray-400">
-                      RM {retailTotal.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Item Discount */}
-                {totalItemDiscount > 0 && (
-                  <div className="flex items-center justify-between text-sm text-green-600">
-                    <span className="flex items-center gap-1">
-                      <span className="text-base">🎉</span>
-                      Discount
-                    </span>
-                    <span className="font-semibold">
-                      -RM {totalItemDiscount.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Voucher Discount */}
-                {voucherAmount > 0 && (
-                  <div className="flex items-center justify-between text-sm text-purple-600">
-                    <span className="flex items-center gap-1">
-                      <span className="text-base">🎫</span>
-                      Voucher ({voucher?.code})
-                    </span>
-                    <span className="font-semibold">
-                      -RM {voucherAmount.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Pass Discount */}
-                {passDiscount > 0 && (
-                  <div className="flex items-center justify-between text-sm text-teal-600">
-                    <span className="flex items-center gap-1">
-                      <span className="text-base">🎟️</span>
-                      Pass ({pass?.program_name})
-                    </span>
-                    <span className="font-semibold">
-                      -RM {passDiscount.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Divider */}
-                <div className="border-t border-blue-200 my-1.5"></div>
-
-                {/* Total */}
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold text-gray-800">TOTAL</span>
-                  <span className="text-3xl font-bold text-blue-600">
-                    RM {finalTotal.toFixed(2)}
-                  </span>
-                </div>
-
-                {/* Savings Summary */}
-                {hasDiscount && (
-                  <div className="text-center pt-1">
-                    <p className="text-sm text-green-600 font-semibold">
-                      🎊 You saved RM {totalDiscount.toFixed(2)}!
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* DuitNow QR Payment */}
+          {/* Consolidated payment + total bar: QR · breakdown · amount */}
+          <div className="shrink-0 flex items-center gap-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-md">
+            {/* DuitNow QR (left) */}
             {finalTotal > 0 && (
-              <div className="bg-white rounded-xl p-3 border border-gray-200 shadow-md flex flex-col items-center">
-                <p className="text-sm font-semibold text-gray-700 mb-2">Scan to pay</p>
-                <div className="rounded-xl overflow-hidden shadow-sm" style={{ width: 190 }}>
+              <div className="shrink-0 flex flex-col items-center">
+                <div className="rounded-lg overflow-hidden bg-white p-1 shadow-sm" style={{ width: 160 }}>
                   <Image
                     src="/duitnow-qr.png"
                     alt="DuitNow QR - Scan to Pay"
@@ -429,15 +347,67 @@ export default function CustomerDisplayPage() {
                     className="w-full h-auto"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Amount to pay</p>
-                <p className="text-3xl font-bold text-rose-600">
-                  RM {finalTotal.toFixed(2)}
-                </p>
-                <p className="text-[10px] text-gray-400 mt-0.5">Any bank or e-wallet</p>
+                <p className="text-xs font-semibold text-gray-600 mt-1">Scan to pay</p>
               </div>
             )}
+
+            {/* Breakdown + amount (fills the space beside the QR) */}
+            <div className="flex-1 flex items-center justify-between gap-6 min-w-0">
+              {/* Breakdown */}
+              <div className="space-y-1 text-sm min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-600">Items</span>
+                  <span className="font-semibold text-gray-800">{totalItems}</span>
+                </div>
+
+                {hasDiscount && (
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <span>Subtotal</span>
+                    <span className="line-through">RM {retailTotal.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {totalItemDiscount > 0 && (
+                  <div className="flex items-center gap-2 text-green-600">
+                    <span>🎉 Discount</span>
+                    <span className="font-semibold">-RM {totalItemDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {voucherAmount > 0 && (
+                  <div className="flex items-center gap-2 text-purple-600">
+                    <span>🎫 Voucher ({voucher?.code})</span>
+                    <span className="font-semibold">-RM {voucherAmount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {passDiscount > 0 && (
+                  <div className="flex items-center gap-2 text-teal-600">
+                    <span>🎟️ Pass ({pass?.program_name})</span>
+                    <span className="font-semibold">-RM {passDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {hasDiscount && (
+                  <p className="text-sm text-green-600 font-semibold pt-0.5">
+                    🎊 You saved RM {totalDiscount.toFixed(2)}!
+                  </p>
+                )}
+              </div>
+
+              {/* Amount to pay (single, prominent total) */}
+              <div className="text-right shrink-0">
+                <p className="text-sm text-gray-500">Amount to pay</p>
+                <p className="text-5xl font-bold text-blue-600 leading-none">
+                  RM {finalTotal.toFixed(2)}
+                </p>
+                {finalTotal > 0 && (
+                  <p className="text-[11px] text-gray-400 mt-1">Any bank or e-wallet</p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Footer */}
