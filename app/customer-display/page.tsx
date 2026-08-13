@@ -369,7 +369,7 @@ export default function CustomerDisplayPage() {
 
                 {voucherAmount > 0 && (
                   <div className="flex items-center gap-2 text-purple-600">
-                    <span>Voucher ({voucher?.code})</span>
+                    <span>Voucher</span>
                     <span className="font-semibold">-RM {voucherAmount.toFixed(2)}</span>
                   </div>
                 )}
