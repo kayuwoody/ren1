@@ -367,13 +367,6 @@ export default function CustomerDisplayPage() {
                   </div>
                 )}
 
-                {totalItemDiscount > 0 && (
-                  <div className="flex items-center gap-2 text-green-600">
-                    <span>Discount</span>
-                    <span className="font-semibold">-RM {totalItemDiscount.toFixed(2)}</span>
-                  </div>
-                )}
-
                 {voucherAmount > 0 && (
                   <div className="flex items-center gap-2 text-purple-600">
                     <span>Voucher ({voucher?.code})</span>
