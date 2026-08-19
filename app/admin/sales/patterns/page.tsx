@@ -76,19 +76,20 @@ export default function SalesPatternsPage() {
   const [endDate, setEndDate] = useState('');
   const [month, setMonth] = useState(''); // YYYY-MM for the "Specific Month" filter
   const [hideStaffMeals, setHideStaffMeals] = useState(true);
+  const [hideShellStaff, setHideShellStaff] = useState(false);
   const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
   const [metric, setMetric] = useState<Metric>('revenue');
 
   useEffect(() => {
     fetchPatterns();
-  }, [dateRange, startDate, endDate, hideStaffMeals, source]);
+  }, [dateRange, startDate, endDate, hideStaffMeals, hideShellStaff, source]);
 
   const fetchPatterns = async () => {
     setLoading(true);
     try {
-      let url = `/api/admin/sales/patterns?range=${dateRange}&hideStaffMeals=${hideStaffMeals}&source=${source}`;
+      let url = `/api/admin/sales/patterns?range=${dateRange}&hideStaffMeals=${hideStaffMeals}&hideShellStaff=${hideShellStaff}&source=${source}`;
       if (startDate && endDate) {
-        url = `/api/admin/sales/patterns?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}&source=${source}`;
+        url = `/api/admin/sales/patterns?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}&hideShellStaff=${hideShellStaff}&source=${source}`;
       }
       const res = await branchFetch(url);
       if (res.ok) {
@@ -243,6 +244,16 @@ export default function SalesPatternsPage() {
               }`}
             >
               {hideStaffMeals ? '✓ Staff Hidden' : 'Show Staff'}
+            </button>
+
+            <button
+              onClick={() => setHideShellStaff(!hideShellStaff)}
+              title="Orders where every item was rung up at staff price (Shell petrol-station staff)"
+              className={`px-4 py-2 rounded-lg transition ${
+                hideShellStaff ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {hideShellStaff ? '✓ Shell Staff Hidden' : 'Show Shell Staff'}
             </button>
 
             <div className="flex rounded-lg overflow-hidden border border-gray-300">
