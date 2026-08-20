@@ -129,19 +129,21 @@ function expandComboToCategories(
 ): Array<{ category: string | undefined; quantity: number; revenue: number }> | null {
   if (!v._bundle_components) return null;
 
-  let components: any[];
+  // Wrap parse + filter together: a parseable-but-malformed blob (e.g. a null
+  // element from legacy meta) must fall back to counting the combo, never crash
+  // the whole report. Mirrors the defensive pattern in products-sold/route.ts.
+  let visible: any[] = [];
   try {
-    components = typeof v._bundle_components === 'string'
+    const components = typeof v._bundle_components === 'string'
       ? JSON.parse(v._bundle_components)
       : v._bundle_components;
+    if (!Array.isArray(components)) return null;
+    visible = components.filter(
+      (c) => c && c.productId && c.productName && c.category !== 'hidden' && c.category !== 'private',
+    );
   } catch {
     return null;
   }
-  if (!Array.isArray(components)) return null;
-
-  const visible = components.filter(
-    (c) => c.productId && c.productName && c.category !== 'hidden' && c.category !== 'private',
-  );
   if (visible.length === 0) return null;
 
   const withPrices = visible.map((c) => {
