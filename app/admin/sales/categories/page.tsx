@@ -16,6 +16,8 @@ interface CategoryRow {
 interface CategoryReport {
   categories: CategoryRow[];
   totals: { items: number; revenue: number; categories: number };
+  expanded: boolean;
+  onlineCombosGrouped: number;
   dateRange: { start: string | null; end: string | null };
 }
 
@@ -36,6 +38,7 @@ export default function CategoryBreakdownPage() {
   const [month, setMonth] = useState('');
   const [hideStaffMeals, setHideStaffMeals] = useState(true);
   const [hideShellStaff, setHideShellStaff] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
 
   const applyMonth = (ym: string) => {
@@ -54,15 +57,15 @@ export default function CategoryBreakdownPage() {
   useEffect(() => {
     fetchCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, startDate, endDate, hideStaffMeals, hideShellStaff, source]);
+  }, [dateRange, startDate, endDate, hideStaffMeals, hideShellStaff, expanded, source]);
 
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      let url = `/api/admin/sales/categories?range=${dateRange}&hideStaffMeals=${hideStaffMeals}&hideShellStaff=${hideShellStaff}&source=${source}`;
-      if (startDate && endDate) {
-        url = `/api/admin/sales/categories?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}&hideShellStaff=${hideShellStaff}&source=${source}`;
-      }
+      const base = startDate && endDate
+        ? `start=${startDate}&end=${endDate}`
+        : `range=${dateRange}`;
+      const url = `/api/admin/sales/categories?${base}&hideStaffMeals=${hideStaffMeals}&hideShellStaff=${hideShellStaff}&expanded=${expanded}&source=${source}`;
       const res = await branchFetch(url);
       if (res.ok) {
         setReport(await res.json());
@@ -179,6 +182,16 @@ export default function CategoryBreakdownPage() {
               {hideShellStaff ? '✓ Shell Staff Hidden' : 'Show Shell Staff'}
             </button>
 
+            <button
+              onClick={() => setExpanded(!expanded)}
+              title="Break combos into their component categories (the coffee under Coffee, the danish under Pastry) instead of a single Combo bucket"
+              className={`px-4 py-2 rounded-lg transition ${
+                expanded ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {expanded ? '✓ Combos Expanded' : 'Group Combos'}
+            </button>
+
             <div className="flex rounded-lg overflow-hidden border border-gray-300">
               {(['all', 'pos', 'online'] as const).map((s) => (
                 <button
@@ -201,6 +214,14 @@ export default function CategoryBreakdownPage() {
           <div className="bg-white rounded-lg shadow p-12 text-center text-gray-500">No sales in this period</div>
         ) : (
           <>
+            {report.expanded && report.onlineCombosGrouped > 0 && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3">
+                Note: {report.onlineCombosGrouped} online combo item(s) couldn&apos;t be broken down
+                (the customer app doesn&apos;t store a reliable component list) and still count under
+                &ldquo;Combo&rdquo;. POS combos are fully expanded.
+              </div>
+            )}
+
             {/* Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white rounded-lg shadow p-4">
