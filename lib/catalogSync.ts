@@ -34,6 +34,7 @@ export async function syncProduct(productId: string) {
     base_price: product.basePrice,
     image_url: product.imageUrl,
     combo_price_override: product.comboPriceOverride,
+    pwp_price: product.pwpPrice ?? null,
     selection_config: selectionConfig,
     stock_quantity: product.manageStock ? getProductStockQuantity(productId) : null,
     available_online: !!product.availableOnline,
@@ -110,6 +111,7 @@ export async function syncAllProducts() {
   const products = db.prepare('SELECT * FROM Product ORDER BY name').all() as any[];
   let synced = 0;
   let failed = 0;
+  const errors: string[] = [];
 
   const now = new Date().toISOString();
   const rows = products.map(p => ({
@@ -120,6 +122,7 @@ export async function syncAllProducts() {
     base_price: p.basePrice,
     image_url: p.imageUrl,
     combo_price_override: p.comboPriceOverride,
+    pwp_price: p.pwpPrice ?? null,
     selection_config: buildSelectionConfig(p.id),
     stock_quantity: p.manageStock ? getProductStockQuantity(p.id) : null,
     available_online: !!p.availableOnline,
@@ -132,13 +135,15 @@ export async function syncAllProducts() {
       const { error } = await supabase.from('products').upsert(batch, { onConflict: 'id' });
       if (error) throw error;
       synced += batch.length;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Batch product sync failed:', err);
       failed += batch.length;
+      const msg = err?.message || err?.hint || err?.details || String(err);
+      if (!errors.includes(msg)) errors.push(msg);
     }
   }
 
-  return { synced, failed, total: products.length };
+  return { synced, failed, total: products.length, errors };
 }
 
 export async function syncAllRecipes() {

@@ -352,7 +352,7 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
           const bundleBaseName = getItemMeta(item, '_bundle_base_product_name');
           const displayName = isBundle && bundleDisplayName ? bundleDisplayName : item.name;
 
-          let bundleComponents: Array<{ productName: string; quantity: number }> = [];
+          let bundleComponents: Array<{ productName: string; quantity: number; addonPrice?: number }> = [];
           if (isBundle) {
             try {
               const raw = getItemMeta(item, '_bundle_components');
@@ -365,7 +365,7 @@ export function generateReceiptHTML(order: any, branch?: BranchInfo, mascotUrl?:
           <td>
             <div class="item-name">${escapeHtml(displayName)}</div>
             ${isBundle && bundleBaseName ? `<div class="item-base">Base: ${escapeHtml(bundleBaseName)}</div>` : ''}
-            ${bundleComponents.map(c => `<div class="item-component">→ ${escapeHtml(c.productName)}${c.quantity > 1 ? ` × ${escapeHtml(c.quantity)}` : ''}</div>`).join('')}
+            ${bundleComponents.map(c => `<div class="item-component">→ ${escapeHtml(c.productName)}${c.quantity > 1 ? ` × ${escapeHtml(c.quantity)}` : ''}${c.addonPrice ? ` +RM ${(c.addonPrice * (c.quantity || 1)).toFixed(2)}` : ''}</div>`).join('')}
             ${discountReason ? `<div class="discount-label">• ${escapeHtml(discountReason)}</div>` : ''}
           </td>
           <td class="center">${item.quantity}</td>

@@ -90,47 +90,47 @@ export default function KitchenDisplayPage() {
     );
   }, [labelsPrinted]);
 
-  // Connect to label printer (requires user gesture first time)
-  const connectLabelPrinter = async () => {
-    try {
+  // Print via the local USB print server (Bluetooth was slow/unreliable).
+  // Falls back to the old Web Bluetooth path only if the server is unreachable.
+  const printLabelsViaBluetooth = async (order: Order) => {
+    if (!labelPrinter.isConnected()) {
       const device = await labelPrinter.pair();
       await labelPrinter.connect(device);
       setLabelPrinterConnected(true);
-      console.log('🏷️ Label printer connected');
-      return true;
-    } catch (err: any) {
-      console.error('Label printer connection failed:', err);
-      alert(`Failed to connect label printer: ${err.message}`);
-      return false;
+    }
+    for (const item of order.line_items) {
+      for (let i = 0; i < item.quantity; i++) {
+        await labelPrinter.printKitchenLabel(order.number, item.name, 1);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
     }
   };
 
-  // Print labels for an order
+  // Print labels for an order (USB first)
   const printLabelsForOrder = async (order: Order) => {
     setPrintingOrderId(order.id);
 
     try {
-      // Try to connect if not connected
-      if (!labelPrinter.isConnected()) {
-        const connected = await connectLabelPrinter();
-        if (!connected) {
-          setPrintingOrderId(null);
+      // Primary: local USB print server (same host that serves the POS)
+      try {
+        const res = await fetch('http://localhost:9101/print-label', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order),
+        });
+        if (res.ok) {
+          setLabelsPrinted(prev => new Set([...prev, order.id]));
+          console.log(`🏷️ Printed labels for order #${order.number} via USB`);
           return;
         }
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Print server returned ${res.status}`);
+      } catch (usbErr: any) {
+        console.warn('USB label print failed, trying Bluetooth:', usbErr?.message);
+        await printLabelsViaBluetooth(order);
+        setLabelsPrinted(prev => new Set([...prev, order.id]));
+        console.log(`🏷️ Printed labels for order #${order.number} via Bluetooth`);
       }
-
-      // Print a label for each item (quantity times)
-      for (const item of order.line_items) {
-        for (let i = 0; i < item.quantity; i++) {
-          await labelPrinter.printKitchenLabel(order.number, item.name, 1);
-          // Small delay between labels
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-      }
-
-      // Mark order as printed
-      setLabelsPrinted(prev => new Set([...prev, order.id]));
-      console.log(`🏷️ Printed labels for order #${order.number}`);
     } catch (err: any) {
       console.error('Label printing failed:', err);
       alert(`Failed to print labels: ${err.message}`);
@@ -645,6 +645,25 @@ export default function KitchenDisplayPage() {
                               }`}>
                                 {item.name}
                               </p>
+
+                              {/* PWP add-ons */}
+                              {(() => {
+                                const raw = itemMeta.find((m: any) => m.key === '_bundle_components')?.value;
+                                if (!raw) return null;
+                                let comps: any[] = [];
+                                try { comps = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+                                const addons = comps.filter((c: any) => c.category === 'addon' || c.addonPrice != null);
+                                if (addons.length === 0) return null;
+                                return (
+                                  <div className="mt-1 space-y-0.5">
+                                    {addons.map((c: any, idx: number) => (
+                                      <p key={idx} className={`text-base font-semibold ${isInProgress ? 'text-blue-800' : 'text-teal-700'}`}>
+                                        + {c.productName}{c.quantity > 1 ? ` × ${c.quantity}` : ''}
+                                      </p>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
 
                               {/* Item SKU if available */}
                               {item.sku && (

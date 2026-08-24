@@ -58,6 +58,7 @@ export default function POSPage() {
   const [discountReason, setDiscountReason] = useState("");
   const [cogsData, setCogsData] = useState<Record<number, { totalCOGS: number; breakdown: any[] }>>({});
   const [staffPriceMap, setStaffPriceMap] = useState<Record<string, number>>({});
+  const [pwpPriceMap, setPwpPriceMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
     // Check admin authentication
@@ -72,10 +73,13 @@ export default function POSPage() {
   useEffect(() => {
     fetch('/api/products').then(r => r.json()).then((products: any[]) => {
       const map: Record<string, number> = {};
+      const pwp: Record<string, number> = {};
       for (const p of products) {
         if (p.staff_price != null) map[p.id] = p.staff_price;
+        if (p.pwp_price != null) pwp[p.id] = p.pwp_price;
       }
       setStaffPriceMap(map);
+      setPwpPriceMap(pwp);
     }).catch(() => {});
   }, []);
 
@@ -348,9 +352,11 @@ export default function POSPage() {
                             {expandedComponents.length > 0 && (
                               <div className="mt-2 ml-4 space-y-1">
                                 {expandedComponents.map((component: any, idx: number) => (
-                                  <div key={idx} className="text-sm text-gray-600 flex items-start">
-                                    <span className="mr-2">→</span>
-                                    <span>{component.productName} × {component.quantity}</span>
+                                  <div key={idx} className="text-sm text-gray-600 flex items-start justify-between">
+                                    <span><span className="mr-2">→</span>{component.productName}{component.quantity > 1 ? ` × ${component.quantity}` : ''}</span>
+                                    {component.addonPrice != null && component.addonPrice > 0 && (
+                                      <span className="text-teal-700 font-medium ml-2">+RM {(component.addonPrice * component.quantity).toFixed(2)}</span>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -491,6 +497,24 @@ export default function POSPage() {
                                 className="px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded-lg text-xs font-bold hover:bg-yellow-200 transition"
                               >
                                 Staff RM{sp.toFixed(2)}
+                              </button>
+                            ) : null;
+                          })()}
+                          {(() => {
+                            const pwp = pwpPriceMap[item.productId];
+                            const alreadyAddon = item.discountReason === 'Add-on';
+                            return pwp != null ? (
+                              <button
+                                onClick={() => alreadyAddon
+                                  ? removeDiscount(index)
+                                  : updateItemDiscount(index, { type: 'override', value: pwp, reason: 'Add-on' })}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                                  alreadyAddon
+                                    ? 'bg-teal-600 text-white hover:bg-teal-700'
+                                    : 'bg-teal-100 text-teal-800 hover:bg-teal-200'
+                                }`}
+                              >
+                                {alreadyAddon ? `✓ Add-on RM${pwp.toFixed(2)}` : `Add-on RM${pwp.toFixed(2)}`}
                               </button>
                             ) : null;
                           })()}

@@ -16,13 +16,14 @@ export async function GET(req: Request) {
     const startDateParam = searchParams.get('start');
     const endDateParam = searchParams.get('end');
     const hideStaffMeals = searchParams.get('hideStaffMeals') === 'true';
+    const hideShellStaff = searchParams.get('hideShellStaff') === 'true';
     const source = searchParams.get('source') || 'all';
 
     const { startDate, endDate } = buildDateFilter(range, startDateParam, endDateParam);
 
     // Fetch POS orders and online orders in parallel
     const posOrders = source !== 'online'
-      ? getSaleOrders({ branchId, range, startDate: startDateParam, endDate: endDateParam, hideStaffMeals })
+      ? getSaleOrders({ branchId, range, startDate: startDateParam, endDate: endDateParam, hideStaffMeals, hideShellStaff })
       : [];
 
     const onlineOrders = source !== 'pos'
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
     let totalCOGS = 0;
     let totalItemsSold = 0;
     let totalOrderCount = 0;
-    const revenueByDay: Record<string, { revenue: number; orders: number; discounts: number; voucherDiscount: number; passDiscount: number; cogs: number; profit: number }> = {};
+    const revenueByDay: Record<string, { revenue: number; orders: number; itemsSold: number; discounts: number; voucherDiscount: number; passDiscount: number; cogs: number; profit: number }> = {};
     const productStats: Record<string, { quantity: number; revenue: number; cogs: number; profit: number }> = {};
     const ordersByStatus: Record<string, number> = {};
 
@@ -70,9 +71,11 @@ export async function GET(req: Request) {
       totalCOGS += orderCOGS;
       totalOrderCount++;
 
-      const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
+      // Bucket by KL local calendar day (UTC+8), not UTC — a pre-8am KL sale
+      // must not fall onto the previous day's date.
+      const orderDate = new Date(new Date(order.createdAt).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
-        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
+        revenueByDay[orderDate] = { revenue: 0, orders: 0, itemsSold: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
       }
       revenueByDay[orderDate].revenue += finalTotal;
       revenueByDay[orderDate].orders += 1;
@@ -104,6 +107,7 @@ export async function GET(req: Request) {
         productStats[productName].profit += (itemRevenue - itemCOGS);
 
         totalItemsSold += item.quantity;
+        revenueByDay[orderDate].itemsSold += item.quantity;
       }
     }
 
@@ -118,16 +122,25 @@ export async function GET(req: Request) {
         orderCOGS = orderConsumptions.reduce((sum, c) => sum + c.totalCost, 0);
       } catch {}
 
+      const orderVoucherDiscount = order.voucherDiscount || 0;
+      const orderPassDiscount = order.passDiscount || 0;
+
       totalRevenue += finalTotal;
+      totalVoucherDiscount += orderVoucherDiscount;
+      totalPassDiscount += orderPassDiscount;
       totalCOGS += orderCOGS;
       totalOrderCount++;
 
-      const orderDate = new Date(order.createdAt).toISOString().split('T')[0];
+      // Bucket by KL local calendar day (UTC+8), not UTC — a pre-8am KL sale
+      // must not fall onto the previous day's date.
+      const orderDate = new Date(new Date(order.createdAt).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
       if (!revenueByDay[orderDate]) {
-        revenueByDay[orderDate] = { revenue: 0, orders: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
+        revenueByDay[orderDate] = { revenue: 0, orders: 0, itemsSold: 0, discounts: 0, voucherDiscount: 0, passDiscount: 0, cogs: 0, profit: 0 };
       }
       revenueByDay[orderDate].revenue += finalTotal;
       revenueByDay[orderDate].orders += 1;
+      revenueByDay[orderDate].voucherDiscount += orderVoucherDiscount;
+      revenueByDay[orderDate].passDiscount += orderPassDiscount;
       revenueByDay[orderDate].cogs += orderCOGS;
       revenueByDay[orderDate].profit += (finalTotal - orderCOGS);
 
@@ -150,6 +163,7 @@ export async function GET(req: Request) {
         productStats[productName].profit += (itemRevenue - itemCOGS);
 
         totalItemsSold += item.quantity;
+        revenueByDay[orderDate].itemsSold += item.quantity;
       }
     }
 
@@ -159,6 +173,7 @@ export async function GET(req: Request) {
         date,
         revenue: data.revenue,
         orders: data.orders,
+        itemsSold: data.itemsSold,
         discounts: data.discounts,
         voucherDiscount: data.voucherDiscount,
         passDiscount: data.passDiscount,

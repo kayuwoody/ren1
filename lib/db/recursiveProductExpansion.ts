@@ -27,6 +27,7 @@ export interface FlattenedOptionalItem {
   id: string;
   name: string;
   basePrice: number;          // Product's base/sales price
+  pwpPrice?: number | null;   // PWP/add-on price (charged instead of basePrice when added as an add-on)
   priceAdjustment: number;    // Extra charge on top of combo override
   isCoffee: boolean;          // Whether this item is a coffee (for milk/sugar options)
   parentProductId?: string;
@@ -150,6 +151,7 @@ export function flattenAllChoices(
         id: item.linkedProductId,
         name: item.linkedProductName || linkedProd?.name || 'Unknown',
         basePrice: linkedProd?.basePrice || 0,
+        pwpPrice: linkedProd?.pwpPrice ?? null,
         priceAdjustment: item.priceAdjustment || 0,
         isCoffee: linkedProd?.category === 'coffee',
         parentProductId: depth === 0 ? undefined : product.id,
@@ -262,22 +264,30 @@ export function calculatePriceWithSelections(
     if (item.itemType === 'product' && item.linkedProductId) {
       const linkedProduct = getProduct(item.linkedProductId);
       if (linkedProduct) {
-        // Add this product's base price
-        totalPrice += linkedProduct.basePrice * item.quantity * quantity;
+        // Optional items are PWP add-ons: charge the flat add-on price
+        // (pwpPrice, falling back to basePrice) and do NOT recurse into
+        // component pricing — an add-on is a fixed surcharge, not an expansion.
+        if (item.isOptional) {
+          const addonPrice = linkedProduct.pwpPrice ?? linkedProduct.basePrice;
+          totalPrice += addonPrice * item.quantity * quantity;
+        } else {
+          // Add this product's base price
+          totalPrice += linkedProduct.basePrice * item.quantity * quantity;
 
-        // Recurse to get nested component prices (if any)
-        const linkedRecipe = getProductRecipe(item.linkedProductId);
-        if (linkedRecipe.length > 0) {
-          const nestedPrice = calculatePriceWithSelections(
-            item.linkedProductId,
-            selections,
-            item.quantity * quantity,
-            depth + 1
-          );
+          // Recurse to get nested component prices (if any)
+          const linkedRecipe = getProductRecipe(item.linkedProductId);
+          if (linkedRecipe.length > 0) {
+            const nestedPrice = calculatePriceWithSelections(
+              item.linkedProductId,
+              selections,
+              item.quantity * quantity,
+              depth + 1
+            );
 
-          // Replace the base price with calculated nested price
-          totalPrice -= linkedProduct.basePrice * item.quantity * quantity;
-          totalPrice += nestedPrice;
+            // Replace the base price with calculated nested price
+            totalPrice -= linkedProduct.basePrice * item.quantity * quantity;
+            totalPrice += nestedPrice;
+          }
         }
       }
     }

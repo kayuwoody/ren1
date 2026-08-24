@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import QRCode from "react-qr-code";
 
 export default function CustomerDisplayPage() {
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -11,6 +10,23 @@ export default function CustomerDisplayPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+
+  // Overflow indicators for the item list (limited screen real estate)
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showMoreAbove, setShowMoreAbove] = useState(false);
+  const [showMoreBelow, setShowMoreBelow] = useState(false);
+
+  const updateOverflow = () => {
+    const el = scrollRef.current;
+    if (!el) {
+      setShowMoreAbove(false);
+      setShowMoreBelow(false);
+      return;
+    }
+    const canScroll = el.scrollHeight > el.clientHeight + 4;
+    setShowMoreAbove(canScroll && el.scrollTop > 4);
+    setShowMoreBelow(canScroll && el.scrollHeight - el.scrollTop - el.clientHeight > 4);
+  };
 
   // Fix hydration error - only show time after mount
   useEffect(() => {
@@ -24,6 +40,14 @@ export default function CustomerDisplayPage() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // When items change, reveal the most recently added one, then recompute
+  // the "more above / more below" affordances.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    updateOverflow();
+  }, [cartItems]);
 
   // Listen for cart updates via Server-Sent Events (push-based, no polling)
   useEffect(() => {
@@ -151,257 +175,236 @@ export default function CustomerDisplayPage() {
               />
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-base font-bold text-amber-900">www.coffee-oasis.com</p>
-              <p className="text-xs text-gray-500 mt-0.5">Order online &amp; earn rewards</p>
-              {mounted && (
-                <p className="text-xs font-mono text-gray-400 mt-1">
-                  {currentTime.toLocaleTimeString('en-MY', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                  })} • {currentTime.toLocaleDateString('en-MY', {
-                    weekday: 'short',
-                    day: 'numeric',
-                    month: 'short'
-                  })}
-                </p>
-              )}
-              <div className="flex items-center justify-end gap-1 mt-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${
-                  connectionStatus === 'connected' ? 'bg-green-500' :
-                  connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
-                  'bg-red-500'
-                }`} />
-                <span className="text-[10px] text-gray-400">
-                  {connectionStatus === 'connected' ? 'Live' :
-                   connectionStatus === 'connecting' ? 'Connecting...' :
-                   'Disconnected'}
-                </span>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-1.5 shadow-sm border border-gray-100">
-              <QRCode
-                value="https://www.coffee-oasis.com"
-                size={80}
-                level="M"
-                fgColor="#3A2414"
-                bgColor="#FFFFFF"
-              />
+          <div className="text-right">
+            <p className="text-base font-bold text-amber-900">www.coffee-oasis.com</p>
+            <p className="text-xs text-gray-500 mt-0.5">Order online &amp; earn rewards</p>
+            {mounted && (
+              <p className="text-xs font-mono text-gray-400 mt-1">
+                {currentTime.toLocaleTimeString('en-MY', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                })} • {currentTime.toLocaleDateString('en-MY', {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short'
+                })}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-1 mt-1">
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-green-500' :
+                connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                'bg-red-500'
+              }`} />
+              <span className="text-[10px] text-gray-400">
+                {connectionStatus === 'connected' ? 'Live' :
+                 connectionStatus === 'connecting' ? 'Connecting...' :
+                 'Disconnected'}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Your Order Text */}
-      <div className="mb-4 shrink-0">
+      <div className="mb-3 shrink-0">
         <p className="text-2xl font-semibold text-gray-800">Your Order</p>
       </div>
 
-      {/* Items List */}
-      <div className="flex-1 mb-4 overflow-y-auto min-h-0">
-        {cartItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full">
-            <div className="relative w-48 h-48 mb-4">
-              <Image
-                src="/circle mascot2.jfif"
-                alt="Coffee Oasis Mascot"
-                fill
-                className="object-contain mix-blend-multiply"
-                style={{ backgroundColor: 'transparent' }}
-                priority
-              />
-            </div>
-            <p className="text-2xl font-bold text-amber-900">Welcome to Coffee Oasis</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {cartItems.map((item, index) => {
-              const itemTotal = item.finalPrice * item.quantity;
-              const itemRetailTotal = item.retailPrice * item.quantity;
-              const itemDiscount = itemRetailTotal - itemTotal;
-              const hasItemDiscount = itemDiscount > 0;
-
-              // Get expanded components from cart item
-              const expandedComponents = item.components || [];
-
-              return (
-                <div
-                  key={index}
-                  className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Left: Quantity and Name */}
-                    <div className="flex-1">
-                      <div className="flex items-baseline gap-3 mb-2">
-                        <span className="text-2xl font-bold text-blue-600">
-                          {item.quantity}×
-                        </span>
-                        <h3 className="text-xl font-semibold text-gray-800">
-                          {item.name}
-                        </h3>
-                      </div>
-
-                      {/* Show expanded components (excluding hidden/private) */}
-                      {expandedComponents.length > 0 && (
-                        <div className="mt-2 ml-12 space-y-1">
-                          {expandedComponents
-                            .filter((component: any) =>
-                              component.category !== 'hidden' && component.category !== 'private'
-                            )
-                            .map((component: any, idx: number) => (
-                              <div key={idx} className="text-base text-gray-600 flex items-start">
-                                <span className="mr-2">→</span>
-                                <span>{component.productName} × {component.quantity}</span>
-                              </div>
-                            ))}
-                        </div>
-                      )}
-
-                      {/* Discount Reason */}
-                      {hasItemDiscount && item.discountReason && (
-                        <p className="text-sm text-green-600 flex items-center gap-2 ml-10 mt-2">
-                          <span>🎉</span>
-                          {item.discountReason}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Right: Price */}
-                    <div className="text-right">
-                      {hasItemDiscount ? (
-                        <>
-                          <p className="text-sm text-gray-400 line-through">
-                            RM {itemRetailTotal.toFixed(2)}
-                          </p>
-                          <p className="text-2xl font-bold text-green-600">
-                            RM {itemTotal.toFixed(2)}
-                          </p>
-                          <p className="text-xs text-green-600">
-                            Save RM {itemDiscount.toFixed(2)}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-2xl font-bold text-gray-800">
-                          RM {itemTotal.toFixed(2)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Total Section */}
-      {cartItems.length > 0 && (
-        <div className="shrink-0 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-md">
-          <div className="space-y-2">
-            {/* Item Count */}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">Items</span>
-              <span className="font-semibold text-gray-800">{totalItems}</span>
-            </div>
-
-            {/* Subtotal (if discount) */}
-            {hasDiscount && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Subtotal</span>
-                <span className="line-through text-gray-400">
-                  RM {retailTotal.toFixed(2)}
-                </span>
-              </div>
-            )}
-
-            {/* Item Discount */}
-            {totalItemDiscount > 0 && (
-              <div className="flex items-center justify-between text-sm text-green-600">
-                <span className="flex items-center gap-1">
-                  <span className="text-base">🎉</span>
-                  Discount
-                </span>
-                <span className="font-semibold">
-                  -RM {totalItemDiscount.toFixed(2)}
-                </span>
-              </div>
-            )}
-
-            {/* Voucher Discount */}
-            {voucherAmount > 0 && (
-              <div className="flex items-center justify-between text-sm text-purple-600">
-                <span className="flex items-center gap-1">
-                  <span className="text-base">🎫</span>
-                  Voucher ({voucher?.code})
-                </span>
-                <span className="font-semibold">
-                  -RM {voucherAmount.toFixed(2)}
-                </span>
-              </div>
-            )}
-
-            {/* Pass Discount */}
-            {passDiscount > 0 && (
-              <div className="flex items-center justify-between text-sm text-teal-600">
-                <span className="flex items-center gap-1">
-                  <span className="text-base">🎟️</span>
-                  Pass ({pass?.program_name})
-                </span>
-                <span className="font-semibold">
-                  -RM {passDiscount.toFixed(2)}
-                </span>
-              </div>
-            )}
-
-            {/* Divider */}
-            <div className="border-t border-blue-200 my-2"></div>
-
-            {/* Total */}
-            <div className="flex items-center justify-between">
-              <span className="text-xl font-bold text-gray-800">TOTAL</span>
-              <span className="text-3xl font-bold text-blue-600">
-                RM {finalTotal.toFixed(2)}
-              </span>
-            </div>
-
-            {/* Savings Summary */}
-            {hasDiscount && (
-              <div className="text-center pt-2">
-                <p className="text-sm text-green-600 font-semibold">
-                  🎊 You saved RM {totalDiscount.toFixed(2)}!
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* DuitNow QR Payment */}
-      {cartItems.length > 0 && finalTotal > 0 && (
-        <div className="mt-4 shrink-0 flex items-center justify-center gap-6">
-          <div className="rounded-xl overflow-hidden shadow-md" style={{ width: 200 }}>
+      {cartItems.length === 0 ? (
+        /* Empty state — welcome */
+        <div className="flex-1 mb-4 flex flex-col items-center justify-center min-h-0">
+          <div className="relative w-48 h-48 mb-4">
             <Image
-              src="/duitnow-qr.png"
-              alt="DuitNow QR - Scan to Pay"
-              width={400}
-              height={400}
-              className="w-full h-auto"
+              src="/circle mascot2.jfif"
+              alt="Coffee Oasis Mascot"
+              fill
+              className="object-contain mix-blend-multiply"
+              style={{ backgroundColor: 'transparent' }}
+              priority
             />
           </div>
-          <div className="text-center">
-            <p className="text-sm text-gray-500 mb-1">Amount to pay</p>
-            <p className="text-4xl font-bold text-rose-600">
-              RM {finalTotal.toFixed(2)}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Scan with any bank or e-wallet</p>
-          </div>
+          <p className="text-2xl font-bold text-amber-900">Welcome to Coffee Oasis</p>
         </div>
+      ) : (
+        <>
+          {/* Items — scrollable, full remaining height */}
+          <div className="relative flex-1 mb-3 min-h-0">
+            <div
+              ref={scrollRef}
+              onScroll={updateOverflow}
+              className="h-full overflow-y-auto space-y-2 pr-1"
+            >
+              {cartItems.map((item, index) => {
+                const itemTotal = item.finalPrice * item.quantity;
+                const itemRetailTotal = item.retailPrice * item.quantity;
+                const itemDiscount = itemRetailTotal - itemTotal;
+                const hasItemDiscount = itemDiscount > 0;
+
+                // Get expanded components from cart item
+                const expandedComponents = item.components || [];
+
+                return (
+                  <div
+                    key={index}
+                    className="bg-gray-50 rounded-lg p-3 border border-gray-200"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      {/* Left: Quantity and Name */}
+                      <div className="flex-1">
+                        <div className="flex items-baseline gap-3">
+                          <span className="text-2xl font-bold text-blue-600">
+                            {item.quantity}×
+                          </span>
+                          <h3 className="text-xl font-semibold text-gray-800">
+                            {item.name}
+                          </h3>
+                        </div>
+
+                        {/* Show expanded components (excluding hidden/private) */}
+                        {expandedComponents.length > 0 && (
+                          <div className="mt-1 ml-12 space-y-0.5">
+                            {expandedComponents
+                              .filter((component: any) =>
+                                component.category !== 'hidden' && component.category !== 'private'
+                              )
+                              .map((component: any, idx: number) => (
+                                <div key={idx} className="text-base text-gray-600 flex items-start justify-between">
+                                  <span><span className="mr-2">→</span>{component.productName}{component.quantity > 1 ? ` × ${component.quantity}` : ''}</span>
+                                  {component.addonPrice != null && component.addonPrice > 0 && (
+                                    <span className="text-teal-700 font-medium ml-2">+RM {(component.addonPrice * component.quantity).toFixed(2)}</span>
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                        )}
+
+                        {/* Discount Reason */}
+                        {hasItemDiscount && item.discountReason && (
+                          <p className="text-sm text-green-600 flex items-center gap-2 ml-10 mt-1">
+                            <span>🎉</span>
+                            {item.discountReason}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Right: Price */}
+                      <div className="text-right">
+                        {hasItemDiscount ? (
+                          <>
+                            <p className="text-sm text-gray-400 line-through">
+                              RM {itemRetailTotal.toFixed(2)}
+                            </p>
+                            <p className="text-2xl font-bold text-green-600">
+                              RM {itemTotal.toFixed(2)}
+                            </p>
+                            <p className="text-xs text-green-600">
+                              Save RM {itemDiscount.toFixed(2)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-2xl font-bold text-gray-800">
+                            RM {itemTotal.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* "More above" hint */}
+            {showMoreAbove && (
+              <div className="pointer-events-none absolute top-0 left-0 right-0 h-9 bg-gradient-to-b from-white via-white/80 to-transparent flex items-start justify-center">
+                <span className="text-xs font-semibold text-blue-600">▲ more items above</span>
+              </div>
+            )}
+
+            {/* "More below" bouncing arrow */}
+            {showMoreBelow && (
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-t from-white via-white/90 to-transparent flex items-end justify-center pb-1">
+                <div className="flex flex-col items-center text-blue-600 animate-bounce">
+                  <span className="text-xs font-semibold">more items</span>
+                  <span className="text-2xl leading-none -mt-0.5">▼</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Consolidated payment + total bar: QR · breakdown · amount */}
+          <div className="shrink-0 flex items-center gap-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-md">
+            {/* DuitNow QR (left) */}
+            {finalTotal > 0 && (
+              <div className="shrink-0 flex flex-col items-center">
+                <div className="rounded-lg overflow-hidden bg-white p-1 shadow-sm" style={{ width: 160 }}>
+                  <Image
+                    src="/duitnow-qr.png"
+                    alt="DuitNow QR - Scan to Pay"
+                    width={400}
+                    height={400}
+                    className="w-full h-auto"
+                  />
+                </div>
+                <p className="text-xs font-semibold text-gray-600 mt-1">Scan to pay</p>
+              </div>
+            )}
+
+            {/* Breakdown + amount (fills the space beside the QR) */}
+            <div className="flex-1 flex items-center justify-between gap-6 min-w-0">
+              {/* Breakdown */}
+              <div className="space-y-1 text-sm min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-600">Items</span>
+                  <span className="font-semibold text-gray-800">{totalItems}</span>
+                </div>
+
+                {hasDiscount && (
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <span>Subtotal</span>
+                    <span className="line-through">RM {retailTotal.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {voucherAmount > 0 && (
+                  <div className="flex items-center gap-2 text-purple-600">
+                    <span>Voucher</span>
+                    <span className="font-semibold">-RM {voucherAmount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {passDiscount > 0 && (
+                  <div className="flex items-center gap-2 text-teal-600">
+                    <span>Pass ({pass?.program_name})</span>
+                    <span className="font-semibold">-RM {passDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {hasDiscount && (
+                  <p className="text-sm text-green-600 font-semibold pt-0.5">
+                    You saved RM {totalDiscount.toFixed(2)}
+                  </p>
+                )}
+              </div>
+
+              {/* Amount to pay (single, prominent total) */}
+              <div className="text-right shrink-0">
+                <p className="text-sm text-gray-500">Amount to pay</p>
+                <p className="text-5xl font-bold text-blue-600 leading-none">
+                  RM {finalTotal.toFixed(2)}
+                </p>
+                {finalTotal > 0 && (
+                  <p className="text-[11px] text-gray-400 mt-1">Any bank or e-wallet</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Footer */}
-      <div className="mt-4 text-center shrink-0">
+      <div className="text-center shrink-0">
         <p className="text-xs text-gray-600">
           Thank you for choosing Coffee Oasis! ☕
         </p>
@@ -409,4 +412,3 @@ export default function CustomerDisplayPage() {
     </div>
   );
 }
-

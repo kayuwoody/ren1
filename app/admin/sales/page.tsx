@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, DollarSign, TrendingUp, ShoppingCart, Calendar, Download, Percent } from 'lucide-react';
 import { useBranch } from '@/context/branchContext';
+import SalesTrendChart from '@/components/SalesTrendChart';
 
 interface SalesReport {
   totalRevenue: number;
@@ -16,7 +17,7 @@ interface SalesReport {
   totalItemsSold: number;
   averageItemPrice: number;
   averageProfitPerItem: number;
-  revenueByDay: { date: string; revenue: number; orders: number; discounts: number; cogs: number; profit: number; margin: number }[];
+  revenueByDay: { date: string; revenue: number; orders: number; itemsSold: number; discounts: number; cogs: number; profit: number; margin: number }[];
   topProducts: { name: string; quantity: number; revenue: number; cogs: number; profit: number; margin: number }[];
   ordersByStatus: { status: string; count: number }[];
 }
@@ -30,18 +31,21 @@ export default function SalesReportPage() {
   const [endDate, setEndDate] = useState('');
   const [month, setMonth] = useState(''); // YYYY-MM for the "Specific Month" filter
   const [hideStaffMeals, setHideStaffMeals] = useState(true);
+  const [hideShellStaff, setHideShellStaff] = useState(false);
   const [source, setSource] = useState<'all' | 'pos' | 'online'>('all');
+  const [chartMetric, setChartMetric] = useState<'revenue' | 'profit' | 'orders' | 'items'>('revenue');
+  const [chartGranularity, setChartGranularity] = useState<'daily' | 'weekly'>('daily');
 
   useEffect(() => {
     fetchSalesReport();
-  }, [dateRange, startDate, endDate, hideStaffMeals, source]);
+  }, [dateRange, startDate, endDate, hideStaffMeals, hideShellStaff, source]);
 
   const fetchSalesReport = async () => {
     setLoading(true);
     try {
-      let url = `/api/admin/sales?range=${dateRange}&hideStaffMeals=${hideStaffMeals}&source=${source}`;
+      let url = `/api/admin/sales?range=${dateRange}&hideStaffMeals=${hideStaffMeals}&hideShellStaff=${hideShellStaff}&source=${source}`;
       if (startDate && endDate) {
-        url = `/api/admin/sales?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}&source=${source}`;
+        url = `/api/admin/sales?start=${startDate}&end=${endDate}&hideStaffMeals=${hideStaffMeals}&hideShellStaff=${hideShellStaff}&source=${source}`;
       }
 
       const res = await branchFetch(url);
@@ -71,6 +75,19 @@ export default function SalesReportPage() {
     setEndDate(`${ym}-${String(lastDay).padStart(2, '0')}`);
   };
 
+  // ISO-8601 week number (1–53) for a YYYY-MM-DD date
+  const isoWeek = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00Z');
+    const dayNum = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+    d.setUTCDate(d.getUTCDate() - dayNum + 3); // Thursday of this week
+    const firstThursday = d.getTime();
+    d.setUTCMonth(0, 1);
+    if (d.getUTCDay() !== 4) {
+      d.setUTCMonth(0, 1 + ((4 - d.getUTCDay()) + 7) % 7);
+    }
+    return 1 + Math.ceil((firstThursday - d.getTime()) / (7 * 24 * 3600 * 1000));
+  };
+
   const exportToCSV = () => {
     if (!report) return;
 
@@ -81,15 +98,18 @@ export default function SalesReportPage() {
       ['Summary'],
       ['Total Revenue', `RM ${report.totalRevenue.toFixed(2)}`],
       ['Total Orders', report.totalOrders],
+      ['Total Items Sold', report.totalItemsSold],
       ['Average Order Value', `RM ${report.averageOrderValue.toFixed(2)}`],
       ['Total Discounts', `RM ${report.totalDiscounts.toFixed(2)}`],
       [''],
       ['Daily Revenue'],
-      ['Date', 'Revenue', 'Orders', 'Discounts'],
+      ['Date', 'Week', 'Revenue', 'Orders', 'Items Sold', 'Discounts'],
       ...report.revenueByDay.map(day => [
         day.date,
+        isoWeek(day.date),
         day.revenue.toFixed(2),
         day.orders,
+        day.itemsSold,
         day.discounts.toFixed(2)
       ]),
       [''],
@@ -134,6 +154,10 @@ export default function SalesReportPage() {
   const discountRate = report.totalRevenue > 0
     ? (report.totalDiscounts / (report.totalRevenue + report.totalDiscounts) * 100)
     : 0;
+
+  // Per-day averages use days with activity (trading days), so closed days don't dilute
+  const activeDays = report.revenueByDay.length || 1;
+  const perDay = (total: number) => total / activeDays;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -240,6 +264,18 @@ export default function SalesReportPage() {
               {hideStaffMeals ? '✓ Staff Meals Hidden' : 'Show Staff Meals'}
             </button>
 
+            <button
+              onClick={() => setHideShellStaff(!hideShellStaff)}
+              title="Orders where every item was rung up at staff price (Shell petrol-station staff)"
+              className={`px-4 py-2 rounded-lg transition ${
+                hideShellStaff
+                  ? 'bg-orange-600 text-white hover:bg-orange-700'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {hideShellStaff ? '✓ Shell Staff Hidden' : 'Show Shell Staff'}
+            </button>
+
             <div className="flex rounded-lg overflow-hidden border border-gray-300">
               {(['all', 'pos', 'online'] as const).map(s => (
                 <button
@@ -294,6 +330,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-green-600">
                   RM {report.totalRevenue.toFixed(2)}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg RM {perDay(report.totalRevenue).toFixed(2)}/day</p>
               </div>
             </div>
           </div>
@@ -308,6 +345,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-red-600">
                   RM {report.totalCOGS.toFixed(2)}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg RM {perDay(report.totalCOGS).toFixed(2)}/day</p>
               </div>
             </div>
           </div>
@@ -322,6 +360,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-emerald-600">
                   RM {report.totalProfit.toFixed(2)}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg RM {perDay(report.totalProfit).toFixed(2)}/day</p>
               </div>
             </div>
           </div>
@@ -356,6 +395,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-purple-600">
                   {report.totalOrders}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg {perDay(report.totalOrders).toFixed(1)}/day</p>
               </div>
             </div>
           </div>
@@ -404,6 +444,7 @@ export default function SalesReportPage() {
                 <p className="text-2xl font-bold text-cyan-600">
                   {report.totalItemsSold}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">avg {perDay(report.totalItemsSold).toFixed(1)}/day</p>
               </div>
             </div>
           </div>
@@ -436,6 +477,78 @@ export default function SalesReportPage() {
             </div>
           </div>
         </div>
+
+        {/* Trend chart with measure filters */}
+        {(() => {
+          const metrics = {
+            revenue: { label: 'Revenue', color: '#059669', get: (d: any) => d.revenue, fmt: (v: number) => `RM ${v.toFixed(v >= 100 ? 0 : 2)}` },
+            profit: { label: 'Profit', color: '#0d9488', get: (d: any) => d.profit, fmt: (v: number) => `RM ${v.toFixed(v >= 100 ? 0 : 2)}` },
+            orders: { label: 'Orders', color: '#7c3aed', get: (d: any) => d.orders, fmt: (v: number) => `${Math.round(v)}` },
+            items: { label: 'Items Sold', color: '#2563eb', get: (d: any) => d.itemsSold, fmt: (v: number) => `${Math.round(v)}` },
+          } as const;
+          const active = metrics[chartMetric];
+
+          // Monday-start ISO week bucket for a KL calendar date (YYYY-MM-DD).
+          const toWeekStart = (dateStr: string) => {
+            const d = new Date(dateStr + 'T00:00:00Z');
+            const daysSinceMonday = (d.getUTCDay() + 6) % 7;
+            d.setUTCDate(d.getUTCDate() - daysSinceMonday);
+            return d.toISOString().split('T')[0];
+          };
+
+          // Weekly = sum of each week's daily totals (not an average).
+          const chartSource = chartGranularity === 'weekly'
+            ? Object.values(
+                report.revenueByDay.reduce((acc, day) => {
+                  const wk = toWeekStart(day.date);
+                  if (!acc[wk]) acc[wk] = { date: wk, revenue: 0, profit: 0, orders: 0, itemsSold: 0 };
+                  acc[wk].revenue += day.revenue;
+                  acc[wk].profit += day.profit;
+                  acc[wk].orders += day.orders;
+                  acc[wk].itemsSold += day.itemsSold;
+                  return acc;
+                }, {} as Record<string, { date: string; revenue: number; profit: number; orders: number; itemsSold: number }>)
+              ).sort((a, b) => a.date.localeCompare(b.date))
+            : report.revenueByDay;
+
+          return (
+            <div className="bg-white rounded-lg shadow p-6 space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {(Object.keys(metrics) as Array<keyof typeof metrics>).map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => setChartMetric(key)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      chartMetric === key ? 'text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    style={chartMetric === key ? { backgroundColor: metrics[key].color } : undefined}
+                  >
+                    {metrics[key].label}
+                  </button>
+                ))}
+                <div className="ml-auto flex items-center gap-1 rounded-lg bg-gray-100 p-0.5">
+                  {(['daily', 'weekly'] as const).map((g) => (
+                    <button
+                      key={g}
+                      onClick={() => setChartGranularity(g)}
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition ${
+                        chartGranularity === g ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {g === 'daily' ? 'Daily' : 'Weekly'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <SalesTrendChart
+                title={`${active.label} ${chartGranularity === 'weekly' ? 'per week' : 'over time'}`}
+                color={active.color}
+                data={chartSource.map(d => ({ date: d.date, value: active.get(d) }))}
+                format={active.fmt}
+              />
+            </div>
+          );
+        })()}
 
         {/* Revenue by Day */}
         <div className="bg-white rounded-lg shadow">

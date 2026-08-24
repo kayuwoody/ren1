@@ -14,7 +14,7 @@ interface Customer {
 }
 
 interface Order {
-  id: number;
+  id: number | string;
   number?: string;
   status: string;
   total: string;
@@ -23,6 +23,7 @@ interface Order {
   line_items: any[];
   meta_data?: any[];
   customer_id: number;
+  source?: 'pos' | 'online';
   billing?: {
     first_name: string;
     last_name: string;
@@ -30,6 +31,9 @@ interface Order {
     phone: string;
   };
 }
+
+// Which statuses count as "done" (no elapsed timer, counted as completed)
+const DONE_STATUSES = ['completed', 'collected', 'rejected', 'cancelled'];
 
 export default function AdminOrdersPage() {
   const { branchFetch } = useBranch();
@@ -39,6 +43,7 @@ export default function AdminOrdersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'pos' | 'online'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [completionFilter, setCompletionFilter] = useState('all'); // all, manual, auto, webhook
@@ -50,7 +55,7 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     filterOrders();
-  }, [orders, statusFilter, searchTerm, completionFilter, selectedCustomer]);
+  }, [orders, statusFilter, sourceFilter, searchTerm, completionFilter, selectedCustomer]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -82,6 +87,11 @@ export default function AdminOrdersPage() {
 
   const filterOrders = () => {
     let filtered = [...orders];
+
+    // Source filter (all / pos / online)
+    if (sourceFilter !== 'all') {
+      filtered = filtered.filter(order => (order.source || 'pos') === sourceFilter);
+    }
 
     // Customer filter
     if (selectedCustomer) {
@@ -119,10 +129,17 @@ export default function AdminOrdersPage() {
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { icon: string; color: string; bg: string }> = {
+      // POS statuses
       'pending': { icon: '🟡', color: 'text-yellow-800', bg: 'bg-yellow-100' },
       'processing': { icon: '🔵', color: 'text-blue-800', bg: 'bg-blue-100' },
       'ready-for-pickup': { icon: '🟢', color: 'text-green-800', bg: 'bg-green-100' },
       'completed': { icon: '⚪', color: 'text-gray-600', bg: 'bg-gray-100' },
+      // Online statuses
+      'accepted': { icon: '🔵', color: 'text-blue-800', bg: 'bg-blue-100' },
+      'ready': { icon: '🟢', color: 'text-green-800', bg: 'bg-green-100' },
+      'collected': { icon: '⚪', color: 'text-gray-600', bg: 'bg-gray-100' },
+      'rejected': { icon: '🔴', color: 'text-red-800', bg: 'bg-red-100' },
+      'cancelled': { icon: '🔴', color: 'text-red-800', bg: 'bg-red-100' },
     };
 
     const badge = badges[status] || { icon: '⚫', color: 'text-gray-800', bg: 'bg-gray-100' };
@@ -136,7 +153,7 @@ export default function AdminOrdersPage() {
   };
 
   const getElapsedTime = (order: Order) => {
-    if (order.status === 'completed') return null;
+    if (DONE_STATUSES.includes(order.status)) return null;
 
     const createdTime = new Date(order.date_created).getTime();
     const now = Date.now();
@@ -153,7 +170,7 @@ export default function AdminOrdersPage() {
   };
 
   const getCompletionMethod = (order: Order) => {
-    if (order.status !== 'completed') return null;
+    if (order.source === 'online' || order.status !== 'completed') return null;
 
     const autoCompleted = order.meta_data?.find(m => m.key === '_auto_completed')?.value;
     const pickupLocker = order.meta_data?.find(m => m.key === '_pickup_locker')?.value;
@@ -169,10 +186,10 @@ export default function AdminOrdersPage() {
 
   const statsData = {
     total: orders.length,
-    pending: orders.filter(o => o.status === 'pending').length,
-    processing: orders.filter(o => o.status === 'processing').length,
-    ready: orders.filter(o => o.status === 'ready-for-pickup').length,
-    completed: orders.filter(o => o.status === 'completed').length,
+    pos: orders.filter(o => (o.source || 'pos') === 'pos').length,
+    online: orders.filter(o => o.source === 'online').length,
+    active: orders.filter(o => !DONE_STATUSES.includes(o.status)).length,
+    done: orders.filter(o => DONE_STATUSES.includes(o.status)).length,
   };
 
   const filteredCustomers = customers.filter(c =>
@@ -292,21 +309,21 @@ export default function AdminOrdersPage() {
             <p className="text-sm text-gray-500">Total Orders</p>
             <p className="text-2xl font-bold">{statsData.total}</p>
           </div>
-          <div className="bg-yellow-50 rounded-lg shadow p-4">
-            <p className="text-sm text-yellow-700">Pending</p>
-            <p className="text-2xl font-bold text-yellow-800">{statsData.pending}</p>
+          <div className="bg-slate-50 rounded-lg shadow p-4">
+            <p className="text-sm text-slate-700">POS</p>
+            <p className="text-2xl font-bold text-slate-800">{statsData.pos}</p>
+          </div>
+          <div className="bg-orange-50 rounded-lg shadow p-4">
+            <p className="text-sm text-orange-700">Online</p>
+            <p className="text-2xl font-bold text-orange-800">{statsData.online}</p>
           </div>
           <div className="bg-blue-50 rounded-lg shadow p-4">
-            <p className="text-sm text-blue-700">Processing</p>
-            <p className="text-2xl font-bold text-blue-800">{statsData.processing}</p>
-          </div>
-          <div className="bg-green-50 rounded-lg shadow p-4">
-            <p className="text-sm text-green-700">Ready</p>
-            <p className="text-2xl font-bold text-green-800">{statsData.ready}</p>
+            <p className="text-sm text-blue-700">Active</p>
+            <p className="text-2xl font-bold text-blue-800">{statsData.active}</p>
           </div>
           <div className="bg-gray-50 rounded-lg shadow p-4">
-            <p className="text-sm text-gray-700">Completed</p>
-            <p className="text-2xl font-bold text-gray-800">{statsData.completed}</p>
+            <p className="text-sm text-gray-700">Done</p>
+            <p className="text-2xl font-bold text-gray-800">{statsData.done}</p>
           </div>
         </div>
 
@@ -325,7 +342,22 @@ export default function AdminOrdersPage() {
               />
             </div>
 
-            {/* Status Filter */}
+            {/* Source Filter (all / pos / online) */}
+            <div className="flex rounded-lg overflow-hidden border border-gray-300">
+              {(['all', 'pos', 'online'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => { setSourceFilter(s); setStatusFilter('all'); }}
+                  className={`px-3 py-2 text-sm font-medium transition ${
+                    sourceFilter === s ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {s === 'all' ? 'All' : s === 'pos' ? 'POS' : 'Online'}
+                </button>
+              ))}
+            </div>
+
+            {/* Status Filter (adapts to the selected source) */}
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -333,9 +365,21 @@ export default function AdminOrdersPage() {
             >
               <option value="all">All Statuses</option>
               <option value="pending">Pending</option>
-              <option value="processing">Processing</option>
-              <option value="ready-for-pickup">Ready for Pickup</option>
-              <option value="completed">Completed</option>
+              {sourceFilter !== 'online' && (
+                <>
+                  <option value="processing">Processing</option>
+                  <option value="ready-for-pickup">Ready for Pickup</option>
+                  <option value="completed">Completed</option>
+                </>
+              )}
+              {sourceFilter !== 'pos' && (
+                <>
+                  <option value="accepted">Accepted</option>
+                  <option value="ready">Ready</option>
+                  <option value="collected">Collected</option>
+                  <option value="rejected">Rejected</option>
+                </>
+              )}
             </select>
 
             {/* Completion Method Filter (only for completed orders) */}
@@ -361,6 +405,7 @@ export default function AdminOrdersPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
@@ -373,13 +418,13 @@ export default function AdminOrdersPage() {
               <tbody className="divide-y">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                       Loading orders...
                     </td>
                   </tr>
                 ) : filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                       No orders found
                     </td>
                   </tr>
@@ -388,6 +433,13 @@ export default function AdminOrdersPage() {
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <span className="font-mono font-semibold">#{order.number || order.id}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {order.source === 'online' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold text-orange-800 bg-orange-100">🌐 Online</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold text-slate-700 bg-slate-100">🏪 POS</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {new Date(order.date_created).toLocaleDateString()}
@@ -430,12 +482,22 @@ export default function AdminOrdersPage() {
                         {getCompletionMethod(order)}
                       </td>
                       <td className="px-6 py-4">
-                        <Link
-                          href={`/orders/${order.id}`}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                        >
-                          View →
-                        </Link>
+                        <div className="flex items-center gap-3">
+                          <Link
+                            href={order.source === 'online' ? '/admin/online-orders' : `/orders/${order.id}`}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          >
+                            View →
+                          </Link>
+                          <a
+                            href={order.source === 'online' ? `/receipts/online/${order.id}` : `/receipts/${order.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-500 hover:text-gray-700 text-sm font-medium"
+                          >
+                            Receipt
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   ))

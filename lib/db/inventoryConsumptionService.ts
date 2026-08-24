@@ -164,7 +164,11 @@ async function _recordProductSaleInternal(
 
   // Process each recipe item
   for (const recipeItem of recipe) {
-    if (recipeItem.isOptional) continue;
+    // Optional items are PWP add-ons: consume them only when they were selected
+    // (so their materials/recipe are deducted and their COGS is recorded).
+    if (recipeItem.isOptional && !bundleSelection?.selectedOptional?.includes(recipeItem.linkedProductId || '')) {
+      continue;
+    }
 
     // Handle bundle selection filtering
     if (bundleSelection && recipeItem.selectionGroup) {
@@ -479,7 +483,8 @@ export function calculateProductCOGS(
   }
 
   recipe
-    .filter(item => !item.isOptional)
+    // Include mandatory items and any selected PWP add-ons
+    .filter(item => !item.isOptional || bundleSelection?.selectedOptional?.includes(item.linkedProductId || ''))
     .forEach(item => {
       if (bundleSelection && item.selectionGroup) {
         const uniqueKey = depth === 0 ? `root:${item.selectionGroup}` : `${product.id}:${item.selectionGroup}`;

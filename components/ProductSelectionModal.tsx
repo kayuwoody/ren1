@@ -29,7 +29,9 @@ interface RecipeConfig {
     id: string;
     name: string;
     basePrice: number;      // Product's base/sales price
+    pwpPrice?: number | null; // PWP/add-on price (charged instead of basePrice as an add-on)
     priceAdjustment?: number; // Extra charge on top of combo override
+    parentProductId?: string; // For combos: the drink option this add-on belongs to
   }>;
 }
 
@@ -49,6 +51,7 @@ interface ProductSelectionModalProps {
   product: Product;
   recipe: RecipeConfig;
   isCombo: boolean; // Whether this is a combo product (has 'combo' category)
+  isCoffee?: boolean; // Whether this is a coffee (shows the sugar-level selector)
   onAddToCart: (bundle: {
     displayName: string;
     baseProduct: Product;
@@ -56,8 +59,17 @@ interface ProductSelectionModalProps {
     selectedOptional: string[]; // array of item IDs
     totalPrice: number;
     isCombo: boolean; // Pass isCombo flag to handler
+    sugarLevel?: string; // 'zero' | 'less' | 'medium' | 'sweet' (coffee only)
   }) => void;
 }
+
+// Sugar levels: zero is the default (no note); others show on all displays.
+const SUGAR_LEVELS: { value: string; label: string; short: string }[] = [
+  { value: 'zero', label: 'No Sugar', short: '' },
+  { value: 'less', label: 'Less', short: 'Less Sugar' },
+  { value: 'medium', label: 'Medium', short: 'Medium Sugar' },
+  { value: 'sweet', label: 'Sweet', short: 'Sweet' },
+];
 
 export default function ProductSelectionModal({
   isOpen,
@@ -65,11 +77,13 @@ export default function ProductSelectionModal({
   product,
   recipe,
   isCombo,
+  isCoffee,
   onAddToCart,
 }: ProductSelectionModalProps) {
   // State for selections
   const [mandatorySelections, setMandatorySelections] = useState<Record<string, string>>({});
   const [optionalSelections, setOptionalSelections] = useState<Set<string>>(new Set());
+  const [sugarLevel, setSugarLevel] = useState<string>('zero');
   const [error, setError] = useState<string>("");
 
   // Initialize mandatory selections with first item of each group
@@ -84,6 +98,7 @@ export default function ProductSelectionModal({
       });
       setMandatorySelections(initialSelections);
       setOptionalSelections(new Set());
+      setSugarLevel('zero');
       setError("");
     }
   }, [isOpen, recipe]);
@@ -97,14 +112,14 @@ export default function ProductSelectionModal({
     if (hasComboOverride) {
       // Combo override: fixed base + sum of selected items' priceAdjustment
       let adjustments = 0;
-      recipe.mandatoryGroups.forEach((group) => {
+      recipe.mandatoryGroups.filter(isGroupActive).forEach((group) => {
         const selectedId = mandatorySelections[group.uniqueKey];
         const selectedItem = group.items.find((item) => item.id === selectedId);
         if (selectedItem) {
           adjustments += selectedItem.priceAdjustment || 0;
         }
       });
-      recipe.optional.forEach((item) => {
+      activeOptionals.forEach((item) => {
         if (optionalSelections.has(item.id)) {
           adjustments += item.priceAdjustment || 0;
         }
@@ -116,7 +131,7 @@ export default function ProductSelectionModal({
     // For combos without override, sum component prices
     let total = isCombo ? 0 : product.basePrice;
 
-    recipe.mandatoryGroups.forEach((group) => {
+    recipe.mandatoryGroups.filter(isGroupActive).forEach((group) => {
       const selectedId = mandatorySelections[group.uniqueKey];
       const selectedItem = group.items.find((item) => item.id === selectedId);
       if (selectedItem) {
@@ -124,9 +139,10 @@ export default function ProductSelectionModal({
       }
     });
 
-    recipe.optional.forEach((item) => {
+    activeOptionals.forEach((item) => {
       if (optionalSelections.has(item.id)) {
-        total += item.basePrice;
+        // Add-ons charge the PWP price when set, else the base price
+        total += item.pwpPrice ?? item.basePrice;
       }
     });
 
@@ -154,12 +170,13 @@ export default function ProductSelectionModal({
       parts.push(product.name);
     }
 
-    // Add selected optional items (if any)
-    recipe.optional.forEach((item) => {
-      if (optionalSelections.has(item.id)) {
-        parts.push(`+ ${item.name}`);
-      }
-    });
+    // Selected add-ons are shown as structured sub-lines (not in the name).
+
+    // Add sugar level note (only when not the default 'zero')
+    const sugar = SUGAR_LEVELS.find(s => s.value === sugarLevel);
+    if (sugar && sugar.short) {
+      parts.push(`(${sugar.short})`);
+    }
 
     return parts.join(" ");
   };
@@ -173,13 +190,16 @@ export default function ProductSelectionModal({
       }
     }
 
+    // Only pass add-ons from the active (selected) branch
+    const activeOptionalIds = new Set(activeOptionals.map((o) => o.id));
     onAddToCart({
       displayName: buildDisplayName(),
       baseProduct: product,
       selectedMandatory: mandatorySelections,
-      selectedOptional: Array.from(optionalSelections),
+      selectedOptional: Array.from(optionalSelections).filter((id) => activeOptionalIds.has(id)),
       totalPrice: calculateTotal(),
       isCombo, // Include isCombo flag
+      sugarLevel: isCoffee ? sugarLevel : undefined,
     });
 
     onClose();
@@ -214,6 +234,38 @@ export default function ProductSelectionModal({
   const getNestedGroupsForItem = (itemId: string) => {
     return nestedGroups.filter(g => g.uniqueKey.startsWith(`${itemId}:`));
   };
+
+  // Products belonging to an XOR branch that is NOT currently selected. Their
+  // nested groups and add-ons must not show or count — e.g. in a combo with 4
+  // drink options, only the chosen drink's "extra shot" / milk should apply.
+  // Propagates down so a nested choice under an unselected drink is inactive too.
+  const inactiveParents = new Set<string>();
+  recipe.mandatoryGroups.forEach((group) => {
+    const selectedId = mandatorySelections[group.uniqueKey];
+    group.items.forEach((item) => {
+      if (item.id !== selectedId) inactiveParents.add(item.id);
+    });
+  });
+  let changed = true;
+  while (changed) {
+    changed = false;
+    nestedGroups.forEach((group) => {
+      const parentId = group.uniqueKey.split(':')[0];
+      if (inactiveParents.has(parentId)) {
+        group.items.forEach((item) => {
+          if (!inactiveParents.has(item.id)) { inactiveParents.add(item.id); changed = true; }
+        });
+      }
+    });
+  }
+  const isGroupActive = (group: { uniqueKey: string }) => {
+    const parentId = group.uniqueKey.split(':')[0];
+    return parentId === 'root' || !inactiveParents.has(parentId);
+  };
+  const isOptionalActive = (opt: { parentProductId?: string }) =>
+    !opt.parentProductId || !inactiveParents.has(opt.parentProductId);
+
+  const activeOptionals = recipe.optional.filter(isOptionalActive);
 
   if (!isOpen) return null;
 
@@ -359,13 +411,13 @@ export default function ProductSelectionModal({
           ))}
 
           {/* Optional Add-ons */}
-          {recipe.optional.length > 0 && (
+          {activeOptionals.length > 0 && (
             <div className="space-y-2">
               <label className="block font-semibold text-gray-700">
                 Optional Add-ons:
               </label>
               <div className="space-y-2">
-                {recipe.optional.map((item) => (
+                {activeOptionals.map((item) => (
                   <label
                     key={item.id}
                     className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
@@ -380,10 +432,33 @@ export default function ProductSelectionModal({
                     <span className="text-sm text-gray-600">
                       {hasComboOverride
                         ? (item.priceAdjustment ? `+RM ${item.priceAdjustment.toFixed(2)}` : 'Included')
-                        : `+RM ${item.basePrice.toFixed(2)}`
+                        : `+RM ${(item.pwpPrice ?? item.basePrice).toFixed(2)}`
                       }
                     </span>
                   </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sugar level (coffee only) */}
+          {isCoffee && (
+            <div className="space-y-2">
+              <label className="block font-semibold text-gray-700">Sugar Level:</label>
+              <div className="grid grid-cols-4 gap-2">
+                {SUGAR_LEVELS.map((s) => (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => setSugarLevel(s.value)}
+                    className={`py-2 rounded-lg text-sm font-medium border transition ${
+                      sugarLevel === s.value
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
                 ))}
               </div>
             </div>

@@ -119,7 +119,7 @@ export interface PurchaseOrder {
   id: string;
   poNumber: string;
   supplier: string;
-  status: 'draft' | 'ordered' | 'received' | 'cancelled';
+  status: 'draft' | 'ordered' | 'partial' | 'received' | 'cancelled';
   totalAmount: number;
   notes?: string;
   orderDate?: string;

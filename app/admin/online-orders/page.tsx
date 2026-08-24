@@ -25,6 +25,10 @@ interface OnlineOrder {
   total_paid: number;
   currency: string;
   reject_reason: string | null;
+  voucher_code: string | null;
+  voucher_discount: number | null;
+  pass_code: string | null;
+  pass_discount: number | null;
   accepted_at: string | null;
   ready_at: string | null;
   arrived_at: string | null;
@@ -653,6 +657,25 @@ function OrderCard({
           RM {Number(order.total_paid).toFixed(2)}
         </span>
       </div>
+
+      {(order.voucher_code || order.pass_code) && (
+        <div className="flex flex-wrap gap-1.5 mb-2.5">
+          {order.voucher_code && (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: '#E8F5E9', color: '#2E7D32' }}>
+              🎟️ {order.voucher_code}
+              {order.voucher_discount ? ` −RM ${Number(order.voucher_discount).toFixed(2)}` : ''}
+            </span>
+          )}
+          {order.pass_code && (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: '#EDE7F6', color: '#5E35B1' }}>
+              🎫 {order.pass_code}
+              {order.pass_discount ? ` −RM ${Number(order.pass_discount).toFixed(2)}` : ''}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 mb-2.5 text-sm" style={{ color: '#3A2414' }}>
         <User className="w-3.5 h-3.5" style={{ color: '#546E7A' }} />

@@ -13,7 +13,22 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const purchaseOrder = await markPurchaseOrderReceived(id);
+
+    // Optional partial-receipt payload: cumulative received qty per line item.
+    // No body → receive everything in full (backward compatible).
+    let receivedItems: Array<{ itemId: string; receivedQuantity: number }> | undefined;
+    try {
+      const body = await req.json();
+      if (Array.isArray(body?.items)) {
+        receivedItems = body.items
+          .filter((i: any) => i && typeof i.itemId === 'string')
+          .map((i: any) => ({ itemId: i.itemId, receivedQuantity: Number(i.receivedQuantity) || 0 }));
+      }
+    } catch {
+      // no/invalid body — fall through to full receipt
+    }
+
+    const purchaseOrder = await markPurchaseOrderReceived(id, receivedItems);
 
     if (!purchaseOrder) {
       return notFoundError(`Purchase order not found: ${id}`, '/api/purchase-orders/[id]/receive');
@@ -21,7 +36,9 @@ export async function POST(
 
     return NextResponse.json({
       ...purchaseOrder,
-      message: 'Purchase order marked as received. Inventory updated in local database and WooCommerce.',
+      message: purchaseOrder.status === 'partial'
+        ? 'Partial delivery received. Inventory updated; remaining items can be received later.'
+        : 'Purchase order fully received. Inventory updated.',
     });
   } catch (error) {
     return handleApiError(error, '/api/purchase-orders/[id]/receive');
