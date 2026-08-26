@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { upsertMaterial } from '@/lib/db/materialService';
+import { adjustBranchStock, getBranchStock } from '@/lib/db/branchStockService';
+import { logStockMovement } from '@/lib/db/stockMovementService';
 import { handleApiError, validationError } from '@/lib/api/error-handler';
 import { getBranchIdFromRequest } from '@/lib/api/branchHelper';
 import { db, initDatabase } from '@/lib/db/init';
@@ -47,6 +49,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const branchId = getBranchIdFromRequest(request);
     const body = await request.json();
 
     const {
@@ -75,6 +78,23 @@ export async function POST(request: NextRequest) {
       lowStockThreshold: parseFloat(lowStockThreshold || 0),
       supplier,
     });
+
+    // upsertMaterial seeds BranchStock at 0, so apply any entered opening stock
+    // to this branch's BranchStock (the source of truth the list reads from).
+    const openingStock = parseFloat(stockQuantity || 0);
+    if (!Number.isNaN(openingStock) && openingStock > 0) {
+      const newStock = adjustBranchStock(branchId, 'material', material.id, openingStock);
+      logStockMovement({
+        itemType: 'material',
+        itemId: material.id,
+        itemName: material.name,
+        movementType: 'manual_adjustment',
+        quantityChange: openingStock,
+        stockBefore: 0,
+        stockAfter: newStock,
+        referenceNote: 'Opening stock on material creation',
+      });
+    }
 
     return NextResponse.json({ material });
   } catch (error) {
