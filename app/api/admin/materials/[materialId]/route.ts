@@ -30,6 +30,7 @@ export async function PUT(
 ) {
   try {
     const { materialId } = await params;
+    const branchId = getBranchIdFromRequest(request);
     const body = await request.json();
 
     const existing = getMaterial(materialId);
@@ -87,9 +88,34 @@ export async function PUT(
       });
     }
 
+    // Stock is owned by BranchStock, not the Material.stockQuantity column, so
+    // the form's stock field is a no-op through upsertMaterial. Treat the
+    // submitted value as the desired stock level for this branch and apply the
+    // delta directly to BranchStock (a manual count correction — no cost change).
+    let stockAdjusted = false;
+    if (stockQuantity !== undefined && stockQuantity !== null && stockQuantity !== '') {
+      const desired = parseFloat(stockQuantity);
+      const current = getBranchStock(branchId, 'material', materialId);
+      if (!Number.isNaN(desired) && Math.abs(desired - current) > 1e-9) {
+        const newStock = adjustBranchStock(branchId, 'material', materialId, desired - current);
+        logStockMovement({
+          itemType: 'material',
+          itemId: materialId,
+          itemName: name || existing.name,
+          movementType: 'manual_adjustment',
+          quantityChange: desired - current,
+          stockBefore: current,
+          stockAfter: newStock,
+          referenceNote: 'Stock level set via material edit',
+        });
+        stockAdjusted = true;
+      }
+    }
+
     return NextResponse.json({
       material,
       priceChanged,
+      stockAdjusted,
       message: priceChanged ? 'Material updated and recipes recalculated' : 'Material updated'
     });
   } catch (error) {
