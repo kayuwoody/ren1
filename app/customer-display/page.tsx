@@ -342,6 +342,7 @@ export default function CustomerDisplayPage() {
                   width={440}
                   height={440}
                   className="w-full h-auto"
+                  unoptimized
                 />
               </div>
             )}
