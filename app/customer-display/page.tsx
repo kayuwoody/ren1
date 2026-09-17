@@ -337,17 +337,14 @@ export default function CustomerDisplayPage() {
           <div className="shrink-0 flex items-center gap-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 shadow-md">
             {/* DuitNow QR (left) */}
             {finalTotal > 0 && (
-              <div className="shrink-0 flex flex-col items-center">
-                <div className="rounded-lg overflow-hidden bg-white p-1 shadow-sm" style={{ width: 160 }}>
-                  <Image
-                    src="/duitnow-qr.png"
-                    alt="DuitNow QR - Scan to Pay"
-                    width={400}
-                    height={400}
-                    className="w-full h-auto"
-                  />
-                </div>
-                <p className="text-xs font-semibold text-gray-600 mt-1">Scan to pay</p>
+              <div className="shrink-0 rounded-lg overflow-hidden bg-white p-1.5 shadow-sm" style={{ width: 220 }}>
+                <Image
+                  src="/duitnow-qr.png"
+                  alt="DuitNow QR - Scan to Pay"
+                  width={440}
+                  height={440}
+                  className="w-full h-auto"
+                />
               </div>
             )}
 
@@ -395,7 +392,19 @@ export default function CustomerDisplayPage() {
                   RM {finalTotal.toFixed(2)}
                 </p>
                 {finalTotal > 0 && (
-                  <p className="text-[11px] text-gray-400 mt-1">Any bank or e-wallet</p>
+                  <>
+                    <p className="text-xs text-gray-500 mt-1.5">Any bank or scan QR for DuitNow</p>
+                    <div className="flex items-center justify-end gap-2.5 mt-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/pay/visa.svg" alt="Visa" className="h-6 w-auto" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/pay/mastercard.svg" alt="Mastercard" className="h-6 w-auto" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/pay/alipay.svg" alt="Alipay" className="h-6 w-auto" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/pay/grabpay.svg" alt="GrabPay" className="h-6 w-auto" />
+                    </div>
+                  </>
                 )}
               </div>
             </div>
