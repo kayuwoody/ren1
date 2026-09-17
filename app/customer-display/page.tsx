@@ -161,10 +161,10 @@ export default function CustomerDisplayPage() {
   return (
     <div className="h-screen bg-white p-4 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="mb-4 border-b border-gray-200 pb-3 shrink-0">
+      <div className="mb-2 border-b border-gray-200 pb-2 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="relative h-[230px] w-auto">
+            <div className="relative h-[110px] w-auto">
               <Image
                 src="/co line mascot.png"
                 alt="Coffee Oasis"
@@ -176,10 +176,8 @@ export default function CustomerDisplayPage() {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-base font-bold text-amber-900">www.coffee-oasis.com</p>
-            <p className="text-xs text-gray-500 mt-0.5">Order online &amp; earn rewards</p>
             {mounted && (
-              <p className="text-xs font-mono text-gray-400 mt-1">
+              <p className="text-xs font-mono text-gray-400">
                 {currentTime.toLocaleTimeString('en-MY', {
                   hour: '2-digit',
                   minute: '2-digit',
